@@ -3,11 +3,19 @@ import { api } from "@/lib/api";
 export interface SetApiKeyRequest {
   apiKey: string;
   expiresAt?: string;
+  expiresInDays?: number;
 }
 
 export interface CloudiaApiKeyStatus {
   configured: boolean;
   expiresAt?: string | null;
+}
+
+interface CloudiaStatusRaw {
+  configured?: boolean;
+  is_configured?: boolean;
+  expiresAt?: string | null;
+  expires_at?: string | null;
 }
 
 export const configService = {
@@ -17,12 +25,20 @@ export const configService = {
   },
 
   async status(): Promise<CloudiaApiKeyStatus> {
-    const { data } = await api.get<CloudiaApiKeyStatus>("/api/config/cloudia-api-key/status");
-    return data;
+    const { data } = await api.get<CloudiaStatusRaw>("/api/config/cloudia-api-key/status");
+    return {
+      configured: Boolean(data?.configured ?? data?.is_configured ?? false),
+      expiresAt: data?.expiresAt ?? data?.expires_at ?? null,
+    };
   },
 
   async remove(): Promise<unknown> {
     const { data } = await api.delete<unknown>("/api/config/cloudia-api-key");
+    return data;
+  },
+
+  async setAdminKey(key: string): Promise<unknown> {
+    const { data } = await api.post<unknown>("/api/config/admin-key", { key });
     return data;
   },
 };

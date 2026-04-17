@@ -34,7 +34,11 @@ export default function SettingsPage() {
   });
 
   const save = useMutation({
-    mutationFn: () => configService.setCloudiaKey({ apiKey, expiresAt: expiresAt || undefined }),
+    mutationFn: () =>
+      configService.setCloudiaKey({
+        apiKey,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+      }),
     onSuccess: () => {
       toast.success("Chave Cloudia atualizada");
       setApiKey("");
@@ -50,9 +54,22 @@ export default function SettingsPage() {
     },
   });
 
-  function saveAdminKey() {
+  const persistAdmin = useMutation({
+    mutationFn: (key: string) => configService.setAdminKey(key),
+  });
+
+  async function saveAdminKey() {
     setAdminKey(adminKey || null);
-    toast.success(adminKey ? "Admin key salva" : "Admin key removida");
+    if (!adminKey) {
+      toast.success("Admin key removida (local)");
+      return;
+    }
+    try {
+      await persistAdmin.mutateAsync(adminKey);
+      toast.success("Admin key salva (local + backend)");
+    } catch {
+      toast.success("Admin key salva localmente (backend indisponível)");
+    }
   }
 
   function saveCloudiaLocalConfig() {

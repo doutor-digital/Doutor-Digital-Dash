@@ -67,10 +67,20 @@ public class MetricsService(
             return null;
         }
 
+         // 🔍 diagnóstico — remover depois                                                                                                       
+        _logger.LogInformation(
+        "Cloudia token fingerprint: len={Len} head={Head} tail={Tail} hasBearerPrefix={HasBearer} hasWhitespace={HasWs}",                    
+        token.Length,                                                                                                                        
+        token.Length >= 6 ? token[..6] : token,
+        token.Length >= 6 ? token[^6..] : token,                                                                                             
+        token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase),
+        token.Any(char.IsWhiteSpace));                                                                                                       
+                                    
+
         var baseUrl = ResolveBaseUrl();
         var url = $"{baseUrl}/api/clinics/{clinicId}/dashboard/real-time" +
                   $"?attendantType={attendantType}&metricType=BUSINESS_PERIOD";
-
+        _logger.LogInformation("Cloudia request URL: {Url}", url);   
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
 

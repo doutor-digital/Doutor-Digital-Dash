@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/LeadAnalytics.Api" # Aponta para a pasta onde está o teu .csproj
+    schedule:
+      interval: "weekly"

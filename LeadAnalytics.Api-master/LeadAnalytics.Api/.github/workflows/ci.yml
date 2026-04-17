@@ -1,0 +1,26 @@
+name: Integracao Continua (CI)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET 10
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restaurar dependências
+      run: dotnet restore LeadAnalytics.Api.slnx
+
+    - name: Compilar projeto
+      # O --no-restore acelera o processo e o Release testa o build final
+      run: dotnet build LeadAnalytics.Api.slnx --configuration Release --no-restore

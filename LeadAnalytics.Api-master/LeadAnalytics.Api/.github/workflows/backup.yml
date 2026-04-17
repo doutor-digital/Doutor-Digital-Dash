@@ -1,0 +1,26 @@
+name: Backup do Banco de Dados
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Cliente PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Executar Dump
+        run: |
+          pg_dump "${{ secrets.RAILWAY_DATABASE_URL }}" --no-owner --no-privileges -F c > backup_$(date +%Y%m%d).dump
+
+      - name: Salvar Artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-leads
+          path: backup_*.dump
+          retention-days: 7

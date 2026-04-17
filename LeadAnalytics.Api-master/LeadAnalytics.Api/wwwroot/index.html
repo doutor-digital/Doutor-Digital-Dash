@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lead Analytics — Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: #f8fafc; }
+
+    .search-bar {
+      display: flex;
+      gap: .75rem;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .search-bar label { font-size: .875rem; color: #94a3b8; }
+
+    .search-bar input {
+      padding: .5rem .75rem;
+      border-radius: .5rem;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #f1f5f9;
+      font-size: 1rem;
+      width: 140px;
+      outline: none;
+    }
+
+    .search-bar input:focus { border-color: #6366f1; }
+
+    .search-bar button {
+      padding: .5rem 1.25rem;
+      border-radius: .5rem;
+      border: none;
+      background: #6366f1;
+      color: #fff;
+      font-size: .95rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background .15s;
+    }
+
+    .search-bar button:hover { background: #4f46e5; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: .75rem;
+      padding: 1.25rem;
+    }
+
+    .card .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .5rem; }
+    .card .value { font-size: 2rem; font-weight: 700; color: #f8fafc; }
+    .card .sub   { font-size: .75rem; color: #94a3b8; margin-top: .25rem; }
+
+    .card.accent-blue   { border-color: #3b82f6; }
+    .card.accent-green  { border-color: #22c55e; }
+    .card.accent-yellow { border-color: #eab308; }
+    .card.accent-red    { border-color: #ef4444; }
+    .card.accent-purple { border-color: #a855f7; }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #1e293b;
+      border-radius: .75rem;
+      overflow: hidden;
+    }
+
+    th {
+      text-align: left;
+      padding: .75rem 1rem;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      border-bottom: 1px solid #334155;
+    }
+
+    td {
+      padding: .75rem 1rem;
+      font-size: .9rem;
+      border-bottom: 1px solid #1e293b;
+      color: #cbd5e1;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #263147; }
+
+    .badge {
+      display: inline-block;
+      padding: .15rem .6rem;
+      border-radius: 9999px;
+      font-size: .75rem;
+      font-weight: 600;
+      background: #6366f1;
+      color: #fff;
+    }
+
+    .empty { color: #475569; font-style: italic; padding: 1rem 0; }
+
+    #error-msg {
+      display: none;
+      background: #450a0a;
+      color: #fca5a5;
+      border: 1px solid #b91c1c;
+      border-radius: .5rem;
+      padding: .75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: .875rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Lead Analytics — Dashboard</h1>
+
+  <div class="search-bar">
+    <label for="clinicId">Clinic ID</label>
+    <input id="clinicId" type="number" placeholder="ex: 1" />
+    <button onclick="loadData()">Buscar</button>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div class="cards">
+    <div class="card accent-blue">
+      <div class="label">Total de Leads</div>
+      <div class="value" id="totalLeads">—</div>
+      <div class="sub">todos os leads salvos</div>
+    </div>
+    <div class="card accent-green">
+      <div class="label">Consultas Fechadas</div>
+      <div class="value" id="qtdConsultas">—</div>
+      <div class="sub">em tratamento / fechou</div>
+    </div>
+    <div class="card accent-yellow">
+      <div class="label">Sem Pagamento</div>
+      <div class="value" id="qtdSemPagamento">—</div>
+      <div class="sub">agendados sem pagamento</div>
+    </div>
+    <div class="card accent-red">
+      <div class="label">Com Pagamento</div>
+      <div class="value" id="qtdComPagamento">—</div>
+      <div class="sub">agendados com pagamento</div>
+    </div>
+    <div class="card accent-purple">
+      <div class="label">Fim de Semana</div>
+      <div class="value" id="qtdFimSemana">—</div>
+      <div class="sub">sáb 18h → seg 18h</div>
+    </div>
+  </div>
+
+  <div id="fimSemanaSection" style="display:none; margin-bottom: 2rem;">
+    <div class="section-title">Leads do Fim de Semana</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Telefone</th>
+          <th>Etapa</th>
+          <th>Origem</th>
+          <th>Entrou em</th>
+        </tr>
+      </thead>
+      <tbody id="fimSemanaBody">
+        <tr><td colspan="5" class="empty">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title">Leads por Origem</div>
+  <table id="origensTable">
+    <thead>
+      <tr>
+        <th>Origem</th>
+        <th>Quantidade</th>
+      </tr>
+    </thead>
+    <tbody id="origensBody">
+      <tr><td colspan="2" class="empty">Informe um Clinic ID e clique em Buscar.</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error(`${res.status} ${res.statusText} — ${url}`);
+      }
+      return res.json();
+    }
+
+    function set(id, val) {
+      document.getElementById(id).textContent = val ?? '—';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function clearError() {
+      const el = document.getElementById('error-msg');
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+
+    async function loadData() {
+      clearError();
+      const clinicId = document.getElementById('clinicId').value.trim();
+
+      // Total de leads (sem filtro)
+      try {
+        const all = await fetchJson('/webhooks');
+        set('totalLeads', Array.isArray(all) ? all.length : '—');
+      } catch (e) { set('totalLeads', 'erro'); }
+
+      if (!clinicId) {
+        set('qtdConsultas', '—');
+        set('qtdSemPagamento', '—');
+        set('qtdComPagamento', '—');
+        document.getElementById('origensBody').innerHTML =
+          '<tr><td colspan="2" class="empty">Informe um Clinic ID para ver métricas por clínica.</td></tr>';
+        return;
+      }
+
+      // Consultas fechadas
+      try {
+        const r = await fetchJson(`/webhooks/consultas?clinicId=${clinicId}`);
+        set('qtdConsultas', r === null ? 0 : (r?.extensions?.count ?? r?.count ?? '—'));
+      } catch (e) { set('qtdConsultas', 'erro'); }
+
+      // Sem pagamento
+      try {
+        const r = await fetchJson(`/webhooks/sem-pagamento?clinicId=${clinicId}`);
+        set('qtdSemPagamento', r === null ? 0 : (r?.extensions?.quantidade ?? r?.quantidade ?? '—'));
+      } catch (e) { set('qtdSemPagamento', 'erro'); }
+
+      // Com pagamento
+      try {
+        const r = await fetchJson(`/webhooks/com-pagamento?clinicId=${clinicId}`);
+        set('qtdComPagamento', r === null ? 0 : (r?.quantidade ?? '—'));
+      } catch (e) { set('qtdComPagamento', 'erro'); }
+
+      // Fim de semana
+      try {
+        const r = await fetchJson(`/webhooks/fim-de-semana?clinicId=${clinicId}`);
+        set('qtdFimSemana', r === null ? 0 : r.quantidade);
+        const section = document.getElementById('fimSemanaSection');
+        const tbody = document.getElementById('fimSemanaBody');
+        if (r && r.leads && r.leads.length > 0) {
+          section.style.display = 'block';
+          tbody.innerHTML = r.leads.map(l => {
+            const dt = new Date(l.createdAt);
+            const fmt = dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+            return `<tr>
+              <td>${l.name ?? '—'}</td>
+              <td>${l.phone ?? '—'}</td>
+              <td>${l.stage ?? '—'}</td>
+              <td>${l.sourceFinal ?? l.origin ?? '—'}</td>
+              <td>${fmt}</td>
+            </tr>`;
+          }).join('');
+        } else {
+          section.style.display = 'block';
+          tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhum lead neste período.</td></tr>';
+        }
+      } catch (e) { set('qtdFimSemana', 'erro'); }
+
+      // Origens
+      try {
+        const origens = await fetchJson(`/webhooks/origens?clinicId=${clinicId}`);
+        const tbody = document.getElementById('origensBody');
+        if (!origens || origens.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2" class="empty">Nenhuma origem encontrada.</td></tr>';
+        } else {
+          tbody.innerHTML = origens
+            .sort((a, b) => b.quantidade - a.quantidade)
+            .map(o => `
+              <tr>
+                <td>${o.origem ?? 'Desconhecida'}</td>
+                <td><span class="badge">${o.quantidade}</span></td>
+              </tr>`)
+            .join('');
+        }
+      } catch (e) {
+        document.getElementById('origensBody').innerHTML =
+          `<tr><td colspan="2" class="empty">Erro ao carregar origens.</td></tr>`;
+      }
+    }
+
+    // Carrega total ao abrir a página
+    (async () => {
+      try {
+        const all = await fetchJson('/webhooks');
+        set('totalLeads', Array.isArray(all) ? all.length : '—');
+      } catch {}
+    })();
+  </script>
+</body>
+</html>

@@ -80,7 +80,7 @@ public class MetricsService(
         var baseUrl = ResolveBaseUrl();
         var url = $"{baseUrl}/api/clinics/{clinicId}/dashboard/real-time" +
                   $"?attendantType={attendantType}&metricType=BUSINESS_PERIOD";
-        _logger.LogInformation("Cloudia request URL: {Url}", url);   
+            _logger.LogInformation("Cloudia request URL: {Url}", url);   
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
 

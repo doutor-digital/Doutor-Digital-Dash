@@ -21,6 +21,30 @@ public class WebhooksController(
         return Ok(leads);
     }
 
+    /// <summary>
+    /// Obter detalhes completos de um lead específico
+    /// </summary>
+    /// <param name="id">Id interno do lead</param>
+    [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(LeadDetailDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetLeadById(int id)
+    {
+        var lead = await _leadService.GetLeadByIdAsync(id);
+
+        if (lead is null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Lead não encontrado",
+                Status = 404,
+                Detail = $"Nenhum lead encontrado com id {id}"
+            });
+        }
+
+        return Ok(lead);
+    }
+
     [HttpPost("cloudia")]
     public async Task<IActionResult> Cloudia([FromBody] CloudiaWebhookDto dto)
     {

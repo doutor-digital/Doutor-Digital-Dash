@@ -45,6 +45,137 @@ public class LeadService(
             .ToListAsync();
     }
 
+    public async Task<LeadDetailDto?> GetLeadByIdAsync(int id)
+    {
+        var lead = await _db.Leads
+            .AsNoTracking()
+            .Include(l => l.Unit)
+            .Include(l => l.Attendant)
+            .Include(l => l.StageHistory)
+            .Include(l => l.Conversations)
+                .ThenInclude(c => c.Interactions)
+            .Include(l => l.Conversations)
+                .ThenInclude(c => c.Attendant)
+            .Include(l => l.Assignments)
+                .ThenInclude(a => a.Attendant)
+            .Include(l => l.Payments)
+            .FirstOrDefaultAsync(l => l.Id == id);
+
+        if (lead is null) return null;
+
+        var tags = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lead.Tags))
+        {
+            try
+            {
+                tags = JsonSerializer.Deserialize<List<string>>(lead.Tags) ?? new();
+            }
+            catch
+            {
+                tags = new List<string> { lead.Tags };
+            }
+        }
+
+        return new LeadDetailDto
+        {
+            Id = lead.Id,
+            ExternalId = lead.ExternalId,
+            TenantId = lead.TenantId,
+
+            Name = lead.Name,
+            Phone = lead.Phone == "AGUARDANDO_COLETA" ? null : lead.Phone,
+            Email = lead.Email == "AGUARDANDO_COLETA" ? null : lead.Email,
+            Cpf = lead.Cpf,
+            Gender = lead.Gender,
+
+            Source = lead.Source,
+            Channel = lead.Channel,
+            Campaign = lead.Campaign,
+            Ad = lead.Ad,
+            TrackingConfidence = lead.TrackingConfidence,
+
+            CurrentStage = lead.CurrentStage,
+            CurrentStageId = lead.CurrentStageId,
+            Status = lead.Status,
+            ConversationState = lead.ConversationState,
+
+            HasAppointment = lead.HasAppointment,
+            HasPayment = lead.HasPayment,
+            HasHealthInsurancePlan = lead.HasHealthInsurancePlan,
+            Observations = lead.Observations,
+            Tags = tags,
+
+            UnitId = lead.UnitId,
+            UnitName = lead.Unit?.Name,
+
+            AttendantId = lead.AttendantId,
+            AttendantName = lead.Attendant?.Name,
+            AttendantEmail = lead.Attendant?.Email,
+
+            CreatedAt = lead.CreatedAt,
+            UpdatedAt = lead.UpdatedAt,
+            ConvertedAt = lead.ConvertedAt,
+
+            StageHistory = lead.StageHistory
+                .OrderBy(h => h.ChangedAt)
+                .Select(h => new LeadStageHistoryDto
+                {
+                    Id = h.Id,
+                    StageId = h.StageId,
+                    StageLabel = h.StageLabel,
+                    ChangedAt = h.ChangedAt
+                })
+                .ToList(),
+
+            Conversations = lead.Conversations
+                .OrderBy(c => c.StartedAt)
+                .Select(c => new LeadConversationDto
+                {
+                    Id = c.Id,
+                    Channel = c.Channel,
+                    Source = c.Source,
+                    ConversationState = c.ConversationState,
+                    StartedAt = c.StartedAt,
+                    EndedAt = c.EndedAt,
+                    AttendantId = c.AttendantId,
+                    AttendantName = c.Attendant?.Name,
+                    Interactions = c.Interactions
+                        .OrderBy(i => i.CreatedAt)
+                        .Select(i => new LeadInteractionDto
+                        {
+                            Id = i.Id,
+                            Type = i.Type,
+                            Content = i.Content,
+                            CreatedAt = i.CreatedAt
+                        })
+                        .ToList()
+                })
+                .ToList(),
+
+            Assignments = lead.Assignments
+                .OrderByDescending(a => a.AssignedAt)
+                .Select(a => new LeadAssignmentDto
+                {
+                    Id = a.Id,
+                    AttendantId = a.AttendantId,
+                    AttendantName = a.Attendant?.Name,
+                    Stage = a.Stage,
+                    AssignedAt = a.AssignedAt
+                })
+                .ToList(),
+
+            Payments = lead.Payments
+                .OrderByDescending(p => p.PaidAt)
+                .Select(p => new LeadPaymentDto
+                {
+                    Id = p.Id,
+                    Amount = p.Amount,
+                    PaidAt = p.PaidAt
+                })
+                .ToList()
+        };
+    }
+
     // LeadService.cs - CreateLeadAsync
     private async Task<LeadProcessResponseDto> CreateLeadAsync(CloudiaLeadDataDto dto)
     {

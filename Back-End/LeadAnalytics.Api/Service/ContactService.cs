@@ -161,6 +161,137 @@ public class ContactService(AppDbContext db)
         };
     }
 
+    public async Task<ContactDetailDto?> GetByIdAsync(
+        int tenantId,
+        string id,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+
+        // Aceita "c_123", "l_123" ou "123" puro (tenta Contact, depois Lead).
+        string prefix;
+        string numeric;
+        if (id.StartsWith("c_", StringComparison.OrdinalIgnoreCase))
+        {
+            prefix = "c";
+            numeric = id[2..];
+        }
+        else if (id.StartsWith("l_", StringComparison.OrdinalIgnoreCase))
+        {
+            prefix = "l";
+            numeric = id[2..];
+        }
+        else
+        {
+            prefix = "auto";
+            numeric = id;
+        }
+
+        if (!int.TryParse(numeric, out var numId)) return null;
+
+        if (prefix == "c" || prefix == "auto")
+        {
+            var contact = await _db.Contacts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == numId && c.TenantId == tenantId, ct);
+            if (contact is not null) return ToDetail(contact);
+            if (prefix == "c") return null;
+        }
+
+        // prefix == "l" OU fallback "auto"
+        var lead = await _db.Leads
+            .AsNoTracking()
+            .Include(l => l.Unit)
+            .Include(l => l.Attendant)
+            .FirstOrDefaultAsync(l => l.Id == numId && l.TenantId == tenantId, ct);
+
+        return lead is null ? null : ToDetail(lead);
+    }
+
+    private static ContactDetailDto ToDetail(Models.Contact c)
+    {
+        return new ContactDetailDto
+        {
+            Id = $"c_{c.Id}",
+            TenantId = c.TenantId,
+            Source = "contact",
+            Name = c.Name,
+            PhoneNormalized = c.PhoneNormalized,
+            PhoneRaw = c.PhoneRaw,
+            Origem = c.Origem,
+            Conexao = c.Conexao,
+            Observacoes = c.Observacoes,
+            Etapa = c.Etapa,
+            Tags = DeserializeStringList(c.TagsJson),
+            MetaAdsIds = DeserializeStringList(c.MetaAdsIdsJson),
+            ConsultationAt = c.ConsultationAt,
+            ConsultationRegisteredAt = c.ConsultationRegisteredAt,
+            LastMessageAt = c.LastMessageAt,
+            Birthday = c.Birthday,
+            Blocked = c.Blocked,
+            ImportedAt = c.ImportedAt,
+            ImportBatchId = c.ImportBatchId,
+            CreatedAt = c.CreatedAt,
+            UpdatedAt = c.UpdatedAt,
+        };
+    }
+
+    private static ContactDetailDto ToDetail(Models.Lead l)
+    {
+        var phone = l.Phone == "AGUARDANDO_COLETA" ? "" : l.Phone;
+        var email = l.Email == "AGUARDANDO_COLETA" ? null : l.Email;
+
+        return new ContactDetailDto
+        {
+            Id = $"l_{l.Id}",
+            TenantId = l.TenantId,
+            Source = "lead",
+            Name = l.Name,
+            PhoneNormalized = OnlyDigits(phone),
+            PhoneRaw = phone,
+            Origem = "webhook_cloudia",
+            Etapa = l.CurrentStage,
+            Tags = DeserializeStringList(l.Tags),
+            Blocked = false,
+
+            ExternalId = l.ExternalId,
+            Email = email,
+            Cpf = l.Cpf,
+            Gender = l.Gender,
+            Channel = l.Channel,
+            Campaign = l.Campaign,
+            Ad = l.Ad,
+            TrackingConfidence = l.TrackingConfidence,
+            CurrentStage = l.CurrentStage,
+            HasAppointment = l.HasAppointment,
+            HasPayment = l.HasPayment,
+            HasHealthInsurancePlan = l.HasHealthInsurancePlan,
+            ConversationState = l.ConversationState,
+            UnitId = l.UnitId,
+            UnitName = l.Unit?.Name,
+            AttendantId = l.AttendantId,
+            AttendantName = l.Attendant?.Name,
+            AttendantEmail = l.Attendant?.Email,
+            ConvertedAt = l.ConvertedAt,
+
+            CreatedAt = l.CreatedAt,
+            UpdatedAt = l.UpdatedAt,
+        };
+    }
+
+    private static List<string> DeserializeStringList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? new();
+        }
+        catch
+        {
+            return new() { json };
+        }
+    }
+
     private static IQueryable<Models.Contact> ApplyOrder(
         IQueryable<Models.Contact> q, string orderBy, string orderDir)
     {

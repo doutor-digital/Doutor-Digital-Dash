@@ -41,6 +41,32 @@ public class ContactsController(
     }
 
     /// <summary>
+    /// Detalhe de um contato (importado ou lead webhook).
+    /// O id aceita os formatos "c_123" (importado), "l_123" (lead webhook) ou "123" (tenta nos dois).
+    /// </summary>
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(ContactDetailDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetById(string id, [FromQuery] int clinicId)
+    {
+        if (clinicId <= 0)
+            return BadRequest(new { error = "clinicId inválido" });
+
+        var detail = await _contactService.GetByIdAsync(clinicId, id, HttpContext.RequestAborted);
+        if (detail is null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Contato não encontrado",
+                Status = 404,
+                Detail = $"Nenhum contato encontrado com id '{id}' para a clínica {clinicId}"
+            });
+        }
+
+        return Ok(detail);
+    }
+
+    /// <summary>
     /// Importa contatos de um arquivo CSV (multipart/form-data).
     /// </summary>
     [HttpPost("import")]

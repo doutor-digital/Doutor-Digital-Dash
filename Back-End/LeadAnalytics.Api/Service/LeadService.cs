@@ -1123,6 +1123,102 @@ public class LeadService(
     }
 
     /// <summary>
+    /// Leads recebidos na madrugada (20h → 07h do dia seguinte) para a unidade informada.
+    /// Caso nenhum clinicId seja informado, o padrão é 8020 (Araguaína).
+    /// </summary>
+    public async Task<OvernightLeadsDto> GetOvernightLeadsAsync(
+        int? clinicId = null,
+        DateTime? referenceDateLocal = null,
+        int startHour = 20,
+        int endHour = 7)
+    {
+        var targetClinic = clinicId ?? 8020;
+
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+        var refLocal = referenceDateLocal ?? nowLocal;
+
+        var endLocal = new DateTime(refLocal.Year, refLocal.Month, refLocal.Day, endHour, 0, 0, DateTimeKind.Unspecified);
+        var startLocal = endLocal.AddDays(-1).Date.AddHours(startHour);
+
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, tz);
+
+        var unit = await _db.Units
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.ClinicId == targetClinic);
+
+        var query = _db.Leads
+            .AsNoTracking()
+            .Where(l => l.TenantId == targetClinic
+                     && l.CreatedAt >= startUtc
+                     && l.CreatedAt < endUtc);
+
+        var rawLeads = await query
+            .OrderByDescending(l => l.CreatedAt)
+            .Select(l => new
+            {
+                l.Id,
+                l.Name,
+                l.Phone,
+                l.Source,
+                l.Channel,
+                l.CurrentStage,
+                l.ConversationState,
+                l.CreatedAt
+            })
+            .ToListAsync();
+
+        var leads = rawLeads.Select(l => new OvernightLeadItemDto
+        {
+            Id = l.Id,
+            Name = l.Name,
+            Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
+            Source = l.Source,
+            Channel = l.Channel,
+            CurrentStage = l.CurrentStage,
+            ConversationState = l.ConversationState,
+            CreatedAt = l.CreatedAt,
+            CreatedAtLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(l.CreatedAt, DateTimeKind.Utc), tz)
+        }).ToList();
+
+        var hourBreakdown = leads
+            .GroupBy(l => l.CreatedAtLocal.Hour)
+            .Select(g => new OvernightHourBucketDto { Hour = g.Key, Count = g.Count() })
+            .OrderBy(x => x.Hour)
+            .ToList();
+
+        var sourceBreakdown = leads
+            .GroupBy(l => string.IsNullOrWhiteSpace(l.Source) ? "DESCONHECIDO" : l.Source)
+            .Select(g => new OvernightSourceBucketDto { Source = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "🌙 Overnight leads {ClinicId} | {Start} → {End} | total={Total}",
+                targetClinic, startLocal, endLocal, leads.Count);
+        }
+
+        return new OvernightLeadsDto
+        {
+            Total = leads.Count,
+            ClinicId = targetClinic,
+            UnitId = unit?.Id,
+            UnitName = unit?.Name ?? $"Unidade {targetClinic}",
+            PeriodStartLocal = startLocal,
+            PeriodEndLocal = endLocal,
+            StartHour = startHour,
+            EndHour = endHour,
+            Leads = leads,
+            HourBreakdown = hourBreakdown,
+            SourceBreakdown = sourceBreakdown
+        };
+    }
+
+    /// <summary>
     /// Obter contagem de leads por estado
     /// </summary>
     public async Task<Dictionary<string, int>> GetLeadsCountByStateAsync(int? unitId = null)

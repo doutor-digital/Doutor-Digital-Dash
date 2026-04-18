@@ -284,6 +284,26 @@ public class WebhooksController(
     }
  
     /// <summary>
+    /// Leads capturados durante a madrugada (20h → 07h) da unidade de Araguaína por padrão.
+    /// </summary>
+    /// <param name="clinicId">Tenant/clínica. Padrão: 8020 (Araguaína).</param>
+    /// <param name="startHour">Hora de início (default: 20)</param>
+    /// <param name="endHour">Hora final do dia seguinte (default: 7)</param>
+    [HttpGet("amanheceu")]
+    [ProducesResponseType(typeof(OvernightLeadsDto), 200)]
+    public async Task<IActionResult> GetOvernightLeads(
+        [FromQuery] int? clinicId = null,
+        [FromQuery] int startHour = 20,
+        [FromQuery] int endHour = 7)
+    {
+        if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23)
+            return BadRequest("startHour e endHour devem estar entre 0 e 23");
+
+        var result = await _leadService.GetOvernightLeadsAsync(clinicId, null, startHour, endHour);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Verificar saúde do endpoint de sincronização
     /// </summary>
     [HttpGet("sync/health")]

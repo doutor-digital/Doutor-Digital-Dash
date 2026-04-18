@@ -31,7 +31,7 @@ public class AssignmentController(
     }
 
     [HttpGet("ranking")]
-    public async Task<IActionResult> GetRanking([FromQuery] int clinicId)
+    public async Task<IActionResult> GetRanking([FromQuery] int? clinicId = null)
     {
         var ranking = await _attendantService.GetRankingAsync(clinicId);
         return Ok(ranking);

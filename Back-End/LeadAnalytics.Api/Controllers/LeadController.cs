@@ -284,6 +284,25 @@ public class WebhooksController(
     }
  
     /// <summary>
+    /// Dados consolidados para a página de Evolução avançada.
+    /// Retorna séries mensais com acumulado/MoM/média-móvel, dia-da-semana, hora do dia,
+    /// origens ao longo do tempo e conversão mês a mês.
+    /// </summary>
+    [HttpGet("evolution/advanced")]
+    [ProducesResponseType(typeof(EvolutionAdvancedDto), 200)]
+    public async Task<IActionResult> GetEvolutionAdvanced(
+        [FromQuery] DateTime dataInicio,
+        [FromQuery] DateTime dataFim,
+        [FromQuery] int? clinicId = null)
+    {
+        if (dataInicio > dataFim)
+            return BadRequest("dataInicio deve ser menor ou igual a dataFim");
+
+        var result = await _leadService.GetEvolutionAdvancedAsync(clinicId, dataInicio, dataFim);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Leads capturados durante a madrugada (20h → 07h) da unidade de Araguaína por padrão.
     /// </summary>
     /// <param name="clinicId">Tenant/clínica. Padrão: 8020 (Araguaína).</param>

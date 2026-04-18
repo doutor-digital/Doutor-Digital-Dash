@@ -1123,6 +1123,262 @@ public class LeadService(
     }
 
     /// <summary>
+    /// Dados consolidados para a página de Evolução avançada:
+    /// série mensal (com acumulado, MoM, média móvel), por dia-da-semana, por hora do dia,
+    /// origens ao longo do tempo e conversão mês a mês.
+    /// </summary>
+    public async Task<EvolutionAdvancedDto> GetEvolutionAdvancedAsync(
+        int? clinicId,
+        DateTime dataInicio,
+        DateTime dataFim)
+    {
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+        var startLocal = DateTime.SpecifyKind(new DateTime(dataInicio.Year, dataInicio.Month, 1), DateTimeKind.Unspecified);
+        var endLocal = DateTime.SpecifyKind(
+            new DateTime(dataFim.Year, dataFim.Month, 1).AddMonths(1), DateTimeKind.Unspecified);
+
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, tz);
+
+        var query = _db.Leads.AsNoTracking()
+            .Where(l => l.CreatedAt >= startUtc && l.CreatedAt < endUtc);
+
+        if (clinicId.HasValue && clinicId.Value > 0)
+            query = query.Where(l => l.TenantId == clinicId.Value);
+
+        var raw = await query
+            .Select(l => new
+            {
+                l.CreatedAt,
+                l.Source,
+                l.CurrentStage,
+                l.HasAppointment,
+                l.HasPayment
+            })
+            .ToListAsync();
+
+        var leads = raw.Select(l => new
+        {
+            Local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(l.CreatedAt, DateTimeKind.Utc), tz),
+            Source = string.IsNullOrWhiteSpace(l.Source) ? "DESCONHECIDO" : l.Source,
+            l.CurrentStage,
+            l.HasAppointment,
+            l.HasPayment
+        }).ToList();
+
+        // ── Esqueleto de meses no intervalo ────────────────────────
+        var monthKeys = new List<(int Year, int Month, string Label)>();
+        var cur = startLocal;
+        while (cur < endLocal)
+        {
+            monthKeys.Add((cur.Year, cur.Month, $"{MonthShortPt(cur.Month)}/{cur:yy}"));
+            cur = cur.AddMonths(1);
+        }
+
+        // ── Série mensal ────────────────────────────────────────────
+        var monthlyGroups = leads
+            .GroupBy(l => new { l.Local.Year, l.Local.Month })
+            .ToDictionary(g => (g.Key.Year, g.Key.Month), g => g.Count());
+
+        var monthlyRaw = monthKeys
+            .Select(k => new { k.Year, k.Month, k.Label, Total = monthlyGroups.GetValueOrDefault((k.Year, k.Month), 0) })
+            .ToList();
+
+        var monthly = new List<EvolutionMonthPointDto>();
+        var acumulado = 0;
+        for (var i = 0; i < monthlyRaw.Count; i++)
+        {
+            var m = monthlyRaw[i];
+            acumulado += m.Total;
+
+            double? mom = null;
+            if (i > 0)
+            {
+                var prev = monthlyRaw[i - 1].Total;
+                mom = prev == 0 ? (m.Total > 0 ? 100d : 0d) : ((m.Total - prev) * 100d / prev);
+            }
+
+            double? mm3 = null;
+            if (i >= 2)
+            {
+                mm3 = (monthlyRaw[i].Total + monthlyRaw[i - 1].Total + monthlyRaw[i - 2].Total) / 3d;
+            }
+
+            monthly.Add(new EvolutionMonthPointDto
+            {
+                Year = m.Year,
+                Month = m.Month,
+                Label = m.Label,
+                Total = m.Total,
+                Cumulative = acumulado,
+                MomGrowthPercent = mom,
+                MovingAverage3 = mm3
+            });
+        }
+
+        // ── Agregados estatísticos ──────────────────────────────────
+        var totals = monthly.Select(m => m.Total).ToList();
+        var totalLeads = totals.Sum();
+        var avg = totals.Count > 0 ? totals.Average() : 0d;
+        var median = Median(totals);
+        var stddev = StdDev(totals, avg);
+
+        var bestMonth = monthly.OrderByDescending(m => m.Total).FirstOrDefault();
+        var worstMonth = monthly
+            .Where(m => m.Total > 0)
+            .OrderBy(m => m.Total)
+            .FirstOrDefault() ?? monthly.LastOrDefault();
+
+        double growthFirstToLast = 0;
+        if (monthly.Count >= 2)
+        {
+            var first = monthly.First().Total;
+            var last = monthly.Last().Total;
+            growthFirstToLast = first == 0 ? (last > 0 ? 100d : 0d) : ((last - first) * 100d / first);
+        }
+
+        // ── Por dia da semana (seg=1 ... dom=7) ─────────────────────
+        var weekdayLabels = new[] { "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom" };
+        var weekdayGroup = leads
+            .GroupBy(l => ((int)l.Local.DayOfWeek + 6) % 7) // 0=Seg, 6=Dom
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var weekday = Enumerable.Range(0, 7).Select(i => new EvolutionWeekdayDto
+        {
+            Weekday = i,
+            Label = weekdayLabels[i],
+            Total = weekdayGroup.GetValueOrDefault(i, 0)
+        }).ToList();
+
+        // ── Por hora do dia ─────────────────────────────────────────
+        var hourGroup = leads
+            .GroupBy(l => l.Local.Hour)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var hour = Enumerable.Range(0, 24).Select(h => new EvolutionHourDto
+        {
+            Hour = h,
+            Total = hourGroup.GetValueOrDefault(h, 0)
+        }).ToList();
+
+        // ── Origens ao longo do tempo (top 6) ───────────────────────
+        var sourceTotals = leads
+            .GroupBy(l => l.Source)
+            .Select(g => new { Source = g.Key, Total = g.Count() })
+            .OrderByDescending(x => x.Total)
+            .ToList();
+
+        var topSources = sourceTotals.Take(6).Select(s => s.Source).ToList();
+
+        var sourceBuckets = leads
+            .GroupBy(l => new
+            {
+                Source = topSources.Contains(l.Source) ? l.Source : "OUTROS",
+                l.Local.Year,
+                l.Local.Month
+            })
+            .Select(g => new { g.Key.Source, g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToList();
+
+        var sourceNames = topSources.ToList();
+        if (sourceTotals.Count > 6) sourceNames.Add("OUTROS");
+
+        var sourcesOverTime = sourceNames.Select(src =>
+        {
+            var serie = new EvolutionSourceSerieDto
+            {
+                Source = src,
+                Total = sourceBuckets.Where(b => b.Source == src).Sum(b => b.Count),
+                Points = monthKeys.Select(k =>
+                {
+                    var match = sourceBuckets.FirstOrDefault(b =>
+                        b.Source == src && b.Year == k.Year && b.Month == k.Month);
+                    return new EvolutionSourceMonthDto
+                    {
+                        Year = k.Year,
+                        Month = k.Month,
+                        Label = k.Label,
+                        Count = match?.Count ?? 0
+                    };
+                }).ToList()
+            };
+            return serie;
+        }).ToList();
+
+        // ── Conversão mês a mês ─────────────────────────────────────
+        var conversionOverTime = monthKeys.Select(k =>
+        {
+            var monthLeads = leads.Where(l => l.Local.Year == k.Year && l.Local.Month == k.Month).ToList();
+            var total = monthLeads.Count;
+            var agendado = monthLeads.Count(l => l.HasAppointment);
+            var pago = monthLeads.Count(l => l.HasPayment);
+            var tratamento = monthLeads.Count(l => l.CurrentStage == "09_FECHOU_TRATAMENTO"
+                                                || l.CurrentStage == "10_EM_TRATAMENTO");
+
+            return new EvolutionConversionPointDto
+            {
+                Year = k.Year,
+                Month = k.Month,
+                Label = k.Label,
+                Total = total,
+                Agendado = agendado,
+                Pago = pago,
+                Tratamento = tratamento,
+                AgendadoRate = total == 0 ? 0 : agendado * 100d / total,
+                PagoRate = total == 0 ? 0 : pago * 100d / total
+            };
+        }).ToList();
+
+        return new EvolutionAdvancedDto
+        {
+            StartDateLocal = startLocal,
+            EndDateLocal = endLocal.AddDays(-1),
+            ClinicId = clinicId,
+            TotalLeads = totalLeads,
+            AverageMonthly = avg,
+            MedianMonthly = median,
+            StdDevMonthly = stddev,
+            BestMonthTotal = bestMonth?.Total ?? 0,
+            BestMonthLabel = bestMonth?.Label ?? "",
+            WorstMonthTotal = worstMonth?.Total ?? 0,
+            WorstMonthLabel = worstMonth?.Label ?? "",
+            GrowthPercentFirstToLast = growthFirstToLast,
+            Monthly = monthly,
+            Weekday = weekday,
+            Hour = hour,
+            SourcesOverTime = sourcesOverTime,
+            ConversionOverTime = conversionOverTime
+        };
+    }
+
+    private static string MonthShortPt(int month) => month switch
+    {
+        1 => "jan", 2 => "fev", 3 => "mar", 4 => "abr",
+        5 => "mai", 6 => "jun", 7 => "jul", 8 => "ago",
+        9 => "set", 10 => "out", 11 => "nov", 12 => "dez",
+        _ => "-"
+    };
+
+    private static double Median(List<int> values)
+    {
+        if (values.Count == 0) return 0;
+        var sorted = values.OrderBy(v => v).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2d
+            : sorted[mid];
+    }
+
+    private static double StdDev(List<int> values, double mean)
+    {
+        if (values.Count <= 1) return 0;
+        var sumSq = values.Sum(v => (v - mean) * (v - mean));
+        return Math.Sqrt(sumSq / values.Count);
+    }
+
+    /// <summary>
     /// Leads recebidos na madrugada (20h → 07h do dia seguinte) para a unidade informada.
     /// Caso nenhum clinicId seja informado, o padrão é 8020 (Araguaína).
     /// </summary>

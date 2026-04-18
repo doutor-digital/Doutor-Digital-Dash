@@ -1496,6 +1496,93 @@ public class LeadService(
     }
 
     // ════════════════════════════════════════════════════════════════
+    //  Dashboard overview — tudo que o dashboard precisa num request,
+    //  filtrado por dateFrom/dateTo em Lead.CreatedAt.
+    // ════════════════════════════════════════════════════════════════
+
+    public async Task<DashboardOverviewDto> GetDashboardOverviewAsync(
+        int clinicId,
+        DateTime dateFrom,
+        DateTime dateTo,
+        int? unitId,
+        CancellationToken ct = default)
+    {
+        if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
+
+        // Janela UTC com fim exclusivo (+1 dia para incluir o dia inteiro)
+        var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
+        var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
+
+        var baseQ = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                     && l.CreatedAt >= startUtc
+                     && l.CreatedAt < endExclUtc);
+
+        if (unitId.HasValue) baseQ = baseQ.Where(l => l.UnitId == unitId.Value);
+
+        var totalLeads = await baseQ.CountAsync(ct);
+
+        // KPIs por etapa
+        var consultas = await baseQ
+            .Where(l => l.CurrentStage == "10_EM_TRATAMENTO" || l.CurrentStage == "09_FECHOU_TRATAMENTO")
+            .CountAsync(ct);
+        var comPag = await baseQ
+            .Where(l => l.CurrentStage == "05_AGENDADO_COM_PAGAMENTO")
+            .CountAsync(ct);
+        var semPag = await baseQ
+            .Where(l => l.CurrentStage == "04_AGENDADO_SEM_PAGAMENTO")
+            .CountAsync(ct);
+
+        // Estados da conversa (bot/queue/service/concluido)
+        var stateRows = await baseQ
+            .GroupBy(l => l.ConversationState ?? "")
+            .Select(g => new { State = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var states = new LeadsCountDto
+        {
+            Bot = stateRows.FirstOrDefault(s => s.State == "bot")?.Count ?? 0,
+            Queue = stateRows.FirstOrDefault(s => s.State == "queue")?.Count ?? 0,
+            Service = stateRows.FirstOrDefault(s => s.State == "service")?.Count ?? 0,
+            Concluido = stateRows.FirstOrDefault(s => s.State == "concluido")?.Count ?? 0,
+        };
+        states.Total = states.Bot + states.Queue + states.Service + states.Concluido;
+
+        // Etapas agrupadas
+        var etapas = await baseQ
+            .GroupBy(l => string.IsNullOrWhiteSpace(l.CurrentStage) ? "SEM_ETAPA" : l.CurrentStage.Trim())
+            .Select(g => new EtapaAgrupadaDto { Etapa = g.Key, Quantidade = g.Count() })
+            .OrderByDescending(e => e.Quantidade)
+            .ToListAsync(ct);
+
+        // Origens agrupadas
+        var origens = await baseQ
+            .GroupBy(l => l.Source)
+            .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+            .OrderByDescending(o => o.Quantidade)
+            .ToListAsync(ct);
+
+        var conversaoRate = totalLeads > 0 ? consultas * 100.0 / totalLeads : 0;
+        var pagamentoRate = totalLeads > 0 ? comPag * 100.0 / totalLeads : 0;
+        var semPagRate = totalLeads > 0 ? semPag * 100.0 / totalLeads : 0;
+
+        return new DashboardOverviewDto
+        {
+            DateFrom = dateFrom.Date,
+            DateTo = dateTo.Date,
+            TotalLeads = totalLeads,
+            Consultas = consultas,
+            ComPagamento = comPag,
+            SemPagamento = semPag,
+            ConversaoRate = Math.Round(conversaoRate, 2),
+            PagamentoRate = Math.Round(pagamentoRate, 2),
+            SemPagamentoRate = Math.Round(semPagRate, 2),
+            States = states,
+            Etapas = etapas,
+            Origens = origens,
+        };
+    }
+
+    // ════════════════════════════════════════════════════════════════
     //  Leads recentes (notificações + página /recent-leads)
     // ════════════════════════════════════════════════════════════════
 

@@ -245,6 +245,36 @@ public class WebhooksController(
     }
  
     /// <summary>
+    /// Overview consolidado do dashboard. Todos os KPIs filtrados por dateFrom/dateTo
+    /// (baseados em Lead.CreatedAt). Usado pela DashboardPage.
+    /// </summary>
+    [HttpGet("dashboard-overview")]
+    [ProducesResponseType(typeof(DashboardOverviewDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> GetDashboardOverview(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
+        [FromQuery] int? unitId = null)
+    {
+        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
+        if ((dateTo - dateFrom).TotalDays > 3 * 365)
+            return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
+
+        try
+        {
+            var result = await _leadService.GetDashboardOverviewAsync(
+                clinicId, dateFrom, dateTo, unitId, HttpContext.RequestAborted);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Leads criados nas últimas N horas (notificação + página de recentes).
     /// </summary>
     [HttpGet("recent")]

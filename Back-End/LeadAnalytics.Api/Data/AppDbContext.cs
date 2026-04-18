@@ -20,6 +20,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<WebhookEvent> WebhookEvents { get; set; }
 
+    public DbSet<Contact> Contacts { get; set; }
+    public DbSet<ImportBatch> ImportBatches { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ─── Lead ────────────────────────────────────────────────
@@ -140,5 +143,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => e.Email)
                 .IsUnique();
           });
+
+        // ─── Contact ─────────────────────────────────────────────
+        modelBuilder.Entity<Contact>(entity =>
+        {
+            entity.ToTable("contacts");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.PhoneNormalized).IsRequired();
+            entity.Property(e => e.Origem).IsRequired().HasMaxLength(30);
+
+            entity.HasIndex(e => new { e.TenantId, e.PhoneNormalized }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.Origem });
+            entity.HasIndex(e => new { e.TenantId, e.LastMessageAt });
+
+            entity.HasOne(e => e.ImportBatch)
+                  .WithMany()
+                  .HasForeignKey(e => e.ImportBatchId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── ImportBatch ─────────────────────────────────────────
+        modelBuilder.Entity<ImportBatch>(entity =>
+        {
+            entity.ToTable("import_batches");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasMaxLength(20);
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+        });
     }
 }

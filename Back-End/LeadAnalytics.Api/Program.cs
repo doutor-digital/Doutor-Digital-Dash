@@ -67,6 +67,8 @@ builder.Services.AddScoped<LeadAnalyticsService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ContactService>();
+builder.Services.AddScoped<ContactImportService>();
 
 builder.Services.AddCors(options =>
 {

@@ -19,6 +19,12 @@ public class ContactDto
 
     public bool Blocked { get; set; }
 
+    [JsonPropertyName("attendance_status")]
+    public string? AttendanceStatus { get; set; }
+
+    [JsonPropertyName("attendance_status_at")]
+    public DateTime? AttendanceStatusAt { get; set; }
+
     [JsonPropertyName("imported_at")]
     public DateTime? ImportedAt { get; set; }
 }
@@ -52,6 +58,12 @@ public class ContactCountsDto
 
     [JsonPropertyName("import_csv")]
     public int ImportCsv { get; set; }
+
+    public int Manual { get; set; }
+
+    public int Compareceu { get; set; }
+    public int Faltou { get; set; }
+    public int Aguardando { get; set; }
 }
 
 public class ContactImportResultDto
@@ -117,6 +129,12 @@ public class ContactDetailDto
     public DateTime? Birthday { get; set; }
 
     public bool Blocked { get; set; }
+
+    [JsonPropertyName("attendance_status")]
+    public string? AttendanceStatus { get; set; }
+
+    [JsonPropertyName("attendance_status_at")]
+    public DateTime? AttendanceStatusAt { get; set; }
 
     [JsonPropertyName("imported_at")]
     public DateTime? ImportedAt { get; set; }

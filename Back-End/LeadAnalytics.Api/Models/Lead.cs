@@ -31,6 +31,10 @@ public class Lead
     public bool HasAppointment { get; set; }
     public bool HasPayment { get; set; }
 
+    // "compareceu" | "faltou" | "aguardando" | null (ação manual na tela de contatos)
+    public string? AttendanceStatus { get; set; }
+    public DateTime? AttendanceStatusAt { get; set; }
+
     // ─── CONTEXTO ────────────────────────────
     public string? ConversationState { get; set; } // cache opcional
     public string? Observations { get; set; }

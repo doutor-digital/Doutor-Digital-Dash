@@ -28,6 +28,10 @@ public class Contact
 
     public bool Blocked { get; set; }
 
+    // "compareceu" | "faltou" | "aguardando" | null
+    public string? AttendanceStatus { get; set; }
+    public DateTime? AttendanceStatusAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

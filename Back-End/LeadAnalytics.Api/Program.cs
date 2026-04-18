@@ -50,6 +50,7 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<LeadService>();
 builder.Services.AddScoped<UnitService>();

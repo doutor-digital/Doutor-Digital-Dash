@@ -41,6 +41,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(l => l.Attendant)
                   .WithMany()
                   .HasForeignKey(l => l.AttendantId);
+
+            entity.Property(l => l.AttendanceStatus).HasMaxLength(20);
+            entity.HasIndex(l => new { l.TenantId, l.AttendanceStatus });
         });
 
         // ─── Unit ────────────────────────────────────────────────
@@ -154,9 +157,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.PhoneNormalized).IsRequired();
             entity.Property(e => e.Origem).IsRequired().HasMaxLength(30);
 
+            entity.Property(e => e.AttendanceStatus).HasMaxLength(20);
+
             entity.HasIndex(e => new { e.TenantId, e.PhoneNormalized }).IsUnique();
             entity.HasIndex(e => new { e.TenantId, e.Origem });
             entity.HasIndex(e => new { e.TenantId, e.LastMessageAt });
+            entity.HasIndex(e => new { e.TenantId, e.AttendanceStatus });
 
             entity.HasOne(e => e.ImportBatch)
                   .WithMany()

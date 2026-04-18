@@ -245,6 +245,84 @@ public class WebhooksController(
     }
  
     /// <summary>
+    /// Leads criados nas últimas N horas (notificação + página de recentes).
+    /// </summary>
+    [HttpGet("recent")]
+    [ProducesResponseType(typeof(RecentLeadsResponseDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> GetRecentLeads(
+        [FromQuery] int clinicId,
+        [FromQuery] int hours = 24,
+        [FromQuery] int limit = 50,
+        [FromQuery] int? unitId = null)
+    {
+        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (hours <= 0) return BadRequest(new { error = "hours deve ser > 0" });
+
+        var result = await _leadService.GetRecentLeadsAsync(clinicId, hours, limit, unitId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Série temporal de leads para o dashboard: intervalo + granularidade + comparação.
+    /// group_by: day | week | month | quarter. compare: none | previous_period | previous_year.
+    /// </summary>
+    [HttpGet("evolution-range")]
+    [ProducesResponseType(typeof(DashboardEvolutionDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> GetEvolutionRange(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
+        [FromQuery] string groupBy = "day",
+        [FromQuery] string compare = "none")
+    {
+        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
+        if ((dateTo - dateFrom).TotalDays > 3 * 365)
+            return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
+
+        if (!TryParseGranularity(groupBy, out var g))
+            return BadRequest(new { error = $"groupBy inválido (use day|week|month|quarter), recebido '{groupBy}'" });
+        if (!TryParseCompare(compare, out var c))
+            return BadRequest(new { error = $"compare inválido (use none|previous_period|previous_year), recebido '{compare}'" });
+
+        try
+        {
+            var result = await _leadService.GetEvolutionRangeAsync(
+                clinicId, dateFrom, dateTo, g, c, HttpContext.RequestAborted);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static bool TryParseGranularity(string raw, out LeadService.Granularity g)
+    {
+        switch (raw?.ToLowerInvariant())
+        {
+            case "day": g = LeadService.Granularity.Day; return true;
+            case "week": g = LeadService.Granularity.Week; return true;
+            case "month": g = LeadService.Granularity.Month; return true;
+            case "quarter": g = LeadService.Granularity.Quarter; return true;
+            default: g = LeadService.Granularity.Day; return false;
+        }
+    }
+
+    private static bool TryParseCompare(string raw, out LeadService.CompareMode c)
+    {
+        switch (raw?.ToLowerInvariant())
+        {
+            case "none": c = LeadService.CompareMode.None; return true;
+            case "previous_period": c = LeadService.CompareMode.PreviousPeriod; return true;
+            case "previous_year": c = LeadService.CompareMode.PreviousYear; return true;
+            default: c = LeadService.CompareMode.None; return false;
+        }
+    }
+
+    /// <summary>
     /// Obter contagem de leads por estado
     /// </summary>
     /// <param name="unitId">Filtrar por unidade específica</param>

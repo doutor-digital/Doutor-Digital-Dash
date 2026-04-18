@@ -28,6 +28,26 @@ public class ContactCreateDto
     public string? AttendanceStatus { get; set; }
 }
 
+public class ContactUpdateDto
+{
+    public string? Name { get; set; }
+    public string? Phone { get; set; }
+    public string? Conexao { get; set; }
+    public string? Observacoes { get; set; }
+    public string? Etapa { get; set; }
+    public List<string>? Tags { get; set; }
+
+    [JsonPropertyName("consultation_at")]
+    public DateTime? ConsultationAt { get; set; }
+
+    public DateTime? Birthday { get; set; }
+
+    public bool? Blocked { get; set; }
+
+    [JsonPropertyName("attendance_status")]
+    public string? AttendanceStatus { get; set; }
+}
+
 public class ContactActionDto
 {
     public string Action { get; set; } = string.Empty;

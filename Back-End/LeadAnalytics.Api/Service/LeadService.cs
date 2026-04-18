@@ -1494,7 +1494,197 @@ public class LeadService(
 
         return counts;
     }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Leads recentes (notificações + página /recent-leads)
+    // ════════════════════════════════════════════════════════════════
+
+    public async Task<RecentLeadsResponseDto> GetRecentLeadsAsync(
+        int clinicId,
+        int hours,
+        int limit,
+        int? unitId,
+        CancellationToken ct = default)
+    {
+        hours = Math.Clamp(hours, 1, 720);  // 1h a 30 dias
+        limit = Math.Clamp(limit, 1, 200);
+
+        var since = DateTime.UtcNow.AddHours(-hours);
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= since);
+
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        var total = await q.CountAsync(ct);
+
+        var items = await q
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(limit)
+            .Select(l => new RecentLeadDto
+            {
+                Id = l.Id,
+                ExternalId = l.ExternalId,
+                Name = l.Name,
+                Phone = l.Phone,
+                Source = l.Source,
+                Channel = l.Channel,
+                CurrentStage = l.CurrentStage,
+                ConversationState = l.ConversationState,
+                UnitId = l.UnitId,
+                UnitName = l.Unit != null ? l.Unit.Name : null,
+                CreatedAt = l.CreatedAt,
+            })
+            .ToListAsync(ct);
+
+        return new RecentLeadsResponseDto
+        {
+            Hours = hours,
+            Total = total,
+            Since = since,
+            Items = items,
+        };
     }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Evolução por período com granularidade e comparação
+    //  (alimenta o card "Evolução" + filtros do dashboard)
+    // ════════════════════════════════════════════════════════════════
+
+    public enum Granularity { Day, Week, Month, Quarter }
+    public enum CompareMode { None, PreviousPeriod, PreviousYear }
+
+    public async Task<DashboardEvolutionDto> GetEvolutionRangeAsync(
+        int clinicId,
+        DateTime dateFrom,
+        DateTime dateTo,
+        Granularity groupBy,
+        CompareMode compare,
+        CancellationToken ct = default)
+    {
+        if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
+
+        // Normaliza pro início/fim do dia em UTC (+1 dia no fim inclusivo)
+        var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
+        var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
+
+        var currentPoints = await BucketSeriesAsync(clinicId, startUtc, endExclUtc, groupBy, ct);
+
+        List<DashboardEvolutionPointDto>? comparePoints = null;
+        DateTime? compareStart = null;
+        DateTime? compareEnd = null;
+
+        if (compare != CompareMode.None)
+        {
+            var spanDays = (endExclUtc - startUtc).TotalDays;
+
+            (DateTime cStart, DateTime cEnd) = compare switch
+            {
+                CompareMode.PreviousPeriod => (startUtc.AddDays(-spanDays), endExclUtc.AddDays(-spanDays)),
+                CompareMode.PreviousYear => (startUtc.AddYears(-1), endExclUtc.AddYears(-1)),
+                _ => (startUtc, endExclUtc)
+            };
+
+            comparePoints = await BucketSeriesAsync(clinicId, cStart, cEnd, groupBy, ct);
+            compareStart = cStart;
+            compareEnd = cEnd.AddDays(-1);
+        }
+
+        var totalCurrent = currentPoints.Sum(p => p.Count);
+        var totalCompare = comparePoints?.Sum(p => p.Count) ?? 0;
+
+        return new DashboardEvolutionDto
+        {
+            DateFrom = dateFrom.Date,
+            DateTo = dateTo.Date,
+            GroupBy = groupBy.ToString().ToLowerInvariant(),
+            Compare = compare.ToString().ToLowerInvariant(),
+            TotalCurrent = totalCurrent,
+            TotalCompare = totalCompare,
+            ChangePercent = totalCompare > 0
+                ? Math.Round((double)(totalCurrent - totalCompare) / totalCompare * 100, 2)
+                : (double?)null,
+            Current = currentPoints,
+            Comparison = comparePoints,
+            ComparisonDateFrom = compareStart?.Date,
+            ComparisonDateTo = compareEnd?.Date,
+        };
+    }
+
+    private async Task<List<DashboardEvolutionPointDto>> BucketSeriesAsync(
+        int clinicId,
+        DateTime startInclUtc,
+        DateTime endExclUtc,
+        Granularity groupBy,
+        CancellationToken ct)
+    {
+        // Agregação client-side após trazer (tenantId, createdAt) — simples e sem dependências
+        // de funções SQL específicas. Para datasets grandes podemos migrar para date_trunc.
+        var rows = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                     && l.CreatedAt >= startInclUtc
+                     && l.CreatedAt < endExclUtc)
+            .Select(l => l.CreatedAt)
+            .ToListAsync(ct);
+
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+        var buckets = new SortedDictionary<DateTime, int>();
+        foreach (var createdUtc in rows)
+        {
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(createdUtc, DateTimeKind.Utc), tz);
+            var key = BucketStart(local, groupBy);
+            buckets[key] = buckets.TryGetValue(key, out var c) ? c + 1 : 1;
+        }
+
+        // Preenche buckets vazios dentro do intervalo
+        var startLocal = TimeZoneInfo.ConvertTimeFromUtc(startInclUtc, tz);
+        var endLocal = TimeZoneInfo.ConvertTimeFromUtc(endExclUtc.AddSeconds(-1), tz);
+        var cursor = BucketStart(startLocal, groupBy);
+        var last = BucketStart(endLocal, groupBy);
+
+        var result = new List<DashboardEvolutionPointDto>();
+        while (cursor <= last)
+        {
+            result.Add(new DashboardEvolutionPointDto
+            {
+                Bucket = cursor,
+                Label = BucketLabel(cursor, groupBy),
+                Count = buckets.TryGetValue(cursor, out var c) ? c : 0,
+            });
+            cursor = NextBucket(cursor, groupBy);
+        }
+        return result;
+    }
+
+    private static DateTime BucketStart(DateTime dt, Granularity g) => g switch
+    {
+        Granularity.Day => new DateTime(dt.Year, dt.Month, dt.Day),
+        Granularity.Week => new DateTime(dt.Year, dt.Month, dt.Day).AddDays(-(int)dt.DayOfWeek),
+        Granularity.Month => new DateTime(dt.Year, dt.Month, 1),
+        Granularity.Quarter => new DateTime(dt.Year, ((dt.Month - 1) / 3) * 3 + 1, 1),
+        _ => new DateTime(dt.Year, dt.Month, dt.Day),
+    };
+
+    private static DateTime NextBucket(DateTime dt, Granularity g) => g switch
+    {
+        Granularity.Day => dt.AddDays(1),
+        Granularity.Week => dt.AddDays(7),
+        Granularity.Month => dt.AddMonths(1),
+        Granularity.Quarter => dt.AddMonths(3),
+        _ => dt.AddDays(1),
+    };
+
+    private static string BucketLabel(DateTime dt, Granularity g) => g switch
+    {
+        Granularity.Day => dt.ToString("yyyy-MM-dd"),
+        Granularity.Week => $"{dt:yyyy-MM-dd}",
+        Granularity.Month => dt.ToString("yyyy-MM"),
+        Granularity.Quarter => $"{dt.Year}-Q{(dt.Month - 1) / 3 + 1}",
+        _ => dt.ToString("yyyy-MM-dd"),
+    };
+}
 
 public enum ProcessResult
 {

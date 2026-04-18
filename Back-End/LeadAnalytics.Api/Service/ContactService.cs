@@ -323,6 +323,94 @@ public class ContactService(AppDbContext db, IMemoryCache? cache = null)
         return ToDetail(contact);
     }
 
+    public async Task<ContactDetailDto?> UpdateAsync(
+        int tenantId,
+        string id,
+        ContactUpdateDto dto,
+        CancellationToken ct = default)
+    {
+        var (prefix, numId) = ParseId(id);
+        if (numId is null) return null;
+        if (prefix == "l")
+            throw new InvalidOperationException("leads não podem ser editados por este endpoint");
+
+        var contact = await _db.Contacts
+            .FirstOrDefaultAsync(c => c.Id == numId && c.TenantId == tenantId, ct);
+        if (contact is null) return null;
+
+        var now = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(dto.Name))
+            contact.Name = dto.Name.Trim();
+
+        if (!string.IsNullOrWhiteSpace(dto.Phone))
+        {
+            var phoneNorm = ContactImportService.NormalizePhone(dto.Phone)
+                ?? throw new ArgumentException("telefone inválido", nameof(dto.Phone));
+            if (phoneNorm != contact.PhoneNormalized)
+            {
+                var conflict = await _db.Contacts.AnyAsync(
+                    c => c.TenantId == tenantId &&
+                         c.Id != contact.Id &&
+                         c.PhoneNormalized == phoneNorm, ct);
+                if (conflict)
+                    throw new InvalidOperationException("outro contato já usa esse telefone");
+                contact.PhoneNormalized = phoneNorm;
+                contact.PhoneRaw = dto.Phone;
+            }
+        }
+
+        if (dto.Conexao is not null)
+            contact.Conexao = string.IsNullOrWhiteSpace(dto.Conexao) ? null : dto.Conexao.Trim();
+        if (dto.Observacoes is not null)
+            contact.Observacoes = string.IsNullOrWhiteSpace(dto.Observacoes) ? null : dto.Observacoes.Trim();
+        if (dto.Etapa is not null)
+            contact.Etapa = string.IsNullOrWhiteSpace(dto.Etapa) ? null : dto.Etapa.Trim();
+        if (dto.Tags is not null)
+        {
+            var clean = dto.Tags.Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+            contact.TagsJson = clean.Count > 0 ? JsonSerializer.Serialize(clean) : null;
+        }
+        if (dto.ConsultationAt.HasValue)
+        {
+            contact.ConsultationAt = dto.ConsultationAt;
+            contact.ConsultationRegisteredAt = now;
+        }
+        if (dto.Birthday.HasValue) contact.Birthday = dto.Birthday;
+        if (dto.Blocked.HasValue) contact.Blocked = dto.Blocked.Value;
+
+        if (dto.AttendanceStatus is not null)
+        {
+            var attendance = NormalizeStatus(dto.AttendanceStatus);
+            if (attendance == "none") attendance = null;
+            contact.AttendanceStatus = attendance;
+            contact.AttendanceStatusAt = attendance is null ? null : now;
+        }
+
+        contact.UpdatedAt = now;
+        await _db.SaveChangesAsync(ct);
+        return ToDetail(contact);
+    }
+
+    public async Task<bool> DeleteAsync(
+        int tenantId,
+        string id,
+        CancellationToken ct = default)
+    {
+        var (prefix, numId) = ParseId(id);
+        if (numId is null) return false;
+        if (prefix == "l")
+            throw new InvalidOperationException("leads não podem ser removidos por este endpoint");
+
+        var contact = await _db.Contacts
+            .FirstOrDefaultAsync(c => c.Id == numId && c.TenantId == tenantId, ct);
+        if (contact is null) return false;
+
+        _db.Contacts.Remove(contact);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<ContactDetailDto?> SetActionAsync(
         int tenantId,
         string id,

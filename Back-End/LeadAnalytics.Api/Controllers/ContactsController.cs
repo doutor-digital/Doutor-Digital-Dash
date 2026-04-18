@@ -124,6 +124,63 @@ public class ContactsController(
     }
 
     /// <summary>
+    /// Edita um contato existente (apenas ids c_*). Só campos enviados são alterados.
+    /// </summary>
+    [HttpPut("{id}")]
+    [ProducesResponseType(typeof(ContactDetailDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<IActionResult> Update(
+        string id,
+        [FromQuery] int clinicId,
+        [FromBody] ContactUpdateDto dto)
+    {
+        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (dto is null) return BadRequest(new { error = "payload obrigatório" });
+
+        try
+        {
+            var updated = await _contactService.UpdateAsync(clinicId, id, dto, HttpContext.RequestAborted);
+            if (updated is null) return NotFound(new { error = $"contato '{id}' não encontrado" });
+            return Ok(updated);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove um contato (apenas ids c_*).
+    /// </summary>
+    [HttpDelete("{id}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Delete(
+        string id,
+        [FromQuery] int clinicId)
+    {
+        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+
+        try
+        {
+            var ok = await _contactService.DeleteAsync(clinicId, id, HttpContext.RequestAborted);
+            if (!ok) return NotFound(new { error = $"contato '{id}' não encontrado" });
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Atualiza a ação (compareceu, faltou, aguardando) de um contato ou lead.
     /// </summary>
     [HttpPatch("{id}/action")]

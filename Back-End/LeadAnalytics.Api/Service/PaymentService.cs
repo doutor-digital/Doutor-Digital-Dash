@@ -64,7 +64,7 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
             InstallmentValue = installmentValue,
             Amount = treatmentValue,
             Notes = dto.Notes,
-            PaidAt = dto.PaidAt ?? DateTime.UtcNow,
+            PaidAt = ToUtc(dto.PaidAt) ?? DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
         };
 
@@ -122,8 +122,11 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
     {
         var q = _db.Payments.AsNoTracking().Where(p => p.TenantId == clinicId);
 
-        if (dateFrom.HasValue) q = q.Where(p => p.PaidAt >= dateFrom.Value);
-        if (dateTo.HasValue) q = q.Where(p => p.PaidAt < dateTo.Value);
+        var fromUtc = ToUtc(dateFrom);
+        var toUtc = ToUtc(dateTo);
+
+        if (fromUtc.HasValue) q = q.Where(p => p.PaidAt >= fromUtc.Value);
+        if (toUtc.HasValue) q = q.Where(p => p.PaidAt < toUtc.Value);
         if (!string.IsNullOrWhiteSpace(treatment))
             q = q.Where(p => p.Treatment == treatment);
         if (!string.IsNullOrWhiteSpace(method))
@@ -164,9 +167,12 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
     {
         var q = _db.Payments.AsNoTracking().AsQueryable();
 
+        var fromUtc = ToUtc(dateFrom);
+        var toUtc = ToUtc(dateTo);
+
         if (clinicId is > 0) q = q.Where(p => p.TenantId == clinicId.Value);
-        if (dateFrom.HasValue) q = q.Where(p => p.PaidAt >= dateFrom.Value);
-        if (dateTo.HasValue) q = q.Where(p => p.PaidAt < dateTo.Value);
+        if (fromUtc.HasValue) q = q.Where(p => p.PaidAt >= fromUtc.Value);
+        if (toUtc.HasValue) q = q.Where(p => p.PaidAt < toUtc.Value);
 
         var grouped = await q
             .GroupBy(p => new { p.UnitId, p.TenantId })
@@ -262,6 +268,18 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
 
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    private static DateTime? ToUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        var dt = value.Value;
+        return dt.Kind switch
+        {
+            DateTimeKind.Utc => dt,
+            DateTimeKind.Local => dt.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc),
+        };
     }
 
     private static PaymentResponseDto ToDto(Payment p, string leadName, string? unitName) => new()

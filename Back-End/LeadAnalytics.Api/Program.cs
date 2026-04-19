@@ -70,6 +70,7 @@ builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<ContactImportService>();
+builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddCors(options =>
 {

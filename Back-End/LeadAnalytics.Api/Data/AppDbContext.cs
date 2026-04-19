@@ -119,6 +119,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(e => e.Lead)
                   .WithMany(l => l.Payments)
                   .HasForeignKey(e => e.LeadId);
+
+            entity.HasOne(e => e.Unit)
+                  .WithMany()
+                  .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.Property(e => e.Treatment).HasMaxLength(80).IsRequired();
+            entity.Property(e => e.PaymentMethod).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.Notes).HasMaxLength(500);
+
+            entity.Property(e => e.Amount).HasColumnType("numeric(12,2)");
+            entity.Property(e => e.TreatmentValue).HasColumnType("numeric(12,2)");
+            entity.Property(e => e.DownPayment).HasColumnType("numeric(12,2)");
+            entity.Property(e => e.InstallmentValue).HasColumnType("numeric(12,2)");
+
+            entity.HasIndex(e => new { e.TenantId, e.PaidAt });
+            entity.HasIndex(e => new { e.TenantId, e.UnitId });
+            entity.HasIndex(e => e.LeadId);
         });
 
           // ─── User ────────────────────────────────────────────────

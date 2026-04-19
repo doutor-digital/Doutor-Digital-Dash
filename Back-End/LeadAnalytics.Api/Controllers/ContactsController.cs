@@ -288,9 +288,10 @@ public class ContactsController(
     /// </summary>
     [HttpPost("import")]
     [RequestSizeLimit(MaxFileSize)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ContactImportResultDto), 200)]
     public async Task<IActionResult> Import(
-        [FromForm] IFormFile file,
+        IFormFile file,
         [FromForm] int clinicId,
         [FromForm] string onDuplicate = "skip")
     {

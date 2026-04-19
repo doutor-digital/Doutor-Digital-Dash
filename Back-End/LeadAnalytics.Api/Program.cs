@@ -85,7 +85,58 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var startupLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        db.Database.Migrate();
+        startupLogger.LogInformation("Migrations aplicadas com sucesso no startup.");
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogError(ex, "Falha ao aplicar migrations no startup.");
+    }
+}
+
 app.UseCors("AllowAll");
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Unhandled exception em {Path}", context.Request.Path);
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Clear();
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/problem+json";
+
+            var origin = context.Request.Headers.Origin.ToString();
+            if (!string.IsNullOrEmpty(origin))
+            {
+                context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                context.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+                context.Response.Headers["Vary"] = "Origin";
+            }
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                type = "about:blank",
+                title = "Internal Server Error",
+                status = 500,
+                detail = app.Environment.IsDevelopment() ? ex.Message : "Erro interno no servidor."
+            });
+        }
+    }
+});
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>

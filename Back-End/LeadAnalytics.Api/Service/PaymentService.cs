@@ -22,12 +22,11 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
             throw new ArgumentException("clinicId inválido");
         if (string.IsNullOrWhiteSpace(dto.Treatment))
             throw new ArgumentException("tratamento obrigatório");
-        if (string.IsNullOrWhiteSpace(dto.PaymentMethod))
-            throw new ArgumentException("forma de pagamento obrigatória");
 
-        var method = dto.PaymentMethod.Trim().ToLowerInvariant();
-        if (!AllowedMethods.Contains(method))
-            throw new ArgumentException($"forma de pagamento inválida. Use: {string.Join(", ", AllowedMethods)}");
+        var hasSplits = dto.Splits is { Count: > 0 };
+
+        if (!hasSplits && string.IsNullOrWhiteSpace(dto.PaymentMethod))
+            throw new ArgumentException("forma de pagamento obrigatória");
 
         if (dto.Installments <= 0) dto.Installments = 1;
         if (dto.TreatmentDurationMonths < 0) dto.TreatmentDurationMonths = 0;
@@ -42,31 +41,99 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
             ? dto.TreatmentValue.Value
             : Payment.DefaultTreatmentValue;
 
-        if (dto.DownPayment < 0 || dto.DownPayment > treatmentValue)
-            throw new ArgumentException("entrada inválida (não pode ser negativa nem maior que o valor do tratamento)");
+        Payment payment;
 
-        var remaining = treatmentValue - dto.DownPayment;
-        var installmentValue = dto.Installments > 0
-            ? Math.Round(remaining / dto.Installments, 2)
-            : 0m;
-
-        var payment = new Payment
+        if (hasSplits)
         {
-            LeadId = lead.Id,
-            TenantId = dto.ClinicId,
-            UnitId = unit.Id,
-            Treatment = dto.Treatment.Trim(),
-            TreatmentDurationMonths = dto.TreatmentDurationMonths,
-            TreatmentValue = treatmentValue,
-            PaymentMethod = method,
-            DownPayment = dto.DownPayment,
-            Installments = dto.Installments,
-            InstallmentValue = installmentValue,
-            Amount = treatmentValue,
-            Notes = dto.Notes,
-            PaidAt = ToUtc(dto.PaidAt) ?? DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
-        };
+            var normalizedSplits = new List<PaymentSplit>(dto.Splits!.Count);
+            decimal totalFromSplits = 0m;
+
+            foreach (var s in dto.Splits!)
+            {
+                if (string.IsNullOrWhiteSpace(s.PaymentMethod))
+                    throw new ArgumentException("cada forma de pagamento precisa de método");
+
+                var m = s.PaymentMethod.Trim().ToLowerInvariant();
+                if (!AllowedMethods.Contains(m))
+                    throw new ArgumentException($"forma de pagamento inválida: '{s.PaymentMethod}'. Use: {string.Join(", ", AllowedMethods)}");
+
+                if (s.Amount <= 0)
+                    throw new ArgumentException("valor de cada forma deve ser maior que zero");
+
+                var inst = s.Installments <= 0 ? 1 : s.Installments;
+                var instValue = Math.Round(s.Amount / inst, 2);
+
+                normalizedSplits.Add(new PaymentSplit
+                {
+                    PaymentMethod = m,
+                    Amount = s.Amount,
+                    Installments = inst,
+                    InstallmentValue = instValue,
+                    Notes = s.Notes,
+                    CreatedAt = DateTime.UtcNow,
+                });
+
+                totalFromSplits += s.Amount;
+            }
+
+            if (totalFromSplits <= 0)
+                throw new ArgumentException("soma das formas de pagamento deve ser maior que zero");
+
+            if (Math.Abs(totalFromSplits - treatmentValue) > 0.01m)
+                throw new ArgumentException(
+                    $"soma das formas de pagamento ({totalFromSplits:N2}) difere do valor do tratamento ({treatmentValue:N2})");
+
+            payment = new Payment
+            {
+                LeadId = lead.Id,
+                TenantId = dto.ClinicId,
+                UnitId = unit.Id,
+                Treatment = dto.Treatment.Trim(),
+                TreatmentDurationMonths = dto.TreatmentDurationMonths,
+                TreatmentValue = treatmentValue,
+                PaymentMethod = PaymentMethodConstants.Composite,
+                DownPayment = 0m,
+                Installments = normalizedSplits.Max(s => s.Installments),
+                InstallmentValue = 0m,
+                Amount = totalFromSplits,
+                Notes = dto.Notes,
+                PaidAt = ToUtc(dto.PaidAt) ?? DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                Splits = normalizedSplits,
+            };
+        }
+        else
+        {
+            var method = dto.PaymentMethod!.Trim().ToLowerInvariant();
+            if (!AllowedMethods.Contains(method))
+                throw new ArgumentException($"forma de pagamento inválida. Use: {string.Join(", ", AllowedMethods)}");
+
+            if (dto.DownPayment < 0 || dto.DownPayment > treatmentValue)
+                throw new ArgumentException("entrada inválida (não pode ser negativa nem maior que o valor do tratamento)");
+
+            var remaining = treatmentValue - dto.DownPayment;
+            var installmentValue = dto.Installments > 0
+                ? Math.Round(remaining / dto.Installments, 2)
+                : 0m;
+
+            payment = new Payment
+            {
+                LeadId = lead.Id,
+                TenantId = dto.ClinicId,
+                UnitId = unit.Id,
+                Treatment = dto.Treatment.Trim(),
+                TreatmentDurationMonths = dto.TreatmentDurationMonths,
+                TreatmentValue = treatmentValue,
+                PaymentMethod = method,
+                DownPayment = dto.DownPayment,
+                Installments = dto.Installments,
+                InstallmentValue = installmentValue,
+                Amount = treatmentValue,
+                Notes = dto.Notes,
+                PaidAt = ToUtc(dto.PaidAt) ?? DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+            };
+        }
 
         _db.Payments.Add(payment);
 
@@ -77,8 +144,9 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "💰 Pagamento {Id} registrado: lead={LeadId} clinicId={Clinic} tratamento={Treatment} valor={Valor}",
-            payment.Id, lead.Id, dto.ClinicId, payment.Treatment, payment.Amount);
+            "💰 Pagamento {Id} registrado: lead={LeadId} clinicId={Clinic} tratamento={Treatment} valor={Valor} formas={Formas}",
+            payment.Id, lead.Id, dto.ClinicId, payment.Treatment, payment.Amount,
+            hasSplits ? string.Join("+", payment.Splits.Select(s => s.PaymentMethod)) : payment.PaymentMethod);
 
         return ToDto(payment, lead.Name, unit.Name);
     }
@@ -108,6 +176,15 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
                 Notes = p.Notes,
                 PaidAt = p.PaidAt,
                 CreatedAt = p.CreatedAt,
+                Splits = p.Splits.Select(s => new PaymentSplitDto
+                {
+                    Id = s.Id,
+                    PaymentMethod = s.PaymentMethod,
+                    Amount = s.Amount,
+                    Installments = s.Installments,
+                    InstallmentValue = s.InstallmentValue,
+                    Notes = s.Notes,
+                }).ToList(),
             })
             .ToListAsync(ct);
     }
@@ -132,7 +209,7 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
         if (!string.IsNullOrWhiteSpace(method))
         {
             var m = method.Trim().ToLowerInvariant();
-            q = q.Where(p => p.PaymentMethod == m);
+            q = q.Where(p => p.PaymentMethod == m || p.Splits.Any(s => s.PaymentMethod == m));
         }
 
         return await q
@@ -155,6 +232,15 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
                 Notes = p.Notes,
                 PaidAt = p.PaidAt,
                 CreatedAt = p.CreatedAt,
+                Splits = p.Splits.Select(s => new PaymentSplitDto
+                {
+                    Id = s.Id,
+                    PaymentMethod = s.PaymentMethod,
+                    Amount = s.Amount,
+                    Installments = s.Installments,
+                    InstallmentValue = s.InstallmentValue,
+                    Notes = s.Notes,
+                }).ToList(),
             })
             .ToListAsync(ct);
     }
@@ -186,7 +272,8 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
             })
             .ToListAsync(ct);
 
-        var methodBreakdown = await q
+        var nonComposite = await q
+            .Where(p => p.PaymentMethod != PaymentMethodConstants.Composite)
             .GroupBy(p => new { p.UnitId, p.PaymentMethod })
             .Select(g => new
             {
@@ -196,6 +283,31 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
                 Total = g.Sum(p => p.Amount),
             })
             .ToListAsync(ct);
+
+        var splitBreakdown = await q
+            .Where(p => p.PaymentMethod == PaymentMethodConstants.Composite)
+            .SelectMany(p => p.Splits.Select(s => new { p.UnitId, s.PaymentMethod, s.Amount }))
+            .GroupBy(x => new { x.UnitId, x.PaymentMethod })
+            .Select(g => new
+            {
+                g.Key.UnitId,
+                g.Key.PaymentMethod,
+                Quantity = g.Count(),
+                Total = g.Sum(x => x.Amount),
+            })
+            .ToListAsync(ct);
+
+        var methodBreakdown = nonComposite
+            .Concat(splitBreakdown)
+            .GroupBy(x => new { x.UnitId, x.PaymentMethod })
+            .Select(g => new
+            {
+                g.Key.UnitId,
+                g.Key.PaymentMethod,
+                Quantity = g.Sum(x => x.Quantity),
+                Total = g.Sum(x => x.Total),
+            })
+            .ToList();
 
         var unitIds = grouped
             .Where(x => x.UnitId.HasValue)
@@ -300,5 +412,14 @@ public class PaymentService(AppDbContext db, UnitService unitService, ILogger<Pa
         Notes = p.Notes,
         PaidAt = p.PaidAt,
         CreatedAt = p.CreatedAt,
+        Splits = p.Splits?.Select(s => new PaymentSplitDto
+        {
+            Id = s.Id,
+            PaymentMethod = s.PaymentMethod,
+            Amount = s.Amount,
+            Installments = s.Installments,
+            InstallmentValue = s.InstallmentValue,
+            Notes = s.Notes,
+        }).ToList() ?? [],
     };
 }

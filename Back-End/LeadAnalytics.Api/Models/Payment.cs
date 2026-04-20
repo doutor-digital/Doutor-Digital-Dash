@@ -42,4 +42,11 @@ public class Payment
 
     public DateTime PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    public List<PaymentSplit> Splits { get; set; } = [];
+}
+
+public static class PaymentMethodConstants
+{
+    public const string Composite = "composite";
 }

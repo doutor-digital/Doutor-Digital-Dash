@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LeadConversation> LeadConversations { get; set; }
     public DbSet<LeadInteraction> LeadInteractions { get; set; }
     public DbSet<Payment> Payments { get; set; }
+    public DbSet<PaymentSplit> PaymentSplits { get; set; }
     public DbSet<OriginEvent> OriginEvents { get; set; }
     public DbSet<LeadAttribution> LeadAttributions { get; set; }
     public DbSet<AppConfiguration> AppConfigurations { get; set; }
@@ -137,6 +138,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => new { e.TenantId, e.PaidAt });
             entity.HasIndex(e => new { e.TenantId, e.UnitId });
             entity.HasIndex(e => e.LeadId);
+        });
+
+        // ─── PaymentSplit ────────────────────────────────────────
+        modelBuilder.Entity<PaymentSplit>(entity =>
+        {
+            entity.ToTable("payment_splits");
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne(e => e.Payment)
+                  .WithMany(p => p.Splits)
+                  .HasForeignKey(e => e.PaymentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Property(e => e.PaymentMethod).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.Notes).HasMaxLength(500);
+
+            entity.Property(e => e.Amount).HasColumnType("numeric(12,2)");
+            entity.Property(e => e.InstallmentValue).HasColumnType("numeric(12,2)");
+
+            entity.HasIndex(e => e.PaymentId);
+            entity.HasIndex(e => new { e.PaymentId, e.PaymentMethod });
         });
 
           // ─── User ────────────────────────────────────────────────

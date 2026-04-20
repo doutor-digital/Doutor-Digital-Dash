@@ -9,11 +9,31 @@ public class PaymentCreateDto
     public int TreatmentDurationMonths { get; set; }
     public decimal? TreatmentValue { get; set; }
 
-    public string PaymentMethod { get; set; } = null!;
+    public string? PaymentMethod { get; set; }
     public decimal DownPayment { get; set; }
     public int Installments { get; set; } = 1;
 
     public DateTime? PaidAt { get; set; }
+    public string? Notes { get; set; }
+
+    public List<PaymentSplitInputDto>? Splits { get; set; }
+}
+
+public class PaymentSplitInputDto
+{
+    public string PaymentMethod { get; set; } = null!;
+    public decimal Amount { get; set; }
+    public int Installments { get; set; } = 1;
+    public string? Notes { get; set; }
+}
+
+public class PaymentSplitDto
+{
+    public int Id { get; set; }
+    public string PaymentMethod { get; set; } = null!;
+    public decimal Amount { get; set; }
+    public int Installments { get; set; } = 1;
+    public decimal InstallmentValue { get; set; }
     public string? Notes { get; set; }
 }
 
@@ -38,6 +58,8 @@ public class PaymentResponseDto
     public string? Notes { get; set; }
     public DateTime PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    public List<PaymentSplitDto> Splits { get; set; } = [];
 }
 
 public class PaymentMethodBreakdownDto

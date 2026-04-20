@@ -52,23 +52,28 @@ public class UserController(UserService userService) : ControllerBase
         return NoContent();
     }
 
-    public class UploadPhotoDto
-    {
-        public IFormFile File { get; set; } = default!;
-    }
-
     [Authorize]
     [HttpPost("me/photo")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 6 * 1024 * 1024)]
-    public async Task<IActionResult> UploadMyPhoto([FromForm] UploadPhotoDto dto)
+    public async Task<IActionResult> UploadMyPhoto()
     {
         var id = CurrentUserId();
         if (id is null) return Unauthorized();
-        if (dto?.File is null) return BadRequest(new { message = "Arquivo obrigatório." });
 
-        var (user, error) = await _userService.SetMyAvatarAsync(id.Value, dto.File);
+        if (!Request.HasFormContentType)
+            return StatusCode(415, new { message = "Envie como multipart/form-data." });
+
+        var form = await Request.ReadFormAsync();
+        var file = form.Files.GetFile("file")
+                ?? form.Files.GetFile("File")
+                ?? form.Files.FirstOrDefault();
+
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "Arquivo obrigatório." });
+
+        var (user, error) = await _userService.SetMyAvatarAsync(id.Value, file);
         if (user is null) return BadRequest(new { message = error ?? "Falha no upload." });
         return Ok(user);
     }

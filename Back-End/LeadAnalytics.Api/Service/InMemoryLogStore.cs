@@ -31,6 +31,9 @@ public class InMemoryLogStore
         _capacity = capacity;
     }
 
+    /// <summary>Disparado toda vez que uma nova entrada é adicionada (para streaming via SSE).</summary>
+    public event Action<LogEntry>? EntryAdded;
+
     public void Add(LogEntry entry)
     {
         _lock.EnterWriteLock();
@@ -40,6 +43,9 @@ public class InMemoryLogStore
             while (_items.Count > _capacity) _items.RemoveLast();
         }
         finally { _lock.ExitWriteLock(); }
+
+        try { EntryAdded?.Invoke(entry); }
+        catch { /* subscribers falhando não podem derrubar o logger */ }
     }
 
     public long NextId() => Interlocked.Increment(ref _nextId);

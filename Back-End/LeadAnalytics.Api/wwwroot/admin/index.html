@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Console · Logs da API</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #070709;
+      --surface: #0c0c10;
+      --surface-2: #111116;
+      --border: rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.12);
+      --text: #e6e7eb;
+      --muted: #7c808b;
+      --muted-2: #4d5159;
+      --accent: #10b981;
+      --accent-2: #059669;
+
+      --trace: #71767f;
+      --debug: #38bdf8;
+      --info: #34d399;
+      --warn: #fbbf24;
+      --error: #f87171;
+      --crit: #e879f9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif; font-size: 13px; }
+    code, pre, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace; }
+
+    a { color: var(--accent); text-decoration: none; }
+    button { font: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; }
+
+    /* ─── Login ─── */
+    .gate { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .gate-card {
+      width: 100%; max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 24px 80px -20px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .gate-hd { padding: 26px 26px 20px; border-bottom: 1px solid var(--border); }
+    .gate-hd .row { display: flex; gap: 12px; align-items: center; }
+    .logo {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #065f46);
+      display: grid; place-items: center;
+      box-shadow: 0 10px 24px -10px rgba(16,185,129,0.6);
+    }
+    .logo svg { width: 22px; height: 22px; color: #fff; }
+    .overline { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted-2); font-weight: 600; }
+    h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+    .gate-hd p { margin-top: 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .gate-hd code { background: rgba(255,255,255,0.04); padding: 1px 5px; border-radius: 3px; font-size: 11.5px; color: #c9cdd4; }
+
+    .gate-form { padding: 20px 26px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .field label { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+    .input-wrap { position: relative; }
+    .input {
+      width: 100%; padding: 10px 12px 10px 36px; border-radius: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text);
+      font-size: 13px; transition: border-color .15s, background .15s;
+    }
+    .input:focus { outline: 0; border-color: rgba(16,185,129,0.5); background: rgba(255,255,255,0.05); }
+    .input-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted-2); width: 15px; height: 15px; pointer-events: none; }
+    .reveal { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 5px; color: var(--muted); }
+    .reveal:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 14px; border-radius: 8px; font-weight: 600; font-size: 13px;
+      transition: background .15s, transform .05s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: #064e3b; width: 100%; }
+    .btn-primary:hover { background: #34d399; }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-ghost { color: var(--muted); padding: 6px 10px; font-weight: 500; }
+    .btn-ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); padding: 7px 11px; font-size: 12px; }
+    .btn-outline:hover { background: rgba(255,255,255,0.04); }
+    .btn-danger { color: #fecaca; border: 1px solid rgba(244,63,94,0.25); padding: 7px 11px; font-size: 12px; border-radius: 8px; }
+    .btn-danger:hover { background: rgba(244,63,94,0.08); }
+
+    .err {
+      padding: 9px 12px; background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.25);
+      color: #fecaca; border-radius: 8px; font-size: 12px;
+    }
+    .gate-foot { padding: 16px 26px 22px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-2); line-height: 1.5; }
+    .gate-foot pre { margin-top: 8px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 6px; color: #c1c5cd; font-size: 11px; overflow-x: auto; }
+
+    /* ─── Console ─── */
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+    header.top {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(10,10,13,0.95); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .top-inner {
+      max-width: 1400px; margin: 0 auto; padding: 10px 18px;
+      display: flex; gap: 16px; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-text { min-width: 0; }
+    .brand h1 { font-size: 14.5px; font-weight: 600; }
+    .brand .overline { margin-bottom: 2px; }
+    .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+    main { flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Levels grid */
+    .levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    @media (max-width: 720px) { .levels { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 480px) { .levels { grid-template-columns: repeat(2, 1fr); } }
+    .level-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 10px 12px; border-radius: 11px;
+      transition: background .15s, border-color .15s;
+    }
+    .level-pill:hover { background: rgba(255,255,255,0.04); }
+    .level-pill[data-active="true"] { background: rgba(16,185,129,0.05); border-color: rgba(16,185,129,0.3); }
+    .level-pill .lbl { display: flex; align-items: center; gap: 8px; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; }
+    .level-pill .dot { width: 8px; height: 8px; border-radius: 999px; }
+    .level-pill .cnt { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Filters */
+    .filters {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .filters .row { display: grid; gap: 10px; grid-template-columns: 2fr repeat(3, 1fr); }
+    @media (max-width: 900px) { .filters .row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { .filters .row { grid-template-columns: 1fr; } }
+    select.input { padding-left: 12px; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c808b' stroke-width='2' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
+    .meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); }
+    .live-dot { width: 7px; height: 7px; border-radius: 999px; background: #10b981; display: inline-block; margin-right: 6px; animation: pulse 1.5s infinite; }
+    .live-dot.off { background: #4b5563; animation: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* Log list */
+    #logs { display: flex; flex-direction: column; gap: 5px; }
+    .entry {
+      background: #0a0a0d; border: 1px solid var(--border); border-radius: 8px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+      transition: background .1s;
+    }
+    .entry:hover { background: rgba(255,255,255,0.025); }
+    .entry.level-error { border-color: rgba(248,113,113,0.25); background: rgba(248,113,113,0.05); }
+    .entry.level-warning { border-color: rgba(251,191,36,0.22); background: rgba(251,191,36,0.04); }
+    .entry.level-critical { border-color: rgba(232,121,249,0.3); background: rgba(232,121,249,0.06); }
+    .entry-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; }
+    .entry .caret {
+      width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted-2);
+      flex-shrink: 0; border-radius: 3px; transition: color .1s;
+    }
+    .entry .caret:hover { color: var(--text); }
+    .entry .caret.dot::after { content: ""; width: 5px; height: 5px; border-radius: 999px; background: currentColor; }
+    .entry time { flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--muted-2); font-size: 11px; padding-top: 1px; min-width: 62px; }
+    .badge {
+      flex-shrink: 0; padding: 1px 6px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em;
+      border-radius: 3px; text-transform: uppercase;
+    }
+    .badge.level-trace { color: var(--trace); background: rgba(113,118,127,0.12); }
+    .badge.level-debug { color: var(--debug); background: rgba(56,189,248,0.12); }
+    .badge.level-information { color: var(--info); background: rgba(52,211,153,0.12); }
+    .badge.level-warning { color: var(--warn); background: rgba(251,191,36,0.14); }
+    .badge.level-error { color: var(--error); background: rgba(248,113,113,0.14); }
+    .badge.level-critical { color: var(--crit); background: rgba(232,121,249,0.15); }
+    .entry .cat { flex-shrink: 0; max-width: 180px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .entry .msg { flex: 1; min-width: 0; color: var(--text); word-break: break-word; }
+    .entry.collapsed .msg { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .entry .hint { margin-top: 3px; font-size: 10.5px; color: var(--muted-2); display: flex; gap: 10px; flex-wrap: wrap; }
+    .entry .hint .tag { background: rgba(255,255,255,0.04); border: 1px solid var(--border); padding: 0 5px; border-radius: 3px; font-size: 10px; color: var(--muted); }
+    .entry .copy {
+      width: 22px; height: 22px; display: grid; place-items: center;
+      color: var(--muted-2); border-radius: 4px; flex-shrink: 0;
+    }
+    .entry .copy:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .entry pre.stack {
+      margin: 0; padding: 10px 14px; border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.3); color: #fecaca; font-size: 11.5px; line-height: 1.55;
+      white-space: pre-wrap; max-height: 340px; overflow: auto;
+    }
+    .entry pre.stack::-webkit-scrollbar { width: 8px; height: 8px; }
+    .entry pre.stack::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    .empty { padding: 56px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .empty svg { width: 22px; height: 22px; margin: 0 auto 10px; opacity: .7; }
+
+    .flash { animation: flash .7s ease-out; }
+    @keyframes flash { 0% { box-shadow: 0 0 0 2px rgba(16,185,129,0.5) inset; } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0) inset; } }
+
+    .toast {
+      position: fixed; bottom: 18px; right: 18px; z-index: 100;
+      background: #0c0c10; border: 1px solid var(--border-strong); color: var(--text);
+      padding: 10px 14px; border-radius: 9px; font-size: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      animation: slideIn .2s ease-out;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <div id="app-root"></div>
+
+  <!-- ícones (lucide-style, inline) -->
+  <template id="icon-terminal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></template>
+  <template id="icon-user"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></template>
+  <template id="icon-key"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></template>
+  <template id="icon-eye"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></template>
+  <template id="icon-eye-off"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg></template>
+  <template id="icon-search"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></template>
+  <template id="icon-pause"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+  <template id="icon-play"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+  <template id="icon-trash"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></template>
+  <template id="icon-refresh"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></template>
+  <template id="icon-logout"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></template>
+  <template id="icon-copy"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></template>
+  <template id="icon-chevron"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></template>
+  <template id="icon-info"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></template>
+  <template id="icon-shield"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><polyline points="9 12 11 14 15 10"/></svg></template>
+
+  <script>
+  // ─── Helpers ───────────────────────────────────────────────────────────
+  const LEVELS = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+  const LEVEL_LABEL = { Trace: "TRACE", Debug: "DEBUG", Information: "INFO", Warning: "WARN", Error: "ERROR", Critical: "CRIT" };
+  const LEVEL_COLOR = { Trace: "#71767f", Debug: "#38bdf8", Information: "#34d399", Warning: "#fbbf24", Error: "#f87171", Critical: "#e879f9" };
+
+  const TOKEN_KEY = "dd.logs.token";
+  const TOKEN_EXP_KEY = "dd.logs.exp";
+
+  const state = {
+    authed: false,
+    level: "",
+    search: "",
+    sinceMinutes: 0,
+    limit: 500,
+    live: true,
+    items: [],              // entradas exibidas (mais novo no topo)
+    stats: { byLevel: {}, total: 0 },
+    expanded: new Set(),
+    sse: null,
+  };
+
+  function $(sel, root = document) { return root.querySelector(sel); }
+  function el(tag, attrs = {}, children = []) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k === "html") n.innerHTML = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v != null) n.setAttribute(k, v);
+    }
+    for (const c of [].concat(children)) {
+      if (c == null) continue;
+      n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return n;
+  }
+  function icon(id) {
+    const tpl = document.getElementById("icon-" + id);
+    return tpl ? tpl.content.cloneNode(true) : document.createDocumentFragment();
+  }
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function shortCat(cat) { const p = (cat || "").split("."); return p[p.length - 1] || cat; }
+  function toast(msg, ms = 2200) {
+    const t = el("div", { class: "toast" }, msg);
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), ms);
+  }
+
+  function hasSession() {
+    const t = localStorage.getItem(TOKEN_KEY);
+    const exp = localStorage.getItem(TOKEN_EXP_KEY);
+    if (!t) return false;
+    if (exp && new Date(exp).getTime() <= Date.now()) {
+      clearSession();
+      return false;
+    }
+    return true;
+  }
+  function saveSession(token, expiresAt) {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (expiresAt) localStorage.setItem(TOKEN_EXP_KEY, expiresAt);
+  }
+  function clearSession() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXP_KEY);
+  }
+  function authHeaders() {
+    const t = localStorage.getItem(TOKEN_KEY) || "";
+    return { "X-Logs-Token": t, "Content-Type": "application/json" };
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, { ...opts, headers: { ...authHeaders(), ...(opts.headers || {}) } });
+    if (res.status === 401) {
+      clearSession();
+      state.authed = false;
+      render();
+      throw new Error("Sessão expirada");
+    }
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { const j = await res.json(); msg = j.message || msg; } catch {}
+      throw new Error(msg);
+    }
+    const ct = res.headers.get("content-type") || "";
+    return ct.includes("application/json") ? res.json() : res.text();
+  }
+
+  // ─── Gate ──────────────────────────────────────────────────────────────
+  function renderGate() {
+    const root = $("#app-root");
+    root.innerHTML = "";
+
+    let showPwd = false;
+    let loading = false;
+    let error = null;
+
+    const userInput = el("input", { class: "input", type: "text", placeholder: "admin", autocomplete: "off", autofocus: "true" });
+    const passInput = el("input", { class: "input", type: "password", placeholder: "••••••••", autocomplete: "off" });
+    const errorBox = el("div", { class: "err", style: "display:none" });
+    const submit = el("button", { class: "btn btn-primary", type: "submit" }, [icon("shield"), " Entrar no painel"]);
+    const revealBtn = el("button", { class: "reveal", type: "button", title: "Mostrar/ocultar senha" }, icon("eye"));
+
+    revealBtn.addEventListener("click", () => {
+      showPwd = !showPwd;
+      passInput.type = showPwd ? "text" : "password";
+      revealBtn.innerHTML = "";
+      revealBtn.appendChild(icon(showPwd ? "eye-off" : "eye"));
+    });
+
+    async function handleLogin(ev) {
+      ev.preventDefault();
+      if (loading) return;
+      loading = true;
+      submit.disabled = true;
+      submit.textContent = "Autenticando…";
+      errorBox.style.display = "none";
+      try {
+        const data = await api("/logs/auth", {
+          method: "POST",
+          body: JSON.stringify({ username: userInput.value.trim(), password: passInput.value }),
+        });
+        saveSession(data.token, data.expiresAt);
+        state.authed = true;
+        render();
+      } catch (err) {
+        error = err.message || "Falha ao autenticar";
+        errorBox.textContent = error;
+        errorBox.style.display = "block";
+      } finally {
+        loading = false;
+        submit.disabled = false;
+        submit.innerHTML = "";
+        submit.appendChild(icon("shield"));
+        submit.appendChild(document.createTextNode(" Entrar no painel"));
+      }
+    }
+
+    const gate = el("div", { class: "gate" }, [
+      el("form", { class: "gate-card", onsubmit: handleLogin }, [
+        el("div", { class: "gate-hd" }, [
+          el("div", { class: "row" }, [
+            el("div", { class: "logo" }, icon("terminal")),
+            el("div", {}, [
+              el("p", { class: "overline" }, "Área restrita"),
+              el("h1", {}, "Painel de logs da API"),
+            ]),
+          ]),
+          el("p", {}, [
+            "Informe o usuário e a senha de administrador configurados no backend ",
+            el("code", {}, "LogsAuth"),
+            " (",
+            el("code", {}, "appsettings.json"),
+            ")."
+          ]),
+        ]),
+        el("div", { class: "gate-form" }, [
+          el("div", { class: "field" }, [
+            el("label", {}, "Usuário"),
+            el("div", { class: "input-wrap" }, [
+              (() => { const s = document.createElementNS("http://www.w3.org/2000/svg","svg"); s.classList.add("input-icon"); return el("span", { class: "input-icon" }, icon("user")); })(),
+              userInput,
+            ]),
+          ]),
+          el("div", { class: "field" }, [
+            el("label", {}, "Senha"),
+            el("div", { class: "input-wrap" }, [
+              el("span", { class: "input-icon" }, icon("key")),
+              passInput,
+              revealBtn,
+            ]),
+          ]),
+          errorBox,
+          submit,
+        ]),
+        el("div", { class: "gate-foot" }, [
+          el("strong", { style: "color:#a0a4ad" }, "Como definir a senha: "),
+          "edite ",
+          el("code", {}, "LeadAnalytics.Api/appsettings.json"),
+          ", seção ",
+          el("code", {}, "LogsAuth"),
+          ":",
+          el("pre", {}, `"LogsAuth": {\n  "Username": "admin",\n  "Password": "sua-senha",\n  "SessionTtlMinutes": 120\n}`),
+          el("p", { style: "margin-top:8px" }, [
+            "Ou via env vars: ",
+            el("code", {}, "LogsAuth__Username"),
+            ", ",
+            el("code", {}, "LogsAuth__Password"),
+            ".",
+          ]),
+        ]),
+      ]),
+    ]);
+
+    root.appendChild(gate);
+  }
+
+  // ─── Console ───────────────────────────────────────────────────────────
+  function renderConsole() {
+    const root = $("#app-root");
+    root.innerHTML = "";
+
+    // Header
+    const btnLive = el("button", { class: "btn btn-outline", title: "Pausar/retomar" });
+    const btnRefresh = el("button", { class: "btn btn-outline", title: "Atualizar" }, [icon("refresh"), " Atualizar"]);
+    const btnClear = el("button", { class: "btn btn-danger" }, [icon("trash"), " Limpar"]);
+    const btnLogout = el("button", { class: "btn btn-ghost" }, [icon("logout"), " Sair"]);
+
+    function updateLiveBtn() {
+      btnLive.innerHTML = "";
+      if (state.live) {
+        btnLive.appendChild(icon("pause"));
+        btnLive.appendChild(document.createTextNode(" Pausar"));
+      } else {
+        btnLive.appendChild(icon("play"));
+        btnLive.appendChild(document.createTextNode(" Ao vivo"));
+      }
+    }
+    updateLiveBtn();
+
+    btnLive.addEventListener("click", () => {
+      state.live = !state.live;
+      if (state.live) openStream(); else closeStream();
+      updateLiveBtn();
+      updateMeta();
+    });
+    btnRefresh.addEventListener("click", () => { fetchAll(); });
+    btnClear.addEventListener("click", async () => {
+      if (!confirm("Apagar todos os logs do buffer em memória?")) return;
+      try { await api("/logs", { method: "DELETE" }); state.items = []; state.stats = { total: 0, byLevel: {} }; renderAll(); toast("Buffer esvaziado"); }
+      catch (e) { toast(e.message); }
+    });
+    btnLogout.addEventListener("click", async () => {
+      closeStream();
+      try { await api("/logs/logout", { method: "POST" }); } catch {}
+      clearSession();
+      state.authed = false;
+      render();
+    });
+
+    const header = el("header", { class: "top" }, [
+      el("div", { class: "top-inner" }, [
+        el("div", { class: "brand" }, [
+          el("div", { class: "logo", style: "width:34px;height:34px;border-radius:8px" }, icon("terminal")),
+          el("div", { class: "brand-text" }, [
+            el("p", { class: "overline" }, "Observabilidade · Área restrita"),
+            el("h1", {}, "Logs da API · console ao vivo"),
+          ]),
+        ]),
+        el("div", { class: "actions" }, [btnLive, btnRefresh, btnClear, btnLogout]),
+      ]),
+    ]);
+
+    // Levels (KPIs)
+    const levelsGrid = el("div", { class: "levels", id: "levels" });
+    for (const lvl of LEVELS) {
+      const pill = el("button", { class: "level-pill", "data-level": lvl, type: "button" }, [
+        el("span", { class: "lbl" }, [
+          el("span", { class: "dot", style: `background:${LEVEL_COLOR[lvl]}` }),
+          el("span", { style: `color:${LEVEL_COLOR[lvl]}` }, LEVEL_LABEL[lvl]),
+        ]),
+        el("span", { class: "cnt", "data-cnt": lvl }, "0"),
+      ]);
+      pill.addEventListener("click", () => toggleLevel(lvl));
+      levelsGrid.appendChild(pill);
+    }
+
+    // Filters
+    const searchInput = el("input", { class: "input", type: "text", placeholder: "ex.: exception, stack trace, path, userId…", value: state.search });
+    searchInput.style.paddingLeft = "36px";
+    const searchWrap = el("div", { class: "input-wrap" }, [el("span", { class: "input-icon" }, icon("search")), searchInput]);
+    let searchDebounce;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => { state.search = searchInput.value; fetchAll(); reopenStream(); }, 250);
+    });
+
+    const levelSelect = el("select", { class: "input" }, [
+      el("option", { value: "" }, "Todos"),
+      ...LEVELS.map(l => el("option", { value: l }, LEVEL_LABEL[l])),
+      el("option", { value: "Error,Critical" }, "Apenas falhas"),
+      el("option", { value: "Warning,Error,Critical" }, "Warnings+"),
+    ]);
+    levelSelect.value = state.level;
+    levelSelect.addEventListener("change", () => { state.level = levelSelect.value; syncLevelPills(); fetchAll(); reopenStream(); });
+
+    const windowSelect = el("select", { class: "input" }, [
+      el("option", { value: "0" }, "Tudo no buffer"),
+      el("option", { value: "5" }, "Últimos 5 min"),
+      el("option", { value: "15" }, "Últimos 15 min"),
+      el("option", { value: "60" }, "Última 1 h"),
+      el("option", { value: "360" }, "Últimas 6 h"),
+      el("option", { value: "1440" }, "Últimas 24 h"),
+    ]);
+    windowSelect.value = String(state.sinceMinutes);
+    windowSelect.addEventListener("change", () => { state.sinceMinutes = +windowSelect.value; fetchAll(); });
+
+    const limitSelect = el("select", { class: "input" }, [100, 250, 500, 1000, 2000].map(n => el("option", { value: n }, String(n))));
+    limitSelect.value = String(state.limit);
+    limitSelect.addEventListener("change", () => { state.limit = +limitSelect.value; fetchAll(); });
+
+    const metaRow = el("div", { class: "meta-row" }, [
+      el("div", {}, [el("span", { id: "live-dot", class: "live-dot" }), el("span", { id: "live-label" }, "Ao vivo")]),
+      el("div", { id: "meta-count", class: "mono" }, "0 no buffer"),
+    ]);
+
+    const filters = el("div", { class: "filters" }, [
+      el("div", { class: "row" }, [
+        wrapField("Buscar no texto", searchWrap),
+        wrapField("Nível", levelSelect),
+        wrapField("Janela", windowSelect),
+        wrapField("Máx. linhas", limitSelect),
+      ]),
+      metaRow,
+    ]);
+
+    function wrapField(label, control) {
+      return el("div", { class: "field" }, [el("label", {}, label), control]);
+    }
+
+    // Logs list
+    const logsList = el("div", { id: "logs" });
+
+    const main = el("main", {}, [levelsGrid, filters, logsList]);
+
+    root.appendChild(el("div", { class: "app" }, [header, main]));
+
+    // Initial data
+    fetchAll();
+    openStream();
+  }
+
+  function syncLevelPills() {
+    const selected = state.level
+      .split(",").map(s => s.trim()).filter(Boolean);
+    document.querySelectorAll("[data-level]").forEach(p => {
+      p.dataset.active = selected.includes(p.dataset.level) ? "true" : "false";
+    });
+  }
+
+  function toggleLevel(lvl) {
+    const selected = state.level.split(",").map(s => s.trim()).filter(Boolean);
+    const newLevel = selected.length === 1 && selected[0] === lvl ? "" : lvl;
+    state.level = newLevel;
+    const sel = document.querySelector("select.input");
+    // atualiza select principal de nível
+    const sels = document.querySelectorAll("select.input");
+    if (sels[0]) sels[0].value = newLevel;
+    syncLevelPills();
+    fetchAll();
+    reopenStream();
+  }
+
+  function updateMeta() {
+    const dot = document.getElementById("live-dot");
+    const lbl = document.getElementById("live-label");
+    const cnt = document.getElementById("meta-count");
+    if (!dot) return;
+    dot.classList.toggle("off", !state.live);
+    lbl.textContent = state.live ? "Ao vivo · stream SSE" : "Pausado";
+    const total = state.stats.total ?? 0;
+    cnt.textContent = `${state.items.length} exibidos · ${total} no buffer`;
+  }
+
+  function updateLevelCounts() {
+    for (const lvl of LEVELS) {
+      const n = state.stats.byLevel?.[lvl] ?? 0;
+      const span = document.querySelector(`[data-cnt="${lvl}"]`);
+      if (span) span.textContent = String(n);
+    }
+  }
+
+  async function fetchAll() {
+    try {
+      const params = new URLSearchParams();
+      if (state.level) params.set("level", state.level);
+      if (state.search) params.set("search", state.search);
+      if (state.sinceMinutes) params.set("sinceMinutes", String(state.sinceMinutes));
+      params.set("limit", String(state.limit));
+
+      const [list, stats] = await Promise.all([
+        api("/logs?" + params.toString()),
+        api("/logs/stats" + (state.sinceMinutes ? `?sinceMinutes=${state.sinceMinutes}` : "")),
+      ]);
+      state.items = list.items || [];
+      state.stats = { total: stats.total, byLevel: stats.byLevel || {} };
+      renderAll();
+    } catch (e) { /* 401 já redireciona */ }
+  }
+
+  function renderAll() {
+    updateLevelCounts();
+    updateMeta();
+    const list = document.getElementById("logs");
+    if (!list) return;
+    list.innerHTML = "";
+    if (state.items.length === 0) {
+      list.appendChild(el("div", { class: "empty" }, [
+        icon("info"),
+        el("div", {}, state.level || state.search || state.sinceMinutes
+          ? "Nenhum log bate com os filtros. Ajuste ou limpe."
+          : "O buffer está vazio. Faça uma requisição pra API."),
+      ]));
+      return;
+    }
+    for (const e of state.items) list.appendChild(buildEntry(e));
+  }
+
+  function buildEntry(e, flash = false) {
+    const hasStack = !!e.exception;
+    const expanded = state.expanded.has(e.id);
+    const canExpand = hasStack || (e.message && e.message.length > 200);
+
+    const caret = el("button", { class: "caret" + (canExpand ? "" : " dot") , type: "button" },
+      canExpand ? icon("chevron") : null);
+    if (canExpand) {
+      caret.style.transform = expanded ? "rotate(90deg)" : "rotate(0)";
+      caret.addEventListener("click", () => {
+        if (state.expanded.has(e.id)) state.expanded.delete(e.id);
+        else state.expanded.add(e.id);
+        renderAll();
+      });
+    }
+
+    const msg = el("div", { class: "msg" }, e.message || "");
+    const hints = [];
+    if (e.method && e.path) hints.push(el("span", { class: "tag" }, `${e.method} ${e.path}`));
+    if (e.traceId) hints.push(el("span", {}, `trace: ${e.traceId.slice(0, 16)}`));
+    const hint = hints.length ? el("div", { class: "hint" }, hints) : null;
+
+    const copyBtn = el("button", { class: "copy", type: "button", title: "Copiar" }, icon("copy"));
+    copyBtn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const text = [
+        `[${e.timestamp}] ${e.level} ${e.category}`,
+        (e.method && e.path) ? `${e.method} ${e.path}` : null,
+        e.traceId ? `trace: ${e.traceId}` : null,
+        "",
+        e.message,
+        e.exception ? "\n" + e.exception : null,
+      ].filter(Boolean).join("\n");
+      try { await navigator.clipboard.writeText(text); toast("Log copiado"); }
+      catch { toast("Falha ao copiar"); }
+    });
+
+    const row = el("div", { class: "entry-row" }, [
+      caret,
+      el("time", {}, fmtTime(e.timestamp)),
+      el("span", { class: "badge level-" + (e.level || "").toLowerCase() }, LEVEL_LABEL[e.level] || e.level),
+      el("span", { class: "cat", title: e.category }, shortCat(e.category)),
+      el("div", { style: "flex:1; min-width:0" }, [msg, hint]),
+      copyBtn,
+    ]);
+
+    const classes = ["entry", "level-" + (e.level || "").toLowerCase()];
+    if (!expanded) classes.push("collapsed");
+    if (flash) classes.push("flash");
+
+    const entry = el("div", { class: classes.join(" ") }, [row]);
+    if (expanded && hasStack) entry.appendChild(el("pre", { class: "stack" }, e.exception));
+
+    return entry;
+  }
+
+  // ─── SSE live stream ───────────────────────────────────────────────────
+  function openStream() {
+    closeStream();
+    if (!state.live) return;
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const params = new URLSearchParams({ token });
+    if (state.level) params.set("level", state.level);
+    if (state.search) params.set("search", state.search);
+
+    const sse = new EventSource("/logs/stream?" + params.toString());
+    state.sse = sse;
+
+    sse.addEventListener("log", (evt) => {
+      try {
+        const e = JSON.parse(evt.data);
+        // insere no topo e mantém limite
+        state.items.unshift(e);
+        if (state.items.length > state.limit) state.items.length = state.limit;
+        // stats
+        state.stats.total = (state.stats.total || 0) + 1;
+        state.stats.byLevel = state.stats.byLevel || {};
+        state.stats.byLevel[e.level] = (state.stats.byLevel[e.level] || 0) + 1;
+        prependLive(e);
+      } catch {}
+    });
+
+    sse.addEventListener("error", () => {
+      // EventSource tenta reconectar sozinho. Se foi 401, o fetch no próximo tick cuida.
+    });
+  }
+
+  function closeStream() {
+    if (state.sse) { state.sse.close(); state.sse = null; }
+  }
+
+  function reopenStream() {
+    if (state.live) openStream();
+  }
+
+  function prependLive(e) {
+    updateLevelCounts();
+    updateMeta();
+    const list = document.getElementById("logs");
+    if (!list) return;
+    // Remove empty state se existir
+    const empty = list.querySelector(".empty");
+    if (empty) empty.remove();
+    const node = buildEntry(e, /* flash */ true);
+    list.prepend(node);
+    // Remove excesso
+    while (list.children.length > state.limit) list.removeChild(list.lastChild);
+  }
+
+  // ─── Bootstrap ─────────────────────────────────────────────────────────
+  function render() {
+    if (state.authed) renderConsole();
+    else renderGate();
+  }
+
+  state.authed = hasSession();
+  render();
+  </script>
+</body>
+</html>

@@ -52,6 +52,15 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 
+// ── Log viewer em memória (buffer circular dos últimos 5000 logs) ──
+builder.Services.AddSingleton<InMemoryLogStore>(_ => new InMemoryLogStore(capacity: 5000));
+builder.Services.AddSingleton<ILoggerProvider>(sp => new InMemoryLoggerProvider(
+    sp.GetRequiredService<InMemoryLogStore>(),
+    sp.GetRequiredService<IHttpContextAccessor>()));
+
+builder.Services.Configure<LogsAuthOptions>(builder.Configuration.GetSection(LogsAuthOptions.SectionName));
+builder.Services.AddSingleton<LogsAuthService>();
+
 builder.Services.AddScoped<LeadService>();
 builder.Services.AddScoped<UnitService>();
 builder.Services.AddScoped<AttendantService>();

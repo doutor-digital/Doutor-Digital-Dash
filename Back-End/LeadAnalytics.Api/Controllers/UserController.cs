@@ -56,7 +56,7 @@ public class UserController(UserService userService) : ControllerBase
     [HttpPost("me/photo")]
     [RequestSizeLimit(6 * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 6 * 1024 * 1024)]
-    public async Task<IActionResult> UploadMyPhoto([FromForm] IFormFile file)
+    public async Task<IActionResult> UploadMyPhoto(IFormFile file)
     {
         var id = CurrentUserId();
         if (id is null) return Unauthorized();

@@ -1,10 +1,13 @@
 ﻿using LeadAnalytics.Api.Models;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<Unit> Units { get; set; }
     public DbSet<Attendant> Attendants { get; set; }

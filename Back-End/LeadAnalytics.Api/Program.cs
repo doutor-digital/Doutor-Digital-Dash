@@ -2,6 +2,7 @@ using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using QuestPDF.Infrastructure;
@@ -15,6 +16,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("LeadAnalytics.Api")
+    .PersistKeysToDbContext<AppDbContext>();
 
 builder.Services.AddControllers();
 

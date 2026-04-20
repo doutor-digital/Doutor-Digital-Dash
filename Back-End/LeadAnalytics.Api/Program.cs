@@ -72,6 +72,7 @@ builder.Services.AddScoped<AttendantService>();
 builder.Services.AddScoped<IRelatorioService, RelatorioService>();
 builder.Services.AddSingleton<IPdfRelatorioService, PdfRelatorioService>();
 builder.Services.AddHttpClient<MetricsService>();
+builder.Services.AddSingleton<CloudiaTokenProvider>();
 builder.Services.AddScoped<MetricsService>();
 builder.Services.AddScoped<SyncN8N>();
 builder.Services.AddScoped<DailyRelatoryService>();

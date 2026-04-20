@@ -10,7 +10,8 @@ public class MetricsService(
     ILogger<MetricsService> logger,
     IConfiguration config,
     ConfigurationService configurationService,
-    IHttpContextAccessor httpContextAccessor)
+    IHttpContextAccessor httpContextAccessor,
+    CloudiaTokenProvider cloudiaTokenProvider)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -22,6 +23,7 @@ public class MetricsService(
     private readonly IConfiguration _config = config;
     private readonly ConfigurationService _configurationService = configurationService;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly CloudiaTokenProvider _cloudiaTokenProvider = cloudiaTokenProvider;
 
     private string? HeaderValue(string name)
     {
@@ -38,6 +40,12 @@ public class MetricsService(
         if (!string.IsNullOrWhiteSpace(headerToken))
             return headerToken;
 
+        // Provider: tenta auto-renovar usando credenciais configuradas
+        var providerToken = await _cloudiaTokenProvider.GetTokenAsync();
+        if (!string.IsNullOrWhiteSpace(providerToken))
+            return providerToken;
+
+        // Fallback: token estático do DB ou appsettings
         var dbToken = await _configurationService.GetCloudiaApiKeyAsync();
         if (!string.IsNullOrWhiteSpace(dbToken)) return dbToken;
 
@@ -67,39 +75,53 @@ public class MetricsService(
             return null;
         }
 
-         // 🔍 diagnóstico — remover depois                                                                                                       
-        _logger.LogInformation(
-        "Cloudia token fingerprint: len={Len} head={Head} tail={Tail} hasBearerPrefix={HasBearer} hasWhitespace={HasWs}",                    
-        token.Length,                                                                                                                        
-        token.Length >= 6 ? token[..6] : token,
-        token.Length >= 6 ? token[^6..] : token,                                                                                             
-        token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase),
-        token.Any(char.IsWhiteSpace));                                                                                                       
-                                    
-
         var baseUrl = ResolveBaseUrl();
-        var url = $"{baseUrl}/api/clinics/{clinicId}/dashboard/real-time" +
-                  $"?attendantType={attendantType}&metricType=BUSINESS_PERIOD";
-            _logger.LogInformation("Cloudia request URL: {Url}", url);   
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        var response = await SendRequestAsync(baseUrl, clinicId, attendantType, token);
 
-        try
+        // Se 401, invalida cache e tenta de novo
+        if (response?.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            var response = await _httpClient.SendAsync(request);
+            _logger.LogWarning("Recebido 401 de Cloudia — renovando token");
+            _cloudiaTokenProvider.InvalidateCache();
 
-            if (!response.IsSuccessStatusCode)
+            var newToken = await ResolveTokenAsync();
+            if (!string.IsNullOrWhiteSpace(newToken))
             {
-                _logger.LogWarning("Erro ao buscar métricas da Cloudia: {Status}", response.StatusCode);
-                return null;
+                response = await SendRequestAsync(baseUrl, clinicId, attendantType, newToken);
             }
+        }
 
+        if (response?.IsSuccessStatusCode ?? false)
+        {
             var json = await response.Content.ReadAsStringAsync();
             return JsonSerializer.Deserialize<CloudiaMetricsResponseDto>(json, JsonOptions);
         }
+
+        _logger.LogWarning("Erro ao buscar métricas da Cloudia: {Status}",
+            response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError);
+        return null;
+    }
+
+    private async Task<HttpResponseMessage?> SendRequestAsync(
+        string baseUrl,
+        int clinicId,
+        string attendantType,
+        string token)
+    {
+        try
+        {
+            var url = $"{baseUrl}/api/clinics/{clinicId}/dashboard/real-time" +
+                      $"?attendantType={attendantType}&metricType=BUSINESS_PERIOD";
+            _logger.LogInformation("Cloudia request URL: {Url}", url);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+
+            return await _httpClient.SendAsync(request);
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha na chamada à Cloudia ({Url})", url);
+            _logger.LogError(ex, "Falha na chamada à Cloudia");
             return null;
         }
     }

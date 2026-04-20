@@ -151,7 +151,6 @@ public class LogsController(
 
     /// <summary>Serve o painel HTML estático (dashboard autônomo do backend).</summary>
     [HttpGet("~/admin")]
-    [HttpGet("~/admin/")]
     public IActionResult AdminRedirect() => Redirect("/admin/index.html");
 
     // ─── helpers ────────────────────────────────────────────────

@@ -6,4 +6,7 @@ public class UserResponseDto
     public string Name { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string Role { get; set; } = null!;
+    public string? Phone { get; set; }
+    public string? PhotoUrl { get; set; }
+    public int? TenantId { get; set; }
 }

@@ -183,6 +183,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasDefaultValue("user")
                 .IsRequired();
 
+            entity.Property(e => e.Phone).HasMaxLength(30);
+            entity.Property(e => e.PhotoPath).HasMaxLength(300);
+
             entity.HasIndex(e => e.Email)
                 .IsUnique();
           });

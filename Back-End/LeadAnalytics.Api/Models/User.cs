@@ -23,6 +23,12 @@ public class User
     [Column("role")]
     public string Role { get; set; } = "user";
 
+    [Column("phone")]
+    public string? Phone { get; set; }
+
+    [Column("photo_path")]
+    public string? PhotoPath { get; set; }
+
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 

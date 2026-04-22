@@ -20,11 +20,19 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
 
     public async Task<byte[]> GerarRelatorioMensalAsync(int clinicId, int mes, int ano, CancellationToken ct)
     {
+        var dados = await ObterResumoMensalAsync(clinicId, mes, ano, ct);
+        if (dados is null)
+            return [];
+
+        return _pdfService.Gerar(dados);
+    }
+
+    public async Task<RelatorioMensalDadosDto?> ObterResumoMensalAsync(int clinicId, int mes, int ano, CancellationToken ct)
+    {
         ValidarMesEAno(mes, ano);
 
         var (inicioUtc, fimUtc) = ObterIntervaloUtc(mes, ano);
 
-        // Query principal com projeção enxuta
         var leads = await _db.Leads
             .AsNoTracking()
             .Where(l =>
@@ -44,9 +52,8 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
             .ToListAsync(ct);
 
         if (leads.Count == 0)
-            return [];
+            return null;
 
-        // Resolve nomes de unidade sem N+1
         var unitIds = leads
             .Where(l => l.UnitId.HasValue)
             .Select(l => l.UnitId!.Value)
@@ -61,10 +68,8 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
                 .ToDictionaryAsync(x => x.Id, x => x.Name, ct)
             : [];
 
-        // Se não houver entidade Tenant/Clinic consolidada, usa fallback
         var nomeClinica = unidadesMap.Values.FirstOrDefault() ?? $"Clínica #{clinicId}";
 
-        // KPIs
         var totalLeads = leads.Count;
 
         var totalComConsulta = leads.Count(l => l.HasAppointment);
@@ -77,7 +82,6 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
             ? Math.Round(leadsComPagamento.Average(l => l.TotalPago), 2)
             : 0m;
 
-        // Agrupamentos
         var leadsPorOrigem = leads
             .GroupBy(l => string.IsNullOrWhiteSpace(l.Origem) ? "Não informado" : l.Origem)
             .Select(g => new OrigemAgrupadaDto
@@ -124,7 +128,6 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
             .OrderBy(x => x.Dia)
             .ToList();
 
-        // Listagem detalhada
         var listaDetalhada = leads
             .Select(l => new LeadRelatorioItemDto(
                 l.Nome,
@@ -136,7 +139,7 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
             .OrderBy(x => x.CriadoEm)
             .ToList();
 
-        var dados = new RelatorioMensalDadosDto
+        return new RelatorioMensalDadosDto
         {
             NomeClinica = nomeClinica,
             Mes = mes,
@@ -151,8 +154,6 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
             LeadsPorDia = leadsPorDia,
             Leads = listaDetalhada
         };
-
-        return _pdfService.Gerar(dados);
     }
 
     private static void ValidarMesEAno(int mes, int ano)

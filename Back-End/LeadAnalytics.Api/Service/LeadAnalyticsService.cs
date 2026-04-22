@@ -126,10 +126,17 @@ public class LeadAnalyticsService(AppDbContext context, ILogger<LeadAnalyticsSer
         DateTime? endDate = null,
         string? state = null)
     {
+        // Garante que DateTimes estão em UTC (PostgreSQL exige isso)
+        if (startDate.HasValue && startDate.Value.Kind == DateTimeKind.Unspecified)
+            startDate = DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc);
+
+        if (endDate.HasValue && endDate.Value.Kind == DateTimeKind.Unspecified)
+            endDate = DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc);
+
         // ─────────────────────────────────────────────────────────
         // BUSCAR LEADS COM FILTROS
         // ─────────────────────────────────────────────────────────
-        
+
         var query = _context.Leads
             .Include(l => l.Unit)      // ✅ Unit é navegação
             .Include(l => l.Attendant) // ✅ Attendant é navegação
@@ -189,7 +196,14 @@ public class LeadAnalyticsService(AppDbContext context, ILogger<LeadAnalyticsSer
         // ─────────────────────────────────────────────────────────
         // 1. DEFINIR PERÍODO (PADRÃO: ÚLTIMOS 30 DIAS)
         // ─────────────────────────────────────────────────────────
-        
+
+        // Garante que DateTimes estão em UTC (PostgreSQL exige isso)
+        if (startDate.HasValue && startDate.Value.Kind == DateTimeKind.Unspecified)
+            startDate = DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc);
+
+        if (endDate.HasValue && endDate.Value.Kind == DateTimeKind.Unspecified)
+            endDate = DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc);
+
         var start = startDate ?? DateTime.UtcNow.Date.AddDays(-30);
         var end = endDate ?? DateTime.UtcNow;
 

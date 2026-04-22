@@ -82,23 +82,23 @@ public class CloudiaTokenProvider
             var json = JsonSerializer.Serialize(payload);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            _logger.LogInformation("Autenticando contra Cloudia em {Url}", loginUrl);
+            _logger.LogInformation("Autenticando contra Cloudia em {Url} com email {Email}", loginUrl, email);
             var response = await httpClient.PostAsync(loginUrl, content);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Resposta Cloudia login: Status={Status}, Body={Body}", response.StatusCode, responseContent);
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Falha ao autenticar Cloudia: {Status} {Content}",
-                    response.StatusCode,
-                    await response.Content.ReadAsStringAsync());
+                _logger.LogWarning("Falha ao autenticar Cloudia: {Status} {Content}", response.StatusCode, responseContent);
                 return null;
             }
 
-            var responseJson = await response.Content.ReadAsStringAsync();
-            var loginResponse = JsonSerializer.Deserialize<CloudiaLoginResponse>(responseJson, JsonOptions);
+            var loginResponse = JsonSerializer.Deserialize<CloudiaLoginResponse>(responseContent, JsonOptions);
 
             if (string.IsNullOrWhiteSpace(loginResponse?.Token))
             {
-                _logger.LogWarning("Resposta de login Cloudia não contém token");
+                _logger.LogWarning("Resposta de login Cloudia não contém token. Response: {Response}", responseContent);
                 return null;
             }
 
@@ -113,8 +113,7 @@ public class CloudiaTokenProvider
                 _tokenExpiresAt = expiresAt;
             }
 
-            _logger.LogInformation("Token Cloudia renovado com sucesso (expira em {ExpiresAt})",
-                expiresAt);
+            _logger.LogInformation("Token Cloudia renovado com sucesso (expira em {ExpiresAt})", expiresAt);
 
             return loginResponse.Token;
         }

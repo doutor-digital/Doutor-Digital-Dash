@@ -1,16 +1,78 @@
+using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/analytics")]
 public class LeadAnalyticsController(
     LeadAnalyticsService analyticsService,
+    AppDbContext db,
     ILogger<LeadAnalyticsController> logger) : ControllerBase
 {
+    private const int MaxPeriodDays = 366;
+
     private readonly LeadAnalyticsService _analyticsService = analyticsService;
+    private readonly AppDbContext _db = db;
     private readonly ILogger<LeadAnalyticsController> _logger = logger;
+
+    /// <summary>
+    /// Garante que a unidade solicitada pertence ao tenant autenticado (isolation por tenant).
+    /// </summary>
+    private async Task<IActionResult?> GuardUnitAccessAsync(int unitId)
+    {
+        if (unitId <= 0)
+            return BadRequest(new ProblemDetails { Title = "unitId inválido", Status = 400 });
+
+        var tenantClaim = User.FindFirst("tenant_id")?.Value;
+        if (!int.TryParse(tenantClaim, out var tenantId))
+            return Forbid();
+
+        var unitClinicId = await _db.Units
+            .AsNoTracking()
+            .Where(u => u.Id == unitId)
+            .Select(u => (int?)u.ClinicId)
+            .FirstOrDefaultAsync();
+
+        if (unitClinicId is null)
+            return NotFound(new ProblemDetails { Title = "Unidade não encontrada", Status = 404 });
+
+        if (unitClinicId.Value != tenantId)
+        {
+            _logger.LogWarning(
+                "Cross-tenant access negado: user tenant={Tenant} tentou unit={Unit} (clinic={Clinic})",
+                tenantId, unitId, unitClinicId.Value);
+            return Forbid();
+        }
+
+        return null;
+    }
+
+    private static IActionResult? ValidatePeriod(DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate.HasValue && endDate.HasValue && endDate.Value < startDate.Value)
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = "endDate deve ser maior ou igual a startDate",
+                Status = 400,
+            });
+
+        if (startDate.HasValue && endDate.HasValue
+            && (endDate.Value - startDate.Value).TotalDays > MaxPeriodDays)
+        {
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = $"Intervalo máximo permitido é {MaxPeriodDays} dias",
+                Status = 400,
+            });
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Obter métricas completas de um lead específico
@@ -22,6 +84,29 @@ public class LeadAnalyticsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetLeadMetrics(int id)
     {
+        if (id <= 0)
+            return BadRequest(new ProblemDetails { Title = "id inválido", Status = 400 });
+
+        var tenantClaim = User.FindFirst("tenant_id")?.Value;
+        if (!int.TryParse(tenantClaim, out var tenantId))
+            return Forbid();
+
+        var leadTenantId = await _db.Leads.AsNoTracking()
+            .Where(l => l.Id == id)
+            .Select(l => (int?)l.TenantId)
+            .FirstOrDefaultAsync();
+
+        if (leadTenantId is null)
+            return NotFound(new { message = $"Lead {id} não encontrado" });
+
+        if (leadTenantId.Value != tenantId)
+        {
+            _logger.LogWarning(
+                "Cross-tenant access negado: user tenant={Tenant} tentou lead={Lead}",
+                tenantId, id);
+            return Forbid();
+        }
+
         try
         {
             var metrics = await _analyticsService.GetLeadMetricsAsync(id);
@@ -57,6 +142,9 @@ public class LeadAnalyticsController(
         [FromQuery] DateTime? endDate = null,
         [FromQuery] string? state = null)
     {
+        if (await GuardUnitAccessAsync(unitId) is { } guard) return guard;
+        if (ValidatePeriod(startDate, endDate) is { } invalid) return invalid;
+
         try
         {
             var metrics = await _analyticsService.GetLeadsMetricsAsync(
@@ -108,6 +196,9 @@ public class LeadAnalyticsController(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null)
     {
+        if (await GuardUnitAccessAsync(unitId) is { } guard) return guard;
+        if (ValidatePeriod(startDate, endDate) is { } invalid) return invalid;
+
         try
         {
             var summary = await _analyticsService.GetClinicSummaryAsync(
@@ -143,6 +234,8 @@ public class LeadAnalyticsController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDelayedLeads(int unitId)
     {
+        if (await GuardUnitAccessAsync(unitId) is { } guard) return guard;
+
         try
         {
             var delayedLeads = await _analyticsService.GetDelayedLeadsAsync(unitId);
@@ -181,6 +274,8 @@ public class LeadAnalyticsController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTodayDashboard(int unitId)
     {
+        if (await GuardUnitAccessAsync(unitId) is { } guard) return guard;
+
         try
         {
             var today = DateTime.UtcNow.Date;

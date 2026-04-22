@@ -19,7 +19,7 @@ public class CloudiaTokenProvider
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;
     private readonly ILogger<CloudiaTokenProvider> _logger;
-    private readonly string _baseUrl = "https://human-metrics.cloudiabot.com";
+    private readonly string _baseUrl = "https://api-prd.cloudiabot.com";
 
     private string? _cachedToken;
     private DateTime _tokenExpiresAt = DateTime.MinValue;
@@ -77,7 +77,7 @@ public class CloudiaTokenProvider
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
-            var loginUrl = $"{_baseUrl}/api/login";
+            var loginUrl = $"{_baseUrl}/api/auth/token";
             var payload = new CloudiaLoginRequest(email, password);
             var json = JsonSerializer.Serialize(payload);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");

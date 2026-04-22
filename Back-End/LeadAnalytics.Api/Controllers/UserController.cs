@@ -52,7 +52,6 @@ public class UserController(UserService userService) : ControllerBase
         return NoContent();
     }
 
-    [Authorize]
     [HttpPost("me/photo")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]

@@ -3,6 +3,7 @@ using LeadAnalytics.Api.Models;
 
 namespace LeadAnalytics.Api.Adapters;
 
+
 public class CloudiaAdapter
 {
     public LeadEvent ToLeadEvent(CloudiaWebhookDto payload)

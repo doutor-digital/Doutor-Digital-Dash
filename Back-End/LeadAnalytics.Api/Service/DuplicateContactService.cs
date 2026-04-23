@@ -60,30 +60,126 @@ public class DuplicateContactService(
         return report;
     }
 
-    public async Task<DuplicatesReportDto> DeleteDuplicatesAsync(
+    public async Task<DuplicatesDeleteSummaryDto> DeleteDuplicatesAsync(
         int? tenantId,
         bool ignoreTenant,
         CancellationToken ct = default)
     {
-        var report = await FindDuplicatesAsync(tenantId, ignoreTenant, ct);
-        if (report.ContactsToDelete == 0)
+        const int BatchSize = 1000;
+        const int BatchTimeoutSeconds = 120;
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var (groupsFound, expectedToDelete) = await CountDuplicatesAsync(tenantId, ignoreTenant, ct);
+        if (expectedToDelete == 0)
         {
-            report.DryRun = false;
-            return report;
+            sw.Stop();
+            return new DuplicatesDeleteSummaryDto
+            {
+                GroupsFound = 0,
+                ContactsDeleted = 0,
+                Batches = 0,
+                DurationMs = sw.ElapsedMilliseconds,
+            };
         }
 
-        var (sql, parameters) = BuildDeleteSql(tenantId, ignoreTenant);
-        var deleted = await _db.Database.ExecuteSqlRawAsync(sql, parameters, ct);
+        var (sql, parameters) = BuildChunkedDeleteSql(tenantId, ignoreTenant, BatchSize);
 
-        _logger.LogWarning(
-            "🗑 Contacts duplicados apagados: {Deleted} linhas em {Groups} grupo(s) (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
-            deleted, report.GroupsFound, tenantId, ignoreTenant);
+        var originalTimeout = _db.Database.GetCommandTimeout();
+        _db.Database.SetCommandTimeout(BatchTimeoutSeconds);
+
+        var totalDeleted = 0;
+        var batches = 0;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var affected = await _db.Database.ExecuteSqlRawAsync(sql, parameters, ct);
+                if (affected <= 0) break;
+
+                totalDeleted += affected;
+                batches++;
+
+                _logger.LogInformation(
+                    "🗑 Lote {Batch} apagou {Affected} linha(s) (total={Total}/{Expected})",
+                    batches, affected, totalDeleted, expectedToDelete);
+
+                if (affected < BatchSize) break;
+            }
+        }
+        finally
+        {
+            _db.Database.SetCommandTimeout(originalTimeout);
+        }
 
         await InvalidateCacheAsync(tenantId, ct);
 
-        report.DryRun = false;
-        report.ContactsToDelete = deleted;
-        return report;
+        sw.Stop();
+
+        _logger.LogWarning(
+            "🗑 Duplicados apagados: {Deleted} linha(s) em {Batches} lote(s), {Groups} grupo(s), {Ms}ms (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
+            totalDeleted, batches, groupsFound, sw.ElapsedMilliseconds, tenantId, ignoreTenant);
+
+        return new DuplicatesDeleteSummaryDto
+        {
+            GroupsFound = groupsFound,
+            ContactsDeleted = totalDeleted,
+            Batches = batches,
+            DurationMs = sw.ElapsedMilliseconds,
+        };
+    }
+
+    private async Task<(int GroupsFound, int ContactsToDelete)> CountDuplicatesAsync(
+        int? tenantId, bool ignoreTenant, CancellationToken ct)
+    {
+        string sql;
+        if (ignoreTenant)
+        {
+            sql = @"
+                WITH grp AS (
+                    SELECT COUNT(*) AS cnt
+                    FROM contacts
+                    GROUP BY ""PhoneNormalized""
+                    HAVING COUNT(*) > 1
+                )
+                SELECT COUNT(*)::int AS groups_found,
+                       COALESCE(SUM(cnt - 1), 0)::int AS to_delete
+                FROM grp;";
+        }
+        else
+        {
+            var tenantFilter = tenantId.HasValue ? "WHERE \"TenantId\" = @p0" : string.Empty;
+            sql = $@"
+                WITH grp AS (
+                    SELECT COUNT(*) AS cnt
+                    FROM contacts
+                    {tenantFilter}
+                    GROUP BY ""TenantId"", ""PhoneNormalized""
+                    HAVING COUNT(*) > 1
+                )
+                SELECT COUNT(*)::int AS groups_found,
+                       COALESCE(SUM(cnt - 1), 0)::int AS to_delete
+                FROM grp;";
+        }
+
+        var conn = _db.Database.GetDbConnection();
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        if (!ignoreTenant && tenantId.HasValue)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = "@p0";
+            p.Value = tenantId.Value;
+            cmd.Parameters.Add(p);
+        }
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return (0, 0);
+
+        return (reader.GetInt32(0), reader.GetInt32(1));
     }
 
     // ─── SQL ─────────────────────────────────────────────────────────────
@@ -176,11 +272,11 @@ public class DuplicateContactService(
         return result;
     }
 
-    private static (string Sql, object[] Params) BuildDeleteSql(int? tenantId, bool ignoreTenant)
+    private static (string Sql, object[] Params) BuildChunkedDeleteSql(int? tenantId, bool ignoreTenant, int batchSize)
     {
         if (ignoreTenant)
         {
-            const string sql = @"
+            var sql = $@"
                 DELETE FROM contacts
                 WHERE ""Id"" IN (
                     SELECT ""Id"" FROM (
@@ -189,27 +285,29 @@ public class DuplicateContactService(
                         FROM contacts
                     ) t
                     WHERE t.rn > 1
+                    LIMIT {batchSize}
                 );";
             return (sql, Array.Empty<object>());
         }
 
         if (tenantId.HasValue)
         {
-            const string sql = @"
+            var sql = $@"
                 DELETE FROM contacts
                 WHERE ""Id"" IN (
                     SELECT ""Id"" FROM (
                         SELECT ""Id"",
                                ROW_NUMBER() OVER (PARTITION BY ""TenantId"", ""PhoneNormalized"" ORDER BY ""CreatedAt"", ""Id"") AS rn
                         FROM contacts
-                        WHERE ""TenantId"" = {0}
+                        WHERE ""TenantId"" = {{0}}
                     ) t
                     WHERE t.rn > 1
+                    LIMIT {batchSize}
                 );";
             return (sql, new object[] { tenantId.Value });
         }
 
-        const string sqlAllTenants = @"
+        var sqlAllTenants = $@"
             DELETE FROM contacts
             WHERE ""Id"" IN (
                 SELECT ""Id"" FROM (
@@ -218,6 +316,7 @@ public class DuplicateContactService(
                     FROM contacts
                 ) t
                 WHERE t.rn > 1
+                LIMIT {batchSize}
             );";
         return (sqlAllTenants, Array.Empty<object>());
     }

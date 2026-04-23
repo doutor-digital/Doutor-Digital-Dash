@@ -18,3 +18,11 @@ public class DuplicateGroupDto
     public DateTime KeepCreatedAt { get; set; }
     public List<int> DeleteContactIds { get; set; } = [];
 }
+
+public class DuplicatesDeleteSummaryDto
+{
+    public int GroupsFound { get; set; }
+    public int ContactsDeleted { get; set; }
+    public int Batches { get; set; }
+    public long DurationMs { get; set; }
+}

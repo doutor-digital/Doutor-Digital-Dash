@@ -36,6 +36,7 @@ public class AdminDuplicatesController(
     /// </summary>
     [HttpDelete("duplicates")]
     [ProducesResponseType(typeof(DuplicatesReportDto), 200)]
+    [ProducesResponseType(typeof(DuplicatesDeleteSummaryDto), 200)]
     public async Task<IActionResult> DeleteDuplicates(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? tenantId = null,
@@ -52,7 +53,7 @@ public class AdminDuplicatesController(
             "⚠ Solicitação de DELETE real de contatos duplicados por {User} (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
             User.Identity?.Name ?? "anonymous", tenantId, ignoreTenant);
 
-        var report = await _duplicateService.DeleteDuplicatesAsync(tenantId, ignoreTenant, ct);
-        return Ok(report);
+        var summary = await _duplicateService.DeleteDuplicatesAsync(tenantId, ignoreTenant, ct);
+        return Ok(summary);
     }
 }

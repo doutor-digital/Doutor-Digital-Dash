@@ -90,6 +90,7 @@ builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
+builder.Services.AddScoped<DuplicateContactService>();
 builder.Services.AddScoped<CloudiaAdapter>();
 builder.Services.AddScoped<KommoAdapter>();
 

@@ -402,13 +402,11 @@ public class ContactService(AppDbContext db, IMemoryCache? cache = null)
         if (prefix == "l")
             throw new InvalidOperationException("leads não podem ser removidos por este endpoint");
 
-        var contact = await _db.Contacts
-            .FirstOrDefaultAsync(c => c.Id == numId && c.TenantId == tenantId, ct);
-        if (contact is null) return false;
+        var affected = await _db.Contacts
+            .Where(c => c.Id == numId && c.TenantId == tenantId)
+            .ExecuteDeleteAsync(ct);
 
-        _db.Contacts.Remove(contact);
-        await _db.SaveChangesAsync(ct);
-        return true;
+        return affected > 0;
     }
 
     public async Task<ContactDetailDto?> SetActionAsync(

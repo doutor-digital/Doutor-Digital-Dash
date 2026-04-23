@@ -23,9 +23,10 @@ public class AdminDuplicatesController(
     [ProducesResponseType(typeof(DuplicatesReportDto), 200)]
     public async Task<IActionResult> ListDuplicates(
         [FromQuery] int? tenantId,
-        CancellationToken ct)
+        [FromQuery] bool ignoreTenant = false,
+        CancellationToken ct = default)
     {
-        var report = await _duplicateService.FindDuplicatesAsync(tenantId, ct);
+        var report = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, ct);
         return Ok(report);
     }
 
@@ -38,19 +39,20 @@ public class AdminDuplicatesController(
     public async Task<IActionResult> DeleteDuplicates(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? tenantId = null,
+        [FromQuery] bool ignoreTenant = false,
         CancellationToken ct = default)
     {
         if (dryRun)
         {
-            var preview = await _duplicateService.FindDuplicatesAsync(tenantId, ct);
+            var preview = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, ct);
             return Ok(preview);
         }
 
         _logger.LogWarning(
-            "⚠ Solicitação de DELETE real de contatos duplicados por {User} (tenantId={TenantId})",
-            User.Identity?.Name ?? "anonymous", tenantId);
+            "⚠ Solicitação de DELETE real de contatos duplicados por {User} (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
+            User.Identity?.Name ?? "anonymous", tenantId, ignoreTenant);
 
-        var report = await _duplicateService.DeleteDuplicatesAsync(tenantId, ct);
+        var report = await _duplicateService.DeleteDuplicatesAsync(tenantId, ignoreTenant, ct);
         return Ok(report);
     }
 }

@@ -9,41 +9,83 @@ public class DuplicateContactService(AppDbContext db, ILogger<DuplicateContactSe
     private readonly AppDbContext _db = db;
     private readonly ILogger<DuplicateContactService> _logger = logger;
 
-    public async Task<DuplicatesReportDto> FindDuplicatesAsync(int? tenantId, CancellationToken ct = default)
+    public async Task<DuplicatesReportDto> FindDuplicatesAsync(
+        int? tenantId,
+        bool ignoreTenant,
+        CancellationToken ct = default)
     {
         var query = _db.Contacts.AsNoTracking().AsQueryable();
-        if (tenantId.HasValue)
+        if (!ignoreTenant && tenantId.HasValue)
             query = query.Where(c => c.TenantId == tenantId.Value);
 
-        var duplicateKeys = await query
-            .GroupBy(c => new { c.TenantId, c.PhoneNormalized })
-            .Where(g => g.Count() > 1)
-            .Select(g => new { g.Key.TenantId, g.Key.PhoneNormalized })
-            .ToListAsync(ct);
+        List<DuplicateGroupDto> groups;
 
-        var groups = new List<DuplicateGroupDto>(duplicateKeys.Count);
-        foreach (var key in duplicateKeys)
+        if (ignoreTenant)
         {
-            var rows = await query
-                .Where(c => c.TenantId == key.TenantId && c.PhoneNormalized == key.PhoneNormalized)
-                .OrderBy(c => c.CreatedAt)
-                .ThenBy(c => c.Id)
-                .Select(c => new { c.Id, c.Name, c.CreatedAt })
+            // Agrupa só por PhoneNormalized (cross-tenant).
+            var duplicatePhones = await query
+                .GroupBy(c => c.PhoneNormalized)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
                 .ToListAsync(ct);
 
-            if (rows.Count <= 1) continue;
-
-            var keep = rows[0];
-            groups.Add(new DuplicateGroupDto
+            groups = new List<DuplicateGroupDto>(duplicatePhones.Count);
+            foreach (var phone in duplicatePhones)
             {
-                TenantId = key.TenantId,
-                PhoneNormalized = key.PhoneNormalized,
-                Count = rows.Count,
-                KeepContactId = keep.Id,
-                KeepName = keep.Name,
-                KeepCreatedAt = keep.CreatedAt,
-                DeleteContactIds = rows.Skip(1).Select(r => r.Id).ToList()
-            });
+                var rows = await query
+                    .Where(c => c.PhoneNormalized == phone)
+                    .OrderBy(c => c.CreatedAt)
+                    .ThenBy(c => c.Id)
+                    .Select(c => new { c.Id, c.Name, c.CreatedAt, c.TenantId })
+                    .ToListAsync(ct);
+
+                if (rows.Count <= 1) continue;
+
+                var keep = rows[0];
+                groups.Add(new DuplicateGroupDto
+                {
+                    TenantId = keep.TenantId,
+                    PhoneNormalized = phone,
+                    Count = rows.Count,
+                    KeepContactId = keep.Id,
+                    KeepName = keep.Name,
+                    KeepCreatedAt = keep.CreatedAt,
+                    DeleteContactIds = rows.Skip(1).Select(r => r.Id).ToList()
+                });
+            }
+        }
+        else
+        {
+            var duplicateKeys = await query
+                .GroupBy(c => new { c.TenantId, c.PhoneNormalized })
+                .Where(g => g.Count() > 1)
+                .Select(g => new { g.Key.TenantId, g.Key.PhoneNormalized })
+                .ToListAsync(ct);
+
+            groups = new List<DuplicateGroupDto>(duplicateKeys.Count);
+            foreach (var key in duplicateKeys)
+            {
+                var rows = await query
+                    .Where(c => c.TenantId == key.TenantId && c.PhoneNormalized == key.PhoneNormalized)
+                    .OrderBy(c => c.CreatedAt)
+                    .ThenBy(c => c.Id)
+                    .Select(c => new { c.Id, c.Name, c.CreatedAt })
+                    .ToListAsync(ct);
+
+                if (rows.Count <= 1) continue;
+
+                var keep = rows[0];
+                groups.Add(new DuplicateGroupDto
+                {
+                    TenantId = key.TenantId,
+                    PhoneNormalized = key.PhoneNormalized,
+                    Count = rows.Count,
+                    KeepContactId = keep.Id,
+                    KeepName = keep.Name,
+                    KeepCreatedAt = keep.CreatedAt,
+                    DeleteContactIds = rows.Skip(1).Select(r => r.Id).ToList()
+                });
+            }
         }
 
         return new DuplicatesReportDto
@@ -55,9 +97,12 @@ public class DuplicateContactService(AppDbContext db, ILogger<DuplicateContactSe
         };
     }
 
-    public async Task<DuplicatesReportDto> DeleteDuplicatesAsync(int? tenantId, CancellationToken ct = default)
+    public async Task<DuplicatesReportDto> DeleteDuplicatesAsync(
+        int? tenantId,
+        bool ignoreTenant,
+        CancellationToken ct = default)
     {
-        var report = await FindDuplicatesAsync(tenantId, ct);
+        var report = await FindDuplicatesAsync(tenantId, ignoreTenant, ct);
         report.DryRun = false;
 
         var idsToDelete = report.Groups.SelectMany(g => g.DeleteContactIds).ToList();
@@ -73,8 +118,8 @@ public class DuplicateContactService(AppDbContext db, ILogger<DuplicateContactSe
             await tx.CommitAsync(ct);
 
             _logger.LogWarning(
-                "🗑 Contacts duplicados apagados: {Deleted} linhas em {Groups} grupo(s) (tenantId={TenantId})",
-                deleted, report.GroupsFound, tenantId);
+                "🗑 Contacts duplicados apagados: {Deleted} linhas em {Groups} grupo(s) (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
+                deleted, report.GroupsFound, tenantId, ignoreTenant);
 
             report.ContactsToDelete = deleted;
             return report;

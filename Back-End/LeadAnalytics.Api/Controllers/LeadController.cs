@@ -1,5 +1,6 @@
 ﻿using LeadAnalytics.Api.DTOs.Cloudia;
 using LeadAnalytics.Api.DTOs.Response;
+using LeadAnalytics.Api.DTOs.Timeline;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,9 +10,11 @@ namespace LeadAnalytics.Api.Controllers;
 [Route("webhooks")]
 public class WebhooksController(
     LeadService leadService,
+    LeadTimelineService timelineService,
     ILogger<WebhooksController> logger) : ControllerBase
 {
     private readonly LeadService _leadService = leadService;
+    private readonly LeadTimelineService _timelineService = timelineService;
     private readonly ILogger<WebhooksController> _logger = logger;
 
     [HttpGet]
@@ -43,6 +46,28 @@ public class WebhooksController(
         }
 
         return Ok(lead);
+    }
+
+    /// <summary>
+    /// Timeline detalhada do lead: stages com tempo em cada um, atribuições,
+    /// conversas, interações, atribuição de origem (CTWA) e insights agregados.
+    /// </summary>
+    [HttpGet("{id:int}/timeline")]
+    [ProducesResponseType(typeof(LeadTimelineDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetLeadTimeline(int id, CancellationToken ct)
+    {
+        var timeline = await _timelineService.GetTimelineAsync(id, ct);
+        if (timeline is null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Lead não encontrado",
+                Status = 404,
+                Detail = $"Nenhum lead encontrado com id {id}"
+            });
+        }
+        return Ok(timeline);
     }
 
     [HttpPost("cloudia")]

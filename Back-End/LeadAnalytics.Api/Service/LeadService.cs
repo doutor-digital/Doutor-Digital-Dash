@@ -1001,9 +1001,13 @@ public class LeadService(
         var externalLeadId = dto.Customer!.Id;
         var tenantId = dto.Customer.ClinicId;
         var conversationState = dto.Data?.ConversationState ?? "service";
+        var now = DateTime.UtcNow;
 
         var lead = await _db.Leads
-            .Include(l => l.Unit)  // ✅ CRÍTICO: Incluir Unit
+            .Include(l => l.Unit)
+            .Include(l => l.Conversations)
+                .ThenInclude(c => c.Interactions)
+            .Include(l => l.StageHistory)
             .FirstOrDefaultAsync(l =>
             l.ExternalId == externalLeadId &&
             l.TenantId == tenantId);
@@ -1023,9 +1027,9 @@ public class LeadService(
         if (!lead.UnitId.HasValue)
         {
             _logger.LogError(
-                "Lead {LeadId} não tem UnitId! Criando unit agora...", 
+                "Lead {LeadId} não tem UnitId! Criando unit agora...",
                 externalLeadId);
-            
+
             var unit = await _unitService.GetOrCreateAsync(tenantId);
             lead.UnitId = unit.Id;
             await _db.SaveChangesAsync();
@@ -1037,15 +1041,43 @@ public class LeadService(
             lead.UnitId!.Value);
 
         lead.AttendantId = attendant.Id;
-        lead.UpdatedAt = DateTime.UtcNow;
+        lead.UpdatedAt = now;
         lead.ConversationState = conversationState;
+
+        // ── Sincronizar conversa ativa: estado + atendente + interação ──
+        var conversaAtiva = lead.Conversations.FirstOrDefault(c => c.EndedAt is null);
+        if (conversaAtiva is not null)
+        {
+            conversaAtiva.AttendantId = attendant.Id;
+            conversaAtiva.ConversationState = conversationState;
+            conversaAtiva.Interactions.Add(new LeadInteraction
+            {
+                Type = "ASSIGNED",
+                Content = $"Atribuído a {dto.AssignedUserName} (estado: {conversationState})",
+                CreatedAt = now
+            });
+        }
+
+        // ── Registrar mudança de stage no histórico se mudou ──
+        var novoStage = dto.Customer.Stage;
+        if (!string.IsNullOrWhiteSpace(novoStage) && lead.CurrentStage != novoStage)
+        {
+            lead.StageHistory.Add(new LeadStageHistory
+            {
+                LeadId = lead.Id,
+                StageId = lead.CurrentStageId ?? 0,
+                StageLabel = novoStage,
+                ChangedAt = now
+            });
+            lead.CurrentStage = novoStage;
+        }
 
         _db.LeadAssignments.Add(new LeadAssignment
         {
             LeadId = lead.Id,
             AttendantId = attendant.Id,
             Stage = dto.Customer.Stage,
-            AssignedAt = DateTime.UtcNow
+            AssignedAt = now
         });
 
         await _db.SaveChangesAsync();

@@ -2,6 +2,7 @@ using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
+using LeadAnalytics.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -49,10 +50,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
     });
 
-    options.AddSecurityRequirement(_ => new Microsoft.OpenApi.OpenApiSecurityRequirement
-    {
-        [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer")] = new List<string>(),
-    });
+    options.OperationFilter<AuthorizeOperationFilter>();
 });
 
 builder.Services

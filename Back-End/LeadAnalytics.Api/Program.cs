@@ -50,7 +50,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
     });
 
-    options.OperationFilter<AuthorizeOperationFilter>();
+    options.DocumentFilter<AuthorizeOperationFilter>();
 });
 
 builder.Services

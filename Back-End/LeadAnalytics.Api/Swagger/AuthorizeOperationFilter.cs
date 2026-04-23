@@ -6,27 +6,37 @@ namespace LeadAnalytics.Api.Swagger;
 
 /// <summary>
 /// Anexa o requirement do esquema "Bearer" em cada operação que NÃO é [AllowAnonymous].
-/// Garante que o Swagger UI envie o Authorization: Bearer {token} após clicar em Authorize.
+/// Usa IDocumentFilter (em vez de IOperationFilter) pra ter acesso ao OpenApiDocument —
+/// sem ele o OpenApiSecuritySchemeReference serializa como {} vazio no swagger.json.
 /// </summary>
-public class AuthorizeOperationFilter : IOperationFilter
+public class AuthorizeOperationFilter : IDocumentFilter
 {
-    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    public void Apply(OpenApiDocument document, DocumentFilterContext context)
     {
-        var hasAllowAnonymous = context.MethodInfo
-            .GetCustomAttributes(true)
-            .OfType<AllowAnonymousAttribute>()
-            .Any()
-            || (context.MethodInfo.DeclaringType?
-                .GetCustomAttributes(true)
-                .OfType<AllowAnonymousAttribute>()
-                .Any() ?? false);
-
-        if (hasAllowAnonymous) return;
-
-        operation.Security ??= new List<OpenApiSecurityRequirement>();
-        operation.Security.Add(new OpenApiSecurityRequirement
+        if (document.Components?.SecuritySchemes is null
+            || !document.Components.SecuritySchemes.ContainsKey("Bearer"))
         {
-            [new OpenApiSecuritySchemeReference("Bearer")] = new List<string>(),
-        });
+            return;
+        }
+
+        foreach (var apiDescription in context.ApiDescriptions)
+        {
+            var hasAllowAnonymous =
+                apiDescription.CustomAttributes().OfType<AllowAnonymousAttribute>().Any();
+            if (hasAllowAnonymous) continue;
+
+            if (!document.Paths.TryGetValue("/" + apiDescription.RelativePath!.TrimStart('/'), out var pathItem))
+                continue;
+
+            var method = HttpMethod.Parse(apiDescription.HttpMethod ?? "");
+            if (!pathItem.Operations!.TryGetValue(method, out var operation))
+                continue;
+
+            operation.Security ??= new List<OpenApiSecurityRequirement>();
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", document, null)] = new List<string>(),
+            });
+        }
     }
 }

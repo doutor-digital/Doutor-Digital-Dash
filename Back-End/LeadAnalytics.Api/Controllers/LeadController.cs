@@ -26,9 +26,8 @@ public class WebhooksController(
     [HttpGet]
     public async Task<IActionResult> GetAllLeads([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
-        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
-            return guard;
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
 
         var leads = await _leadService.GetAllLeadsAsync(tenantId, unitId);
         return Ok(leads);
@@ -127,9 +126,8 @@ public class WebhooksController(
     [HttpGet("in-service/count")]
     public async Task<IActionResult> GetInServiceCount([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
-        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
-            return guard;
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
 
         var count = await _leadService.GetLeadsInServiceCountAsync(tenantId, unitId);
         return Ok(new { inService = count });
@@ -143,9 +141,8 @@ public class WebhooksController(
     [HttpGet("in-service/details")]
     public async Task<IActionResult> GetInServiceDetails([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
-        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
-            return guard;
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
 
         var details = await _leadService.GetLeadsInServiceDetailsAsync(tenantId, unitId);
         return Ok(details);
@@ -298,9 +295,8 @@ public class WebhooksController(
                 });
             }
 
-            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
-            if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
-                return guard;
+            var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+            if (error is not null) return error;
 
             _logger.LogInformation(
                 "📊 GET /webhooks/active - tenantId={Tenant}, limit={Limit}, unitId={UnitId}",
@@ -445,9 +441,8 @@ public class WebhooksController(
     {
         try
         {
-            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
-            if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
-                return guard;
+            var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+            if (error is not null) return error;
 
             _logger.LogInformation(
                 "📊 GET /webhooks/count-by-state - tenantId={Tenant}, unitId={UnitId}",

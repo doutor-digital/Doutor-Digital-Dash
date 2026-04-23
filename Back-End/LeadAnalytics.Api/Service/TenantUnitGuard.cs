@@ -67,6 +67,67 @@ public class TenantUnitGuard(
     }
 
     /// <summary>
+    /// Resolve qual tenantId usar na query de acordo com o usuário e unit selecionada.
+    /// <list type="bullet">
+    /// <item>Super admin sem unit → tenantId null (sem filtro, vê tudo).</item>
+    /// <item>Super admin com unit → tenantId derivado de Unit.ClinicId (pode ser de outro tenant).</item>
+    /// <item>Usuário normal sem unit → tenantId do JWT.</item>
+    /// <item>Usuário normal com unit → tenantId do JWT + valida que a unit pertence a ele.</item>
+    /// </list>
+    /// </summary>
+    public async Task<(IActionResult? Error, int? TenantId)> ResolveTenantAsync(
+        int? unitId, CancellationToken ct = default)
+    {
+        if (unitId is <= 0)
+            return (new BadRequestObjectResult(new ProblemDetails { Title = "unitId inválido", Status = 400 }), null);
+
+        if (_currentUser.IsSuperAdmin)
+        {
+            if (!unitId.HasValue)
+                return (null, null);
+
+            var unitClinicIdSa = await _db.Units
+                .AsNoTracking()
+                .Where(u => u.Id == unitId.Value)
+                .Select(u => (int?)u.ClinicId)
+                .FirstOrDefaultAsync(ct);
+
+            if (unitClinicIdSa is null)
+                return (new NotFoundObjectResult(new ProblemDetails { Title = "Unidade não encontrada", Status = 404 }), null);
+
+            return (null, unitClinicIdSa);
+        }
+
+        if (_currentUser.TenantId is null)
+        {
+            _logger.LogWarning("Acesso negado: usuário sem tenant_id no JWT");
+            return (new ForbidResult(), null);
+        }
+
+        if (!unitId.HasValue)
+            return (null, _currentUser.TenantId);
+
+        var unitClinicId = await _db.Units
+            .AsNoTracking()
+            .Where(u => u.Id == unitId.Value)
+            .Select(u => (int?)u.ClinicId)
+            .FirstOrDefaultAsync(ct);
+
+        if (unitClinicId is null)
+            return (new NotFoundObjectResult(new ProblemDetails { Title = "Unidade não encontrada", Status = 404 }), null);
+
+        if (unitClinicId.Value != _currentUser.TenantId.Value)
+        {
+            _logger.LogWarning(
+                "Cross-tenant negado: user tenant={Tenant} tentou unit={Unit} (clinic={Clinic})",
+                _currentUser.TenantId.Value, unitId.Value, unitClinicId.Value);
+            return (new ForbidResult(), null);
+        }
+
+        return (null, _currentUser.TenantId);
+    }
+
+    /// <summary>
     /// Valida que <paramref name="unitId"/> pertence ao tenant autenticado.
     /// Super admin pode acessar qualquer unit.
     /// </summary>

@@ -2,25 +2,35 @@
 using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.DTOs.Timeline;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("webhooks")]
 public class WebhooksController(
     LeadService leadService,
     LeadTimelineService timelineService,
+    ICurrentUser currentUser,
+    TenantUnitGuard tenantGuard,
     ILogger<WebhooksController> logger) : ControllerBase
 {
     private readonly LeadService _leadService = leadService;
     private readonly LeadTimelineService _timelineService = timelineService;
+    private readonly ICurrentUser _currentUser = currentUser;
+    private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<WebhooksController> _logger = logger;
 
     [HttpGet]
-    public async Task<IActionResult> GetAllLeads()
+    public async Task<IActionResult> GetAllLeads([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        var leads = await _leadService.GetAllLeadsAsync();
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var leads = await _leadService.GetAllLeadsAsync(tenantId, unitId);
         return Ok(leads);
     }
 
@@ -33,7 +43,9 @@ public class WebhooksController(
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetLeadById(int id)
     {
-        var lead = await _leadService.GetLeadByIdAsync(id);
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+
+        var lead = await _leadService.GetLeadByIdAsync(id, tenantId);
 
         if (lead is null)
         {
@@ -57,6 +69,19 @@ public class WebhooksController(
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetLeadTimeline(int id, CancellationToken ct)
     {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+
+        var preflight = await _leadService.GetLeadByIdAsync(id, tenantId);
+        if (preflight is null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Lead não encontrado",
+                Status = 404,
+                Detail = $"Nenhum lead encontrado com id {id}"
+            });
+        }
+
         var timeline = await _timelineService.GetTimelineAsync(id, ct);
         if (timeline is null)
         {
@@ -71,6 +96,7 @@ public class WebhooksController(
     }
 
     [HttpPost("cloudia")]
+    [AllowAnonymous]
     public async Task<IActionResult> Cloudia([FromBody] CloudiaWebhookDto dto)
     {
         if (!ModelState.IsValid)
@@ -84,6 +110,8 @@ public class WebhooksController(
     [HttpGet("/webhooks/total-leads")]
     public async Task<IActionResult> GetTotalLeads(int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var total = await _leadService.GetLeadsTotal(clinicId);
 
         return Ok(new TotalLeadsDto
@@ -97,9 +125,13 @@ public class WebhooksController(
     /// <param name="unitId">Filtrar por unidade (opcional)</param>
     /// <returns>Número de leads em atendimento</returns>
     [HttpGet("in-service/count")]
-    public async Task<IActionResult> GetInServiceCount([FromQuery] int? unitId = null)
+    public async Task<IActionResult> GetInServiceCount([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        var count = await _leadService.GetLeadsInServiceCountAsync(unitId);
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var count = await _leadService.GetLeadsInServiceCountAsync(tenantId, unitId);
         return Ok(new { inService = count });
     }
 
@@ -109,25 +141,36 @@ public class WebhooksController(
     /// <param name="unitId">Filtrar por unidade (opcional)</param>
     /// <returns>Contagem por estado</returns>
     [HttpGet("in-service/details")]
-    public async Task<IActionResult> GetInServiceDetails([FromQuery] int? unitId = null)
+    public async Task<IActionResult> GetInServiceDetails([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        var details = await _leadService.GetLeadsInServiceDetailsAsync(unitId);
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var details = await _leadService.GetLeadsInServiceDetailsAsync(tenantId, unitId);
         return Ok(details);
     }
 
     [HttpGet("consultas")]
-    public async Task<IActionResult> GetHasAppoiment(int clinicId)
+    public async Task<IActionResult> GetHasAppoiment([FromQuery] int clinicId, [FromQuery] int? unitId = null, CancellationToken ct = default)
     {
-        var result = await _leadService.GetCheckClosedQueries(clinicId);
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var result = await _leadService.GetCheckClosedQueries(clinicId, unitId);
         return Ok(result);
     }
 
 
     [HttpGet("sem-pagamento")]
-    public async Task<IActionResult> GetLeadsWithoutPayment(int clinicId)
+    public async Task<IActionResult> GetLeadsWithoutPayment([FromQuery] int clinicId, [FromQuery] int? unitId = null, CancellationToken ct = default)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
 
-        var result = await _leadService.GetCheckStageWithoutPayment(clinicId);
+        var result = await _leadService.GetCheckStageWithoutPayment(clinicId, unitId);
 
         if (result == 0)
         {
@@ -148,6 +191,8 @@ public class WebhooksController(
     [HttpGet("com-pagamento")]
     public async Task<IActionResult> VerificarEtapaComPagamento(int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var quantidade = await _leadService.GetVerifyPaymentStep(clinicId);
 
         if (quantidade == 0)
@@ -169,6 +214,8 @@ public class WebhooksController(
     [HttpGet("source-final")]
     public async Task<IActionResult> GetSourceFinally(int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var result = await _leadService.GetVerifySourceFinal(clinicId);
         return Ok(result);
     }
@@ -176,6 +223,8 @@ public class WebhooksController(
     [HttpGet("origem-cloudia")]
     public async Task<IActionResult> GetOrigens(int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var result = await _leadService.GetCheckSourceCloudia(clinicId);
         return Ok(result);
     }
@@ -183,6 +232,8 @@ public class WebhooksController(
     [HttpGet("fim-de-semana")]
     public async Task<IActionResult> GetLeadsFinaldeSemana(int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var leads = await _leadService.GetWeekendLeads(clinicId);
         return Ok(leads);
     }
@@ -190,19 +241,16 @@ public class WebhooksController(
     [HttpGet("etapa-agrupada")]
     public async Task<IActionResult> GetEtapaAgrupada([FromQuery] int clinicId)
     {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+
         var result = await _leadService.GetCheckGroupedStep(clinicId);
-
-        if (clinicId <= 0)
-            return BadRequest("clinicId inválido");
-
         return Ok(result);
     }
 
     [HttpGet("buscar-inicio-fim")]
     public async Task<IActionResult> GetBuscarInicioFim([FromQuery] int clinicId, [FromQuery] DateTime dataInicio, [FromQuery] DateTime dataFim)
     {
-        if (clinicId <= 0)
-            return BadRequest("clinicId inválido");
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
         if (dataInicio > dataFim)
             return BadRequest("dataInicio deve ser menor ou igual a dataFim");
         var result = await _leadService.GetSearchStartMonthLeads(clinicId, dataInicio, dataFim);
@@ -212,8 +260,7 @@ public class WebhooksController(
     [HttpGet("consulta-periodos")]
     public async Task<IActionResult> GetConsultaPeriodos([FromQuery] FiltroLeadsPeriodoDto filtro)
     {
-        if (filtro.ClinicId <= 0)
-            return BadRequest("clinicId inválido");
+        if (_tenantGuard.EnsureTenantMatches(filtro.ClinicId) is { } denied) return denied;
         if (filtro.Ano <= 0)
             return BadRequest("Ano inválido");
         if (filtro.Mes.HasValue && (filtro.Mes < 1 || filtro.Mes > 12))
@@ -237,34 +284,38 @@ public class WebhooksController(
     [ProducesResponseType(400)]
     [ProducesResponseType(500)]
     public async Task<IActionResult> GetActiveLeads(
-        [FromQuery] int limit = 100, 
-        [FromQuery] int? unitId = null)
+        [FromQuery] int limit = 100,
+        [FromQuery] int? unitId = null,
+        CancellationToken ct = default)
     {
         try
         {
-            // Validar limite
             if (limit < 1 || limit > 500)
             {
-                return BadRequest(new { 
+                return BadRequest(new {
                     error = "Limite deve estar entre 1 e 500",
-                    limit = limit 
+                    limit = limit
                 });
             }
- 
+
+            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+            if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+                return guard;
+
             _logger.LogInformation(
-                "📊 GET /api/leads/active - limit={Limit}, unitId={UnitId}", 
-                limit, unitId);
- 
+                "📊 GET /webhooks/active - tenantId={Tenant}, limit={Limit}, unitId={UnitId}",
+                tenantId, limit, unitId);
+
             var activeLeads = await _leadService.GetActiveLeadsAsync(limit, unitId);
- 
+
             return Ok(activeLeads);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Erro ao buscar leads ativos");
-            return StatusCode(500, new { 
+            return StatusCode(500, new {
                 error = "Erro ao buscar leads ativos",
-                message = ex.Message 
+                message = ex.Message
             });
         }
     }
@@ -282,7 +333,10 @@ public class WebhooksController(
         [FromQuery] DateTime dateTo,
         [FromQuery] int? unitId = null)
     {
-        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
+            return guard;
+
         if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
         if ((dateTo - dateFrom).TotalDays > 3 * 365)
             return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
@@ -311,7 +365,9 @@ public class WebhooksController(
         [FromQuery] int limit = 50,
         [FromQuery] int? unitId = null)
     {
-        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
+            return guard;
         if (hours <= 0) return BadRequest(new { error = "hours deve ser > 0" });
 
         var result = await _leadService.GetRecentLeadsAsync(clinicId, hours, limit, unitId, HttpContext.RequestAborted);
@@ -332,7 +388,7 @@ public class WebhooksController(
         [FromQuery] string groupBy = "day",
         [FromQuery] string compare = "none")
     {
-        if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
         if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
         if ((dateTo - dateFrom).TotalDays > 3 * 365)
             return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
@@ -385,14 +441,18 @@ public class WebhooksController(
     [HttpGet("count-by-state")]
     [ProducesResponseType(typeof(LeadsCountDto), 200)]
     [ProducesResponseType(500)]
-    public async Task<IActionResult> GetLeadsCountByState([FromQuery] int? unitId = null)
+    public async Task<IActionResult> GetLeadsCountByState([FromQuery] int? unitId = null, CancellationToken ct = default)
     {
         try
         {
+            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+            if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+                return guard;
+
             _logger.LogInformation(
-                "📊 GET /api/leads/count-by-state - unitId={UnitId}", 
-                unitId);
- 
+                "📊 GET /webhooks/count-by-state - tenantId={Tenant}, unitId={UnitId}",
+                tenantId, unitId);
+
             var counts = await _leadService.GetLeadsCountByStateAsync(unitId);
  
             var response = new LeadsCountDto
@@ -428,6 +488,16 @@ public class WebhooksController(
         [FromQuery] DateTime dataFim,
         [FromQuery] int? clinicId = null)
     {
+        if (clinicId.HasValue)
+        {
+            if (_tenantGuard.EnsureTenantMatches(clinicId.Value) is { } denied) return denied;
+        }
+        else
+        {
+            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+            clinicId = tenantId;
+        }
+
         if (dataInicio > dataFim)
             return BadRequest("dataInicio deve ser menor ou igual a dataFim");
 
@@ -448,6 +518,16 @@ public class WebhooksController(
         [FromQuery] int startHour = 20,
         [FromQuery] int endHour = 7)
     {
+        if (clinicId.HasValue)
+        {
+            if (_tenantGuard.EnsureTenantMatches(clinicId.Value) is { } denied) return denied;
+        }
+        else
+        {
+            if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+            clinicId = tenantId;
+        }
+
         if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23)
             return BadRequest("startHour e endHour devem estar entre 0 e 23");
 

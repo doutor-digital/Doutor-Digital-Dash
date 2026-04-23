@@ -38,16 +38,22 @@ public class LeadService(
         };
     }
 
-    public async Task<List<Lead>> GetAllLeadsAsync()
+    public async Task<List<Lead>> GetAllLeadsAsync(int? tenantId, int? unitId = null)
     {
-        return await _db.Leads
-            .AsNoTracking()
-            .ToListAsync();
+        var query = _db.Leads.AsNoTracking().AsQueryable();
+
+        if (tenantId.HasValue)
+            query = query.Where(l => l.TenantId == tenantId.Value);
+
+        if (unitId.HasValue)
+            query = query.Where(l => l.UnitId == unitId.Value);
+
+        return await query.ToListAsync();
     }
 
-    public async Task<LeadDetailDto?> GetLeadByIdAsync(int id)
+    public async Task<LeadDetailDto?> GetLeadByIdAsync(int id, int? tenantId, int? unitId = null)
     {
-        var lead = await _db.Leads
+        var query = _db.Leads
             .AsNoTracking()
             .Include(l => l.Unit)
             .Include(l => l.Attendant)
@@ -59,7 +65,15 @@ public class LeadService(
             .Include(l => l.Assignments)
                 .ThenInclude(a => a.Attendant)
             .Include(l => l.Payments)
-            .FirstOrDefaultAsync(l => l.Id == id);
+            .Where(l => l.Id == id);
+
+        if (tenantId.HasValue)
+            query = query.Where(l => l.TenantId == tenantId.Value);
+
+        if (unitId.HasValue)
+            query = query.Where(l => l.UnitId == unitId.Value);
+
+        var lead = await query.FirstOrDefaultAsync();
 
         if (lead is null) return null;
 
@@ -668,23 +682,23 @@ public class LeadService(
     /// <summary>
     /// Contar leads em atendimento (estado "service")
     /// </summary>
-    public async Task<int> GetLeadsInServiceCountAsync(int? unitId = null)
+    public async Task<int> GetLeadsInServiceCountAsync(int? tenantId, int? unitId = null)
     {
         var query = _db.Leads
             .AsNoTracking()
             .Where(l => l.ConversationState == "service");
 
-        // Filtrar por unidade se especificado
+        if (tenantId.HasValue)
+            query = query.Where(l => l.TenantId == tenantId.Value);
+
         if (unitId.HasValue)
-        {
             query = query.Where(l => l.UnitId == unitId.Value);
-        }
 
         var count = await query.CountAsync();
 
         _logger.LogInformation(
-            "📊 Leads em atendimento: {Count} (unitId: {UnitId})", 
-            count, unitId);
+            "📊 Leads em atendimento: {Count} (tenantId={TenantId}, unitId={UnitId})",
+            count, tenantId, unitId);
 
         return count;
     }
@@ -692,14 +706,15 @@ public class LeadService(
     /// <summary>
     /// Contar leads em cada estado
     /// </summary>
-    public async Task<LeadsInServiceDto> GetLeadsInServiceDetailsAsync(int? unitId = null)
+    public async Task<LeadsInServiceDto> GetLeadsInServiceDetailsAsync(int? tenantId, int? unitId = null)
     {
-        var query = _db.Leads.AsNoTracking();
+        var query = _db.Leads.AsNoTracking().AsQueryable();
+
+        if (tenantId.HasValue)
+            query = query.Where(l => l.TenantId == tenantId.Value);
 
         if (unitId.HasValue)
-        {
             query = query.Where(l => l.UnitId == unitId.Value);
-        }
 
         var inService = await query
             .Where(l => l.ConversationState == "service")
@@ -727,26 +742,35 @@ public class LeadService(
         };
     }
 
-    public async Task<int> GetCheckClosedQueries(int clinicId)
+    public async Task<int> GetCheckClosedQueries(int tenantId, int? unitId = null)
     {
-        return await _db.Leads
+        var query = _db.Leads
             .AsNoTracking()
             .Where(l =>
-                l.UnitId == clinicId &&
-                (l.CurrentStage == "10_EM_TRATAMENTO" || l.CurrentStage == "09_FECHOU_TRATAMENTO"))
+                l.TenantId == tenantId &&
+                (l.CurrentStage == "10_EM_TRATAMENTO" || l.CurrentStage == "09_FECHOU_TRATAMENTO"));
+
+        if (unitId.HasValue)
+            query = query.Where(l => l.UnitId == unitId.Value);
+
+        return await query
             .Select(l => l.Id)
             .Distinct()
             .CountAsync();
     }
 
-    public async Task<int> GetCheckStageWithoutPayment(int clinicId)
+    public async Task<int> GetCheckStageWithoutPayment(int tenantId, int? unitId = null)
     {
-        return await _db.Leads
+        var query = _db.Leads
             .AsNoTracking()
             .Where(l =>
-                l.UnitId == clinicId &&
-                l.CurrentStage == "04_AGENDADO_SEM_PAGAMENTO")
-            .CountAsync();
+                l.TenantId == tenantId &&
+                l.CurrentStage == "04_AGENDADO_SEM_PAGAMENTO");
+
+        if (unitId.HasValue)
+            query = query.Where(l => l.UnitId == unitId.Value);
+
+        return await query.CountAsync();
     }
 
     public async Task<int> GetVerifyPaymentStep(int clinicId)

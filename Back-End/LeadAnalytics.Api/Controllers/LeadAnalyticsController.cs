@@ -12,45 +12,20 @@ namespace LeadAnalytics.Api.Controllers;
 public class LeadAnalyticsController(
     LeadAnalyticsService analyticsService,
     AppDbContext db,
+    TenantUnitGuard tenantGuard,
+    ICurrentUser currentUser,
     ILogger<LeadAnalyticsController> logger) : ControllerBase
 {
     private const int MaxPeriodDays = 366;
 
     private readonly LeadAnalyticsService _analyticsService = analyticsService;
     private readonly AppDbContext _db = db;
+    private readonly TenantUnitGuard _tenantGuard = tenantGuard;
+    private readonly ICurrentUser _currentUser = currentUser;
     private readonly ILogger<LeadAnalyticsController> _logger = logger;
 
-    /// <summary>
-    /// Garante que a unidade solicitada pertence ao tenant autenticado (isolation por tenant).
-    /// </summary>
-    private async Task<IActionResult?> GuardUnitAccessAsync(int unitId)
-    {
-        if (unitId <= 0)
-            return BadRequest(new ProblemDetails { Title = "unitId inválido", Status = 400 });
-
-        var tenantClaim = User.FindFirst("tenant_id")?.Value;
-        if (!int.TryParse(tenantClaim, out var tenantId))
-            return Forbid();
-
-        var unitClinicId = await _db.Units
-            .AsNoTracking()
-            .Where(u => u.Id == unitId)
-            .Select(u => (int?)u.ClinicId)
-            .FirstOrDefaultAsync();
-
-        if (unitClinicId is null)
-            return NotFound(new ProblemDetails { Title = "Unidade não encontrada", Status = 404 });
-
-        if (unitClinicId.Value != tenantId)
-        {
-            _logger.LogWarning(
-                "Cross-tenant access negado: user tenant={Tenant} tentou unit={Unit} (clinic={Clinic})",
-                tenantId, unitId, unitClinicId.Value);
-            return Forbid();
-        }
-
-        return null;
-    }
+    private Task<IActionResult?> GuardUnitAccessAsync(int unitId) =>
+        _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, HttpContext.RequestAborted);
 
     private static IActionResult? ValidatePeriod(DateTime? startDate, DateTime? endDate)
     {
@@ -87,9 +62,7 @@ public class LeadAnalyticsController(
         if (id <= 0)
             return BadRequest(new ProblemDetails { Title = "id inválido", Status = 400 });
 
-        var tenantClaim = User.FindFirst("tenant_id")?.Value;
-        if (!int.TryParse(tenantClaim, out var tenantId))
-            return Forbid();
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
 
         var leadTenantId = await _db.Leads.AsNoTracking()
             .Where(l => l.Id == id)
@@ -99,7 +72,7 @@ public class LeadAnalyticsController(
         if (leadTenantId is null)
             return NotFound(new { message = $"Lead {id} não encontrado" });
 
-        if (leadTenantId.Value != tenantId)
+        if (!_currentUser.IsSuperAdmin && leadTenantId.Value != tenantId)
         {
             _logger.LogWarning(
                 "Cross-tenant access negado: user tenant={Tenant} tentou lead={Lead}",

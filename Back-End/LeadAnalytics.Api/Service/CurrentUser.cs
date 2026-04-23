@@ -28,5 +28,7 @@ public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
     public string? Role => Principal?.FindFirst(ClaimTypes.Role)?.Value;
 
     public bool IsSuperAdmin =>
-        string.Equals(Role, "super_admin", StringComparison.OrdinalIgnoreCase);
+        string.Equals(Role, "super_admin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Role, "super-admin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Role, "superadmin", StringComparison.OrdinalIgnoreCase);
 }

@@ -44,11 +44,9 @@ builder.Services.AddSwaggerGen(options =>
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Description = "Cole o JWT aqui (sem o prefixo \"Bearer \"). Exemplo: eyJhbGciOi...",
+        Description = "JWT. Cole no formato: Bearer {seu_token}",
         In = Microsoft.OpenApi.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
+        Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
     });
 
     options.AddSecurityRequirement(_ => new Microsoft.OpenApi.OpenApiSecurityRequirement
@@ -71,6 +69,30 @@ builder.Services
             ValidAudience = jwtSection["Audience"] ?? "LeadAnalytics.Frontend",
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtAuth");
+                logger.LogWarning(
+                    "JWT auth falhou em {Path}: {Message}",
+                    ctx.Request.Path, ctx.Exception.Message);
+                return Task.CompletedTask;
+            },
+            OnChallenge = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtAuth");
+                logger.LogWarning(
+                    "JWT challenge 401 em {Path}: error={Error}, description={Desc}",
+                    ctx.Request.Path, ctx.Error, ctx.ErrorDescription);
+                return Task.CompletedTask;
+            },
         };
     });
 

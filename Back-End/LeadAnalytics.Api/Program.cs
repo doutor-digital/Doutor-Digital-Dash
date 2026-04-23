@@ -1,3 +1,4 @@
+using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
@@ -86,6 +87,10 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<ContactImportService>();
 builder.Services.AddScoped<PaymentService>();
+
+builder.Services.AddScoped<LeadEventService>();
+builder.Services.AddScoped<CloudiaAdapter>();
+builder.Services.AddScoped<KommoAdapter>();
 
 builder.Services.AddCors(options =>
 {

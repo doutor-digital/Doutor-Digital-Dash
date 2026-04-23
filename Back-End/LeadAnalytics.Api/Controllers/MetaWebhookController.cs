@@ -1,5 +1,7 @@
-﻿using LeadAnalytics.Api.DTOs;
+﻿using LeadAnalytics.Api.Adapters;
+using LeadAnalytics.Api.DTOs;
 using LeadAnalytics.Api.DTOs.Cloudia;
+using LeadAnalytics.Api.DTOs.Kommo;
 using LeadAnalytics.Api.DTOs.Meta;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Mvc;
@@ -10,11 +12,18 @@ namespace LeadAnalytics.Api.Controllers;
 [Route("api/webhooks")]
 public class MetaWebhookController(
     MetaWebhookService metaWebhookService,
-    ILogger<MetaWebhookController> logger, LeadService leadService) : ControllerBase
+    ILogger<MetaWebhookController> logger,
+    LeadService leadService,
+    LeadEventService leadEventService,
+    CloudiaAdapter cloudiaAdapter,
+    KommoAdapter kommoAdapter) : ControllerBase
 {
     private readonly MetaWebhookService _metaWebhookService = metaWebhookService;
     private readonly ILogger<MetaWebhookController> _logger = logger;
     private readonly LeadService _leadService = leadService;
+    private readonly LeadEventService _leadEventService = leadEventService;
+    private readonly CloudiaAdapter _cloudiaAdapter = cloudiaAdapter;
+    private readonly KommoAdapter _kommoAdapter = kommoAdapter;
     /// <summary>
     /// Endpoint de verificação do webhook da Meta
     /// </summary>
@@ -121,6 +130,9 @@ public class MetaWebhookController(
         {
             _logger.LogInformation("📨 Webhook Cloudia recebido: {Type}", webhook.Type);
 
+            var leadEvent = _cloudiaAdapter.ToLeadEvent(webhook);
+            await _leadEventService.ProcessAsync(leadEvent);
+
             var result = await _leadService.SaveLeadAsync(webhook);
 
             var message = result.Result switch
@@ -151,4 +163,22 @@ public class MetaWebhookController(
         }
     }
 
+    [HttpPost("kommo")]
+    public async Task<IActionResult> ReceiveKommoWebhook([FromBody] KommoWebhookDto webhook)
+    {
+        try
+        {
+            _logger.LogInformation("📨 Webhook Kommo recebido: {Id}", webhook.Id);
+
+            var leadEvent = _kommoAdapter.ToLeadEvent(webhook);
+            await _leadEventService.ProcessAsync(leadEvent);
+
+            return Ok(new { success = true, message = "Evento Kommo processado" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Erro ao processar webhook do Kommo");
+            return Ok(new { success = false, message = "Erro ao processar webhook", error = ex.Message });
+        }
+    }
 }

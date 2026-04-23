@@ -15,6 +15,7 @@ public class CloudiaAdapter
             ExternalId = data?.Id.ToString() ?? string.Empty,
             Phone = data?.Phone ?? string.Empty,
             Stage = data?.Stage ?? string.Empty,
+            
             AttendantId = payload.AssignedUserId?.ToString() ?? string.Empty,
             SourceSystem = "Cloudia"
         };

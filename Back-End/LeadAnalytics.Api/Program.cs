@@ -58,6 +58,24 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 
+// ── Cache distribuído (Redis no Railway; fallback em memória se não configurado) ──
+var redisConnection = builder.Configuration.GetConnectionString("Redis")
+    ?? builder.Configuration["Redis:ConnectionString"]
+    ?? Environment.GetEnvironmentVariable("REDIS_URL");
+
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+        options.InstanceName = "LeadAnalytics:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
 // ── Log viewer em memória (buffer circular dos últimos 5000 logs) ──
 builder.Services.AddSingleton<InMemoryLogStore>(_ => new InMemoryLogStore(capacity: 5000));
 builder.Services.AddSingleton<ILoggerProvider>(sp => new InMemoryLoggerProvider(

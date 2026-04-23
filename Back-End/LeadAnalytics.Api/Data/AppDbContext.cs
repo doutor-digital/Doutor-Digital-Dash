@@ -209,6 +209,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => new { e.TenantId, e.Origem });
             entity.HasIndex(e => new { e.TenantId, e.LastMessageAt });
             entity.HasIndex(e => new { e.TenantId, e.AttendanceStatus });
+            // Usado pela detecção de duplicados cross-tenant (ignoreTenant=true) e pelas
+            // window functions ROW_NUMBER() OVER (PARTITION BY PhoneNormalized ORDER BY CreatedAt, Id).
+            entity.HasIndex(e => new { e.PhoneNormalized, e.CreatedAt, e.Id });
 
             entity.HasOne(e => e.ImportBatch)
                   .WithMany()

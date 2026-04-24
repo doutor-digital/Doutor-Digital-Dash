@@ -19,92 +19,126 @@ public class DuplicateContactService(
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
+    public const int MaxPageSize = 200;
+    public const int DefaultBatchSize = 500;
+    public const int MaxBatchSize = 2000;
+    public const int DefaultMaxBatchesPerCall = 4;
+    public const int MaxBatchesPerCallCap = 20;
+
     public async Task<DuplicatesReportDto> FindDuplicatesAsync(
         int? tenantId,
         bool ignoreTenant,
+        int page = 1,
+        int pageSize = 50,
         CancellationToken ct = default)
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+
         var cacheKey = BuildCacheKey(tenantId, ignoreTenant);
 
+        List<DuplicateGroupDto>? allGroups = null;
         var cached = await _cache.GetStringAsync(cacheKey, ct);
         if (!string.IsNullOrEmpty(cached))
         {
-            var hit = JsonSerializer.Deserialize<DuplicatesReportDto>(cached, JsonOpts);
-            if (hit is not null)
-            {
+            allGroups = JsonSerializer.Deserialize<List<DuplicateGroupDto>>(cached, JsonOpts);
+            if (allGroups is not null)
                 _logger.LogDebug("Duplicados cache HIT (key={Key})", cacheKey);
-                return hit;
-            }
         }
 
-        var groups = await QueryGroupsAsync(tenantId, ignoreTenant, ct);
+        allGroups ??= await QueryGroupsAsync(tenantId, ignoreTenant, ct);
 
-        var report = new DuplicatesReportDto
+        if (cached is null or "")
         {
-            DryRun = true,
-            GroupsFound = groups.Count,
-            ContactsToDelete = groups.Sum(g => g.DeleteContactIds.Count),
-            Groups = groups,
-        };
+            await _cache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(allGroups, JsonOpts),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheTtl },
+                ct);
+        }
+
+        var groupsFound = allGroups.Count;
+        var contactsToDelete = allGroups.Sum(g => g.DeleteContactIds.Count);
+        var totalPages = groupsFound == 0 ? 1 : (int)Math.Ceiling(groupsFound / (double)pageSize);
+
+        var pageGroups = allGroups
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
 
         _logger.LogInformation(
-            "Duplicados achados: {Groups} grupo(s), {Delete} a apagar (tenantId={TenantId}, ignoreTenant={Ignore})",
-            report.GroupsFound, report.ContactsToDelete, tenantId, ignoreTenant);
+            "Duplicados: {Groups} grupo(s), {Delete} a apagar — página {Page}/{Total} (tenantId={TenantId}, ignoreTenant={Ignore})",
+            groupsFound, contactsToDelete, page, totalPages, tenantId, ignoreTenant);
 
-        await _cache.SetStringAsync(
-            cacheKey,
-            JsonSerializer.Serialize(report, JsonOpts),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheTtl },
-            ct);
-
-        return report;
+        return new DuplicatesReportDto
+        {
+            DryRun = true,
+            GroupsFound = groupsFound,
+            ContactsToDelete = contactsToDelete,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = totalPages,
+            Groups = pageGroups,
+        };
     }
 
-    public async Task<DuplicatesDeleteSummaryDto> DeleteDuplicatesAsync(
+    public async Task<DuplicatesDeleteProgressDto> DeleteDuplicatesAsync(
         int? tenantId,
         bool ignoreTenant,
+        int batchSize = DefaultBatchSize,
+        int maxBatches = DefaultMaxBatchesPerCall,
         CancellationToken ct = default)
     {
-        const int BatchSize = 1000;
-        const int BatchTimeoutSeconds = 120;
+        batchSize = Math.Clamp(batchSize, 1, MaxBatchSize);
+        maxBatches = Math.Clamp(maxBatches, 1, MaxBatchesPerCallCap);
 
+        const int BatchTimeoutSeconds = 60;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var (groupsFound, expectedToDelete) = await CountDuplicatesAsync(tenantId, ignoreTenant, ct);
         if (expectedToDelete == 0)
         {
             sw.Stop();
-            return new DuplicatesDeleteSummaryDto
+            await InvalidateCacheAsync(tenantId, ct);
+            return new DuplicatesDeleteProgressDto
             {
-                GroupsFound = 0,
-                ContactsDeleted = 0,
+                DeletedThisCall = 0,
                 Batches = 0,
+                Remaining = 0,
+                ContactsToDeleteTotal = 0,
+                GroupsFound = groupsFound,
+                Completed = true,
                 DurationMs = sw.ElapsedMilliseconds,
             };
         }
 
-        var (sql, parameters) = BuildChunkedDeleteSql(tenantId, ignoreTenant, BatchSize);
+        var (sql, parameters) = BuildChunkedDeleteSql(tenantId, ignoreTenant, batchSize);
 
         var originalTimeout = _db.Database.GetCommandTimeout();
         _db.Database.SetCommandTimeout(BatchTimeoutSeconds);
 
-        var totalDeleted = 0;
-        var batches = 0;
+        var deletedThisCall = 0;
+        var batchesThisCall = 0;
         try
         {
-            while (!ct.IsCancellationRequested)
+            for (var i = 0; i < maxBatches; i++)
             {
+                ct.ThrowIfCancellationRequested();
+
+                await using var tx = await _db.Database.BeginTransactionAsync(ct);
                 var affected = await _db.Database.ExecuteSqlRawAsync(sql, parameters, ct);
+                await tx.CommitAsync(ct);
+
                 if (affected <= 0) break;
 
-                totalDeleted += affected;
-                batches++;
+                deletedThisCall += affected;
+                batchesThisCall++;
 
                 _logger.LogInformation(
-                    "🗑 Lote {Batch} apagou {Affected} linha(s) (total={Total}/{Expected})",
-                    batches, affected, totalDeleted, expectedToDelete);
+                    "🗑 Lote {Batch} apagou {Affected} linha(s) nesta chamada (acum={Total})",
+                    batchesThisCall, affected, deletedThisCall);
 
-                if (affected < BatchSize) break;
+                if (affected < batchSize) break;
             }
         }
         finally
@@ -114,17 +148,22 @@ public class DuplicateContactService(
 
         await InvalidateCacheAsync(tenantId, ct);
 
+        var remaining = Math.Max(0, expectedToDelete - deletedThisCall);
+        var completed = remaining == 0 || deletedThisCall == 0;
+
         sw.Stop();
-
         _logger.LogWarning(
-            "🗑 Duplicados apagados: {Deleted} linha(s) em {Batches} lote(s), {Groups} grupo(s), {Ms}ms (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
-            totalDeleted, batches, groupsFound, sw.ElapsedMilliseconds, tenantId, ignoreTenant);
+            "🗑 DELETE call: {Deleted}/{Expected} nesta chamada em {Batches} lote(s), {Ms}ms (restante≈{Remaining}, completed={Completed})",
+            deletedThisCall, expectedToDelete, batchesThisCall, sw.ElapsedMilliseconds, remaining, completed);
 
-        return new DuplicatesDeleteSummaryDto
+        return new DuplicatesDeleteProgressDto
         {
+            DeletedThisCall = deletedThisCall,
+            Batches = batchesThisCall,
+            Remaining = remaining,
+            ContactsToDeleteTotal = expectedToDelete,
             GroupsFound = groupsFound,
-            ContactsDeleted = totalDeleted,
-            Batches = batches,
+            Completed = completed,
             DurationMs = sw.ElapsedMilliseconds,
         };
     }
@@ -190,7 +229,6 @@ public class DuplicateContactService(
         string sql;
         if (ignoreTenant)
         {
-            // Cross-tenant: particiona só por telefone. O "keeper" é o mais antigo global.
             sql = @"
                 WITH ranked AS (
                     SELECT ""Id"", ""Name"", ""PhoneNormalized"", ""CreatedAt"", ""TenantId"",
@@ -324,12 +362,10 @@ public class DuplicateContactService(
     // ─── Cache helpers ───────────────────────────────────────────────────
 
     private static string BuildCacheKey(int? tenantId, bool ignoreTenant)
-        => $"duplicates:v1:t={tenantId?.ToString() ?? "all"}:it={(ignoreTenant ? 1 : 0)}";
+        => $"duplicates:v2:t={tenantId?.ToString() ?? "all"}:it={(ignoreTenant ? 1 : 0)}";
 
     private async Task InvalidateCacheAsync(int? tenantId, CancellationToken ct)
     {
-        // Invalida todas as variações potencialmente afetadas: o tenant específico (se houver),
-        // o modo "all tenants" e o modo cross-tenant (ignoreTenant=true).
         var keys = new List<string>
         {
             BuildCacheKey(null, false),

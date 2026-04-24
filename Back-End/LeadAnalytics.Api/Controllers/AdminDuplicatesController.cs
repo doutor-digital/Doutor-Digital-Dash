@@ -16,7 +16,7 @@ public class AdminDuplicatesController(
     private readonly ILogger<AdminDuplicatesController> _logger = logger;
 
     /// <summary>
-    /// Lista grupos de contatos duplicados por (TenantId, PhoneNormalized).
+    /// Lista grupos de contatos duplicados por (TenantId, PhoneNormalized) com paginação.
     /// Mantém o mais antigo de cada grupo.
     /// </summary>
     [HttpGet("duplicates")]
@@ -24,36 +24,43 @@ public class AdminDuplicatesController(
     public async Task<IActionResult> ListDuplicates(
         [FromQuery] int? tenantId,
         [FromQuery] bool ignoreTenant = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var report = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, ct);
+        var report = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, page, pageSize, ct);
         return Ok(report);
     }
 
     /// <summary>
-    /// Apaga contatos duplicados (mantém o mais antigo de cada grupo).
-    /// Por padrão roda em dry-run e só retorna o relatório. Passe dryRun=false para efetivar.
+    /// Apaga contatos duplicados de forma incremental. Cada chamada executa até
+    /// `maxBatches` lotes de `batchSize` registros e retorna o progresso.
+    /// O cliente repete a chamada até `completed=true`.
+    /// Passe dryRun=true (padrão) para só pré-visualizar.
     /// </summary>
     [HttpDelete("duplicates")]
     [ProducesResponseType(typeof(DuplicatesReportDto), 200)]
-    [ProducesResponseType(typeof(DuplicatesDeleteSummaryDto), 200)]
+    [ProducesResponseType(typeof(DuplicatesDeleteProgressDto), 200)]
     public async Task<IActionResult> DeleteDuplicates(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? tenantId = null,
         [FromQuery] bool ignoreTenant = false,
+        [FromQuery] int batchSize = DuplicateContactService.DefaultBatchSize,
+        [FromQuery] int maxBatches = DuplicateContactService.DefaultMaxBatchesPerCall,
         CancellationToken ct = default)
     {
         if (dryRun)
         {
-            var preview = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, ct);
+            var preview = await _duplicateService.FindDuplicatesAsync(tenantId, ignoreTenant, 1, 50, ct);
             return Ok(preview);
         }
 
         _logger.LogWarning(
-            "⚠ Solicitação de DELETE real de contatos duplicados por {User} (tenantId={TenantId}, ignoreTenant={IgnoreTenant})",
-            User.Identity?.Name ?? "anonymous", tenantId, ignoreTenant);
+            "⚠ DELETE incremental de duplicados por {User} (tenantId={TenantId}, ignoreTenant={IgnoreTenant}, batchSize={BatchSize}, maxBatches={MaxBatches})",
+            User.Identity?.Name ?? "anonymous", tenantId, ignoreTenant, batchSize, maxBatches);
 
-        var summary = await _duplicateService.DeleteDuplicatesAsync(tenantId, ignoreTenant, ct);
-        return Ok(summary);
+        var progress = await _duplicateService.DeleteDuplicatesAsync(
+            tenantId, ignoreTenant, batchSize, maxBatches, ct);
+        return Ok(progress);
     }
 }

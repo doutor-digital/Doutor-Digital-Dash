@@ -5,6 +5,9 @@ public class DuplicatesReportDto
     public bool DryRun { get; set; }
     public int GroupsFound { get; set; }
     public int ContactsToDelete { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 50;
+    public int TotalPages { get; set; } = 1;
     public List<DuplicateGroupDto> Groups { get; set; } = [];
 }
 
@@ -24,5 +27,16 @@ public class DuplicatesDeleteSummaryDto
     public int GroupsFound { get; set; }
     public int ContactsDeleted { get; set; }
     public int Batches { get; set; }
+    public long DurationMs { get; set; }
+}
+
+public class DuplicatesDeleteProgressDto
+{
+    public int DeletedThisCall { get; set; }
+    public int Batches { get; set; }
+    public int Remaining { get; set; }
+    public int ContactsToDeleteTotal { get; set; }
+    public int GroupsFound { get; set; }
+    public bool Completed { get; set; }
     public long DurationMs { get; set; }
 }

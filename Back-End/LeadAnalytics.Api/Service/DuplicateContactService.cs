@@ -82,6 +82,39 @@ public class DuplicateContactService(
         };
     }
 
+    public Task<(int GroupsFound, int ContactsToDelete)> GetDeleteEstimateAsync(
+        int? tenantId, bool ignoreTenant, CancellationToken ct = default)
+        => CountDuplicatesAsync(tenantId, ignoreTenant, ct);
+
+    public async Task<int> DeleteOneBatchAsync(
+        int? tenantId,
+        bool ignoreTenant,
+        int batchSize,
+        CancellationToken ct = default)
+    {
+        batchSize = Math.Clamp(batchSize, 1, MaxBatchSize);
+        const int BatchTimeoutSeconds = 60;
+
+        var (sql, parameters) = BuildChunkedDeleteSql(tenantId, ignoreTenant, batchSize);
+        var originalTimeout = _db.Database.GetCommandTimeout();
+        _db.Database.SetCommandTimeout(BatchTimeoutSeconds);
+
+        try
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            var affected = await _db.Database.ExecuteSqlRawAsync(sql, parameters, ct);
+            await tx.CommitAsync(ct);
+            return affected;
+        }
+        finally
+        {
+            _db.Database.SetCommandTimeout(originalTimeout);
+        }
+    }
+
+    public Task InvalidateReportCacheAsync(int? tenantId, CancellationToken ct = default)
+        => InvalidateCacheAsync(tenantId, ct);
+
     public async Task<DuplicatesDeleteProgressDto> DeleteDuplicatesAsync(
         int? tenantId,
         bool ignoreTenant,

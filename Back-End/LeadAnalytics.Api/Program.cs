@@ -1,5 +1,6 @@
 using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.Jobs;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
 using LeadAnalytics.Api.Swagger;
@@ -151,6 +152,11 @@ builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
 builder.Services.AddScoped<DuplicateContactService>();
+
+// ── Background jobs: delete em lote de contatos duplicados ───────────────────
+builder.Services.AddSingleton<IDuplicateDeleteJobQueue, InMemoryDuplicateDeleteJobQueue>();
+builder.Services.AddScoped<DuplicateDeleteJobStore>();
+builder.Services.AddHostedService<DuplicateDeleteJobWorker>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();

@@ -157,6 +157,11 @@ builder.Services.AddScoped<DuplicateContactService>();
 builder.Services.AddSingleton<IDuplicateDeleteJobQueue, InMemoryDuplicateDeleteJobQueue>();
 builder.Services.AddScoped<DuplicateDeleteJobStore>();
 builder.Services.AddHostedService<DuplicateDeleteJobWorker>();
+
+// ── Background jobs: bulk delete genérico de contatos (por IDs ou filtros) ───
+builder.Services.AddSingleton<IContactsBulkDeleteJobQueue, InMemoryContactsBulkDeleteJobQueue>();
+builder.Services.AddScoped<ContactsBulkDeleteJobStore>();
+builder.Services.AddHostedService<ContactsBulkDeleteJobWorker>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();

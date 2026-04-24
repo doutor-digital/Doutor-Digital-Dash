@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.DTOs.Admin;
 using LeadAnalytics.Api.DTOs.Filter;
 using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.Models;
@@ -199,6 +200,79 @@ public class ContactService(AppDbContext db, IMemoryCache? cache = null)
         if (f.DateTo.HasValue) q = q.Where(c => c.CreatedAt <= f.DateTo.Value);
 
         return q;
+    }
+
+    // ─── Bulk delete ─────────────────────────────────────────────────────
+
+    public const int BulkDeleteDefaultBatchSize = 500;
+    public const int BulkDeleteMaxBatchSize = 2000;
+    public const int BulkDeleteMaxIds = 50_000;
+
+    public IQueryable<Contact> BuildFilteredContactsQuery(int tenantId, ContactFiltersDto filters)
+    {
+        var origem = string.IsNullOrWhiteSpace(filters.Origem) ? "all" : filters.Origem;
+        var normalized = string.IsNullOrWhiteSpace(filters.Search) ? null : NormalizeForSearch(filters.Search);
+        var statusFilter = NormalizeStatus(filters.Status);
+
+        var q = _db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId);
+
+        if (origem == "import_csv") q = q.Where(c => c.Origem == "import_csv");
+        else if (origem == "manual") q = q.Where(c => c.Origem == "manual");
+        else if (origem == "webhook_cloudia") q = q.Where(_ => false); // webhook → vive em Leads, não Contacts
+        // "all" — sem filtro de origem
+
+        return ApplyContactFilters(q, filters, statusFilter, normalized);
+    }
+
+    public async Task<int> CountBulkDeleteCandidatesAsync(
+        int tenantId,
+        ContactsBulkDeleteSelection selection,
+        CancellationToken ct = default)
+    {
+        return await BuildBulkDeleteQuery(tenantId, selection).CountAsync(ct);
+    }
+
+    public async Task<int> DeleteBulkBatchAsync(
+        int tenantId,
+        ContactsBulkDeleteSelection selection,
+        int batchSize,
+        CancellationToken ct = default)
+    {
+        batchSize = Math.Clamp(batchSize, 1, BulkDeleteMaxBatchSize);
+
+        var q = BuildBulkDeleteQuery(tenantId, selection);
+        var batchIds = await q
+            .OrderBy(c => c.Id)
+            .Select(c => c.Id)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
+        if (batchIds.Count == 0) return 0;
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var deleted = await _db.Contacts
+            .Where(c => c.TenantId == tenantId && batchIds.Contains(c.Id))
+            .ExecuteDeleteAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return deleted;
+    }
+
+    private IQueryable<Contact> BuildBulkDeleteQuery(int tenantId, ContactsBulkDeleteSelection selection)
+    {
+        if (selection.Mode == ContactsBulkDeleteMode.Ids)
+        {
+            var ids = selection.Ids ?? new List<int>();
+            if (ids.Count == 0) return _db.Contacts.Where(_ => false);
+            if (ids.Count > BulkDeleteMaxIds)
+                throw new ArgumentException($"Máximo de {BulkDeleteMaxIds} IDs por job. Use modo filter para volumes maiores.");
+
+            return _db.Contacts.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && ids.Contains(c.Id));
+        }
+
+        var filters = selection.Filters ?? new ContactFiltersDto();
+        return BuildFilteredContactsQuery(tenantId, filters);
     }
 
     private static IQueryable<Lead> ApplyLeadFilters(

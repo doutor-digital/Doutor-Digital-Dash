@@ -67,9 +67,6 @@ public class LeadService(
             .Include(l => l.Payments)
             .Where(l => l.Id == id);
 
-        if (tenantId.HasValue)
-            query = query.Where(l => l.TenantId == tenantId.Value);
-
         if (unitId.HasValue)
             query = query.Where(l => l.UnitId == unitId.Value);
 

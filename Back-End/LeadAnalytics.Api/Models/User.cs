@@ -47,6 +47,18 @@ public class User
     [Column("refresh_token_expires_at")]
     public DateTime? RefreshTokenExpiresAt { get; set; }
 
+    [Column("reset_password_code_hash")]
+    public string? ResetPasswordCodeHash { get; set; }
+
+    [Column("reset_password_code_expires_at")]
+    public DateTime? ResetPasswordCodeExpiresAt { get; set; }
+
+    [Column("reset_password_attempts")]
+    public int ResetPasswordAttempts { get; set; } = 0;
+
+    [Column("reset_password_requested_at")]
+    public DateTime? ResetPasswordRequestedAt { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

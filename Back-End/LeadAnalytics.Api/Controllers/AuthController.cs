@@ -37,6 +37,66 @@ public class AuthController(AuthService authService, UnitService unitService) : 
         return Ok(response);
     }
 
+    [HttpPost("forgot-password")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { message = "Email é obrigatório." });
+
+        await _authService.RequestPasswordResetAsync(request.Email);
+
+        // Resposta sempre genérica para não revelar quais emails existem.
+        return Ok(new
+        {
+            message = "Se houver uma conta para este email, um código de verificação será enviado."
+        });
+    }
+
+    [HttpPost("verify-reset-code")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> VerifyResetCode([FromBody] VerifyResetCodeRequestDto request)
+    {
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Code))
+        {
+            return BadRequest(new { message = "Email e código são obrigatórios." });
+        }
+
+        var ok = await _authService.VerifyResetCodeAsync(request.Email, request.Code);
+        if (!ok)
+            return BadRequest(new { message = "Código inválido ou expirado." });
+
+        return Ok(new { message = "Código válido." });
+    }
+
+    [HttpPost("reset-password")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+    {
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Code) ||
+            string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return BadRequest(new { message = "Email, código e nova senha são obrigatórios." });
+        }
+
+        var (ok, error) = await _authService.ResetPasswordAsync(
+            request.Email,
+            request.Code,
+            request.NewPassword);
+
+        if (!ok)
+            return BadRequest(new { message = error ?? "Não foi possível redefinir a senha." });
+
+        return Ok(new { message = "Senha redefinida com sucesso." });
+    }
+
     [Authorize]
     [HttpGet("me")]
     [ProducesResponseType(StatusCodes.Status200OK)]

@@ -189,6 +189,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.Phone).HasMaxLength(30);
             entity.Property(e => e.PhotoPath).HasMaxLength(300);
 
+            entity.Property(e => e.ResetPasswordCodeHash).HasMaxLength(200);
+
             entity.HasIndex(e => e.Email)
                 .IsUnique();
           });

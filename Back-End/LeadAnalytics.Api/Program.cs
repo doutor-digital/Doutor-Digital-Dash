@@ -27,6 +27,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddControllers();
 
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 
@@ -143,6 +144,7 @@ builder.Services.AddScoped<MetaWebhookService>();
 builder.Services.AddScoped<ConfigurationService>();
 builder.Services.AddScoped<LeadAnalyticsService>();
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();

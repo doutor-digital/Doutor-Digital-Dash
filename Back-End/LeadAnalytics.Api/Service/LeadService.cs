@@ -116,6 +116,9 @@ public class LeadService(
             Observations = lead.Observations,
             Tags = tags,
 
+            AttendanceStatus = lead.AttendanceStatus,
+            AttendanceStatusAt = lead.AttendanceStatusAt,
+
             UnitId = lead.UnitId,
             UnitName = lead.Unit?.Name,
 
@@ -344,7 +347,7 @@ public class LeadService(
 
             Status = "new",
             HasAppointment = GetAppointmentAvailable(stageLabel),
-            HasPayment = GetHasPayment(stageLabel),
+            HasPayment = false,
 
             Tags = dto.Tags is not null && dto.Tags.Count > 0
                 ? JsonSerializer.Serialize(dto.Tags)
@@ -354,7 +357,7 @@ public class LeadService(
 
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            ConvertedAt = GetHasPayment(stageLabel) ? DateTime.UtcNow : null,
+            ConvertedAt = null,
 
             StageHistory =
             [
@@ -553,7 +556,19 @@ public class LeadService(
             var novoStage = dto.Stage;
             var novoStageId = dto.IdStage;
 
-            if (lead.CurrentStage != novoStage || lead.CurrentStageId != novoStageId)
+            // Guarda: 09/08/10 só fazem sentido após comparecimento. Se a Cloudia
+            // tentar pular, ignoramos a etapa (mantemos a atual) e logamos.
+            var blockTransition =
+                LeadStages.RequiresPriorAttendance(novoStage)
+                && lead.AttendanceStatus != LeadStages.AttendedCompareceu;
+
+            if (blockTransition)
+            {
+                _logger.LogWarning(
+                    "Transição de etapa bloqueada (comparecimento ausente): lead={LeadId} stageAtual={Atual} stageRecebido={Novo} attendance={Attendance}",
+                    lead.Id, lead.CurrentStage, novoStage, lead.AttendanceStatus);
+            }
+            else if (lead.CurrentStage != novoStage || lead.CurrentStageId != novoStageId)
             {
                 lead.StageHistory.Add(new LeadStageHistory
                 {
@@ -573,32 +588,23 @@ public class LeadService(
 
                 lead.CurrentStage = novoStage;
                 lead.CurrentStageId = novoStageId;
+
+                // Sincroniza AttendanceStatus a partir da etapa quando ela já carrega o fato:
+                //  - 07_FALTOU → "faltou"
+                //  - 04/05 (re-agendamento) → reseta para nova consulta
+                if (novoStage == LeadStages.Faltou)
+                {
+                    lead.AttendanceStatus = LeadStages.AttendedFaltou;
+                    lead.AttendanceStatusAt = DateTime.UtcNow;
+                }
+                else if (LeadStages.IsScheduled(novoStage) && lead.AttendanceStatus is not null)
+                {
+                    lead.AttendanceStatus = null;
+                    lead.AttendanceStatusAt = null;
+                }
             }
 
-            var tinhaPayment = lead.HasPayment;
-            lead.HasAppointment = GetAppointmentAvailable(novoStage);
-            lead.HasPayment = GetHasPayment(novoStage);
-
-            // ── Pagamento ─────────────────────────────────────────────
-            if (!tinhaPayment && lead.HasPayment)
-            {
-                lead.ConvertedAt = DateTime.UtcNow;
-
-                lead.Payments.Add(new Payment
-                {
-                    LeadId = lead.Id,
-                    Amount = 0,
-                    PaidAt = DateTime.UtcNow
-                });
-
-                var conversaAtiva = lead.Conversations.FirstOrDefault(c => c.EndedAt is null);
-                conversaAtiva?.Interactions.Add(new LeadInteraction
-                {
-                    Type = "PAYMENT",
-                    Content = novoStage,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+            lead.HasAppointment = GetAppointmentAvailable(lead.CurrentStage);
         }
 
         lead.UpdatedAt = DateTime.UtcNow;
@@ -668,6 +674,123 @@ public class LeadService(
             Source = lead.Source,
             TrackingConfidence = lead.TrackingConfidence
         };
+    }
+
+    public async Task<LeadProcessResponseDto> MarkAttendanceAsync(
+        int leadId, int tenantId, MarkAttendanceDto dto, CancellationToken ct = default)
+    {
+        var lead = await _db.Leads
+            .Include(l => l.StageHistory)
+            .Include(l => l.Conversations).ThenInclude(c => c.Interactions)
+            .FirstOrDefaultAsync(l => l.Id == leadId && l.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException($"Lead {leadId} não encontrado para clínica {tenantId}");
+
+        if (!LeadStages.IsScheduled(lead.CurrentStage))
+            throw new InvalidOperationException(
+                $"Comparecimento só pode ser marcado em leads com consulta agendada. Etapa atual: {lead.CurrentStage}");
+
+        string newStage;
+        string newAttendance;
+        string interactionType;
+        string interactionContent;
+        var now = DateTime.UtcNow;
+
+        if (!dto.Attended)
+        {
+            newStage = LeadStages.Faltou;
+            newAttendance = LeadStages.AttendedFaltou;
+            interactionType = "ATTENDANCE_NO_SHOW";
+            interactionContent = "Paciente não compareceu";
+        }
+        else
+        {
+            var outcome = (dto.Outcome ?? "").Trim().ToLowerInvariant();
+            if (outcome != "fechou" && outcome != "nao_fechou")
+                throw new ArgumentException("outcome deve ser 'fechou' ou 'nao_fechou' quando attended=true");
+
+            if (outcome == "fechou")
+            {
+                newStage = LeadStages.FechouTratamento;
+                interactionType = "ATTENDANCE_CLOSED";
+                interactionContent = "Compareceu e fechou tratamento";
+            }
+            else
+            {
+                newStage = LeadStages.NaoFechouTratamento;
+                interactionType = "ATTENDANCE_NOT_CLOSED";
+                interactionContent = "Compareceu e não fechou tratamento";
+            }
+            newAttendance = LeadStages.AttendedCompareceu;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Notes))
+            interactionContent += $" — {dto.Notes.Trim()}";
+
+        var prevStage = lead.CurrentStage;
+
+        lead.StageHistory.Add(new LeadStageHistory
+        {
+            LeadId = lead.Id,
+            StageId = lead.CurrentStageId ?? 0,
+            StageLabel = newStage,
+            ChangedAt = now,
+        });
+
+        var conversaAtiva = lead.Conversations.FirstOrDefault(c => c.EndedAt is null);
+        conversaAtiva?.Interactions.Add(new LeadInteraction
+        {
+            Type = interactionType,
+            Content = interactionContent,
+            CreatedAt = now,
+        });
+
+        lead.CurrentStage = newStage;
+        lead.AttendanceStatus = newAttendance;
+        lead.AttendanceStatusAt = now;
+        lead.HasAppointment = true;
+        lead.UpdatedAt = now;
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Comparecimento registrado: lead={LeadId} {Prev}→{Next} attendance={Attendance}",
+            lead.Id, prevStage, newStage, newAttendance);
+
+        return new LeadProcessResponseDto
+        {
+            LeadId = lead.Id,
+            Message = $"Comparecimento registrado: {newAttendance} → {newStage}",
+            Result = ProcessResult.Updated,
+            Source = lead.Source,
+            TrackingConfidence = lead.TrackingConfidence,
+        };
+    }
+
+    public async Task<List<RecoveryLeadDto>> GetRecoveryQueueAsync(
+        int clinicId, int? unitId = null, CancellationToken ct = default)
+    {
+        var q = _db.Leads.AsNoTracking()
+            .Include(l => l.Unit)
+            .Where(l => l.TenantId == clinicId
+                     && l.CurrentStage == LeadStages.NaoFechouTratamento);
+
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        return await q
+            .OrderByDescending(l => l.AttendanceStatusAt ?? l.UpdatedAt)
+            .Select(l => new RecoveryLeadDto
+            {
+                Id = l.Id,
+                Name = l.Name,
+                Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
+                UnitId = l.UnitId,
+                UnitName = l.Unit != null ? l.Unit.Name : null,
+                Source = l.Source,
+                Campaign = l.Campaign,
+                AttendanceStatusAt = l.AttendanceStatusAt,
+                UpdatedAt = l.UpdatedAt,
+            })
+            .ToListAsync(ct);
     }
 
    public async Task<int> GetLeadsTotal(int? clinicId)
@@ -995,26 +1118,8 @@ public class LeadService(
         return "DESCONHECIDO";
     }
 
-    private static bool GetAppointmentAvailable(string? stage)
-    {
-        if (string.IsNullOrWhiteSpace(stage))
-            return false;
-
-        return stage is "04_AGENDADO_SEM_PAGAMENTO"
-            or "05_AGENDADO_COM_PAGAMENTO"
-            or "09_FECHOU_TRATAMENTO"
-            or "10_EM_TRATAMENTO";
-    }
-
-    private static bool GetHasPayment(string? stage)
-    {
-        if (string.IsNullOrWhiteSpace(stage))
-            return false;
-
-        return stage is "05_AGENDADO_COM_PAGAMENTO"
-            or "09_FECHOU_TRATAMENTO"
-            or "10_EM_TRATAMENTO";
-    }
+    private static bool GetAppointmentAvailable(string? stage) =>
+        LeadStages.HasAppointmentRecord(stage);
 
     private async Task<LeadProcessResponseDto> GetProcessAssignment(CloudiaWebhookDto dto)
     {
@@ -1577,13 +1682,37 @@ public class LeadService(
 
         // KPIs por etapa
         var consultas = await baseQ
-            .Where(l => l.CurrentStage == "10_EM_TRATAMENTO" || l.CurrentStage == "09_FECHOU_TRATAMENTO")
+            .Where(l => l.CurrentStage == LeadStages.EmTratamento || l.CurrentStage == LeadStages.FechouTratamento)
             .CountAsync(ct);
         var comPag = await baseQ
-            .Where(l => l.CurrentStage == "05_AGENDADO_COM_PAGAMENTO")
+            .Where(l => l.CurrentStage == LeadStages.AgendadoComPagamento)
             .CountAsync(ct);
         var semPag = await baseQ
-            .Where(l => l.CurrentStage == "04_AGENDADO_SEM_PAGAMENTO")
+            .Where(l => l.CurrentStage == LeadStages.AgendadoSemPagamento)
+            .CountAsync(ct);
+
+        // KPIs de comparecimento / fechamento
+        var consultasAgendadas = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.AgendadoSemPagamento
+                     || l.CurrentStage == LeadStages.AgendadoComPagamento
+                     || l.CurrentStage == LeadStages.Faltou
+                     || l.CurrentStage == LeadStages.NaoFechouTratamento
+                     || l.CurrentStage == LeadStages.FechouTratamento
+                     || l.CurrentStage == LeadStages.EmTratamento)
+            .CountAsync(ct);
+        var compareceu = await baseQ
+            .Where(l => l.AttendanceStatus == LeadStages.AttendedCompareceu)
+            .CountAsync(ct);
+        var faltou = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.Faltou
+                     || l.AttendanceStatus == LeadStages.AttendedFaltou)
+            .CountAsync(ct);
+        var naoFechou = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.NaoFechouTratamento)
+            .CountAsync(ct);
+        var fechou = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.FechouTratamento
+                     || l.CurrentStage == LeadStages.EmTratamento)
             .CountAsync(ct);
 
         // Estados da conversa (bot/queue/service/concluido)
@@ -1617,6 +1746,10 @@ public class LeadService(
         var conversaoRate = totalLeads > 0 ? consultas * 100.0 / totalLeads : 0;
         var pagamentoRate = totalLeads > 0 ? comPag * 100.0 / totalLeads : 0;
         var semPagRate = totalLeads > 0 ? semPag * 100.0 / totalLeads : 0;
+        // Taxa de comparecimento: compareceu / consultas agendadas (universo: leads que tiveram consulta).
+        var comparecimentoRate = consultasAgendadas > 0 ? compareceu * 100.0 / consultasAgendadas : 0;
+        // Taxa de fechamento: fechou / compareceu (mede o pós-consulta).
+        var fechamentoRate = compareceu > 0 ? fechou * 100.0 / compareceu : 0;
 
         return new DashboardOverviewDto
         {
@@ -1629,6 +1762,13 @@ public class LeadService(
             ConversaoRate = Math.Round(conversaoRate, 2),
             PagamentoRate = Math.Round(pagamentoRate, 2),
             SemPagamentoRate = Math.Round(semPagRate, 2),
+            ConsultasAgendadas = consultasAgendadas,
+            Compareceu = compareceu,
+            Faltou = faltou,
+            NaoFechou = naoFechou,
+            Fechou = fechou,
+            ComparecimentoRate = Math.Round(comparecimentoRate, 2),
+            FechamentoRate = Math.Round(fechamentoRate, 2),
             States = states,
             Etapas = etapas,
             Origens = origens,

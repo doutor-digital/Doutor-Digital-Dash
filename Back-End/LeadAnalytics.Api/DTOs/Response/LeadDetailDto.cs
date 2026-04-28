@@ -29,6 +29,10 @@ public class LeadDetailDto
     public string? Observations { get; set; }
     public List<string> Tags { get; set; } = new();
 
+    // "compareceu" | "faltou" | "aguardando" | null
+    public string? AttendanceStatus { get; set; }
+    public DateTime? AttendanceStatusAt { get; set; }
+
     public int? UnitId { get; set; }
     public string? UnitName { get; set; }
 

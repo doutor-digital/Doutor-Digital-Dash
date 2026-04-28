@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(dotnet build *)",
+      "Bash(grep -i \"doc\\\\|wiki\\\\|^docs$\")",
+      "Read(//home/joaoof/Downloads/Doutor-Digital-Dash/**)",
+      "Bash(npx tsc *)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End status)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End log --oneline -1 -- src/hooks/useAccent.ts)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End diff src/hooks/useAccent.ts)"
     ]
   }
 }

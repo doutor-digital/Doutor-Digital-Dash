@@ -32,6 +32,25 @@ public class DashboardOverviewDto
     [JsonPropertyName("sem_pagamento_rate")]
     public double SemPagamentoRate { get; set; }
 
+    // ─── Comparecimento / fechamento ───────────────────────────────
+    [JsonPropertyName("consultas_agendadas")]
+    public int ConsultasAgendadas { get; set; }
+
+    public int Compareceu { get; set; }
+
+    public int Faltou { get; set; }
+
+    [JsonPropertyName("nao_fechou")]
+    public int NaoFechou { get; set; }
+
+    public int Fechou { get; set; }
+
+    [JsonPropertyName("comparecimento_rate")]
+    public double ComparecimentoRate { get; set; }
+
+    [JsonPropertyName("fechamento_rate")]
+    public double FechamentoRate { get; set; }
+
     // ─── Estados da conversa (bot/queue/service/concluido) ─────────
     public LeadsCountDto States { get; set; } = new();
 

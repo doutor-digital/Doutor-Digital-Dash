@@ -106,6 +106,53 @@ public class WebhooksController(
         var result = await _leadService.SaveLeadAsync(dto);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Marcar comparecimento (ou falta) de um lead com consulta agendada.
+    /// Body: { attended: bool, outcome?: "fechou"|"nao_fechou", notes?: string }
+    /// Quando attended=false, lead vai pra 07_FALTOU. Quando attended=true,
+    /// outcome="fechou" → 09_FECHOU_TRATAMENTO, "nao_fechou" → 08_NAO_FECHOU_TRATAMENTO.
+    /// </summary>
+    [HttpPost("{id:int}/attendance")]
+    [ProducesResponseType(typeof(LeadProcessResponseDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> MarkAttendance(int id, [FromBody] MarkAttendanceDto dto, CancellationToken ct)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null)
+            return BadRequest(new ProblemDetails { Title = "Operação requer um tenant específico", Status = 400 });
+
+        try
+        {
+            var result = await _leadService.MarkAttendanceAsync(id, tenantId.Value, dto, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
+    }
+
+    /// <summary>
+    /// Fila de recuperação comercial: leads que compareceram e não fecharam (08_NAO_FECHOU_TRATAMENTO).
+    /// </summary>
+    [HttpGet("recuperacao")]
+    [ProducesResponseType(typeof(List<RecoveryLeadDto>), 200)]
+    public async Task<IActionResult> GetRecoveryQueue(
+        [FromQuery] int clinicId, [FromQuery] int? unitId = null, CancellationToken ct = default)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var result = await _leadService.GetRecoveryQueueAsync(clinicId, unitId, ct);
+        return Ok(result);
+    }
     [HttpGet("/webhooks/total-leads")]
     public async Task<IActionResult> GetTotalLeads(int clinicId)
     {

@@ -23,8 +23,8 @@ public class Payment
     // Valor cheio do tratamento (default 3800)
     public decimal TreatmentValue { get; set; } = DefaultTreatmentValue;
 
-    // Forma de pagamento: pix | dinheiro | debito | credito | boleto | transferencia
-    public string? PaymentMethod { get; set; } = null!;
+    // Forma de pagamento: pix | dinheiro | debito | credito | boleto | transferencia | composite
+    public string PaymentMethod { get; set; } = null!;
 
     // Entrada (sinal) pago pelo lead
     public decimal DownPayment { get; set; }

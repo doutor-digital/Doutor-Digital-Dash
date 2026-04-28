@@ -24,7 +24,7 @@ public class Payment
     public decimal TreatmentValue { get; set; } = DefaultTreatmentValue;
 
     // Forma de pagamento: pix | dinheiro | debito | credito | boleto | transferencia
-    public string PaymentMethod { get; set; } = null!;
+    public string? PaymentMethod { get; set; } = null!;
 
     // Entrada (sinal) pago pelo lead
     public decimal DownPayment { get; set; }

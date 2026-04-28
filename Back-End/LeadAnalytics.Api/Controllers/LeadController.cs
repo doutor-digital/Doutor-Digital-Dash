@@ -153,6 +153,49 @@ public class WebhooksController(
         var result = await _leadService.GetRecoveryQueueAsync(clinicId, unitId, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Analytics de conversão: totais, taxas, motivos de não-conversão extraídos
+    /// das observações e funil por etapa atual.
+    /// </summary>
+    [HttpGet("conversion-analytics")]
+    [ProducesResponseType(typeof(ConversionAnalyticsDto), 200)]
+    public async Task<IActionResult> GetConversionAnalytics(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] int? unitId = null,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var result = await _leadService.GetConversionAnalyticsAsync(clinicId, dateFrom, dateTo, unitId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Mudanças de etapa recentes em todos os leads da clínica, com séries para
+    /// gráficos (por dia, por destino) e a lista mais recente.
+    /// </summary>
+    [HttpGet("stage-changes")]
+    [ProducesResponseType(typeof(StageChangesSummaryDto), 200)]
+    public async Task<IActionResult> GetStageChanges(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] int? unitId = null,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+
+        var result = await _leadService.GetStageChangesAsync(clinicId, dateFrom, dateTo, unitId, limit, ct);
+        return Ok(result);
+    }
     [HttpGet("/webhooks/total-leads")]
     public async Task<IActionResult> GetTotalLeads(int clinicId)
     {

@@ -8,7 +8,10 @@
       "Bash(npx tsc *)",
       "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End status)",
       "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End log --oneline -1 -- src/hooks/useAccent.ts)",
-      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End diff src/hooks/useAccent.ts)"
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End/Front-End diff src/hooks/useAccent.ts)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash status)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash log --oneline -10)",
+      "Bash(git -C /home/joaoof/Downloads/Doutor-Digital-Dash show --stat 38c8c73)"
     ]
   }
 }

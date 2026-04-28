@@ -556,19 +556,7 @@ public class LeadService(
             var novoStage = dto.Stage;
             var novoStageId = dto.IdStage;
 
-            // Guarda: 09/08/10 só fazem sentido após comparecimento. Se a Cloudia
-            // tentar pular, ignoramos a etapa (mantemos a atual) e logamos.
-            var blockTransition =
-                LeadStages.RequiresPriorAttendance(novoStage)
-                && lead.AttendanceStatus != LeadStages.AttendedCompareceu;
-
-            if (blockTransition)
-            {
-                _logger.LogWarning(
-                    "Transição de etapa bloqueada (comparecimento ausente): lead={LeadId} stageAtual={Atual} stageRecebido={Novo} attendance={Attendance}",
-                    lead.Id, lead.CurrentStage, novoStage, lead.AttendanceStatus);
-            }
-            else if (lead.CurrentStage != novoStage || lead.CurrentStageId != novoStageId)
+            if (lead.CurrentStage != novoStage || lead.CurrentStageId != novoStageId)
             {
                 lead.StageHistory.Add(new LeadStageHistory
                 {
@@ -589,12 +577,18 @@ public class LeadService(
                 lead.CurrentStage = novoStage;
                 lead.CurrentStageId = novoStageId;
 
-                // Sincroniza AttendanceStatus a partir da etapa quando ela já carrega o fato:
+                // Auto-deriva AttendanceStatus da etapa destino (operação confia na fonte: Cloudia/operador):
                 //  - 07_FALTOU → "faltou"
-                //  - 04/05 (re-agendamento) → reseta para nova consulta
+                //  - 08/09/10 → "compareceu" (paciente compareceu, fechou ou não)
+                //  - 04/05 → reseta (re-agendamento começa do zero)
                 if (novoStage == LeadStages.Faltou)
                 {
                     lead.AttendanceStatus = LeadStages.AttendedFaltou;
+                    lead.AttendanceStatusAt = DateTime.UtcNow;
+                }
+                else if (LeadStages.RequiresPriorAttendance(novoStage))
+                {
+                    lead.AttendanceStatus = LeadStages.AttendedCompareceu;
                     lead.AttendanceStatusAt = DateTime.UtcNow;
                 }
                 else if (LeadStages.IsScheduled(novoStage) && lead.AttendanceStatus is not null)
@@ -763,6 +757,282 @@ public class LeadService(
             Result = ProcessResult.Updated,
             Source = lead.Source,
             TrackingConfidence = lead.TrackingConfidence,
+        };
+    }
+
+    public async Task<StageChangesSummaryDto> GetStageChangesAsync(
+        int clinicId,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        int? unitId,
+        int limit = 100,
+        CancellationToken ct = default)
+    {
+        if (limit <= 0) limit = 100;
+        if (limit > 500) limit = 500;
+
+        var fromUtc = ToUtcStart(dateFrom);
+        var toUtc = ToUtcEndExclusive(dateTo);
+
+        var q = _db.LeadStageHistories.AsNoTracking()
+            .Include(h => h.Lead)
+                .ThenInclude(l => l.Unit)
+            .Where(h => h.Lead.TenantId == clinicId);
+
+        if (unitId.HasValue) q = q.Where(h => h.Lead.UnitId == unitId.Value);
+        if (fromUtc.HasValue) q = q.Where(h => h.ChangedAt >= fromUtc.Value);
+        if (toUtc.HasValue) q = q.Where(h => h.ChangedAt < toUtc.Value);
+
+        var total = await q.CountAsync(ct);
+
+        var daily = await q
+            .GroupBy(h => h.ChangedAt.Date)
+            .Select(g => new StageChangeDailyPointDto { Date = g.Key, Count = g.Count() })
+            .OrderBy(x => x.Date)
+            .ToListAsync(ct);
+
+        var byDestination = await q
+            .GroupBy(h => h.StageLabel)
+            .Select(g => new StageChangeDestinationDto { Stage = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToListAsync(ct);
+
+        // Para "FromStage" precisamos olhar a entrada anterior do mesmo lead.
+        // Fazemos isso em memória com window function via ordenação por LeadId/ChangedAt.
+        var raw = await q
+            .OrderByDescending(h => h.ChangedAt)
+            .Take(limit)
+            .Select(h => new
+            {
+                h.Id,
+                h.LeadId,
+                LeadName = h.Lead.Name,
+                LeadPhone = h.Lead.Phone == "AGUARDANDO_COLETA" ? null : h.Lead.Phone,
+                UnitId = h.Lead.UnitId,
+                UnitName = h.Lead.Unit != null ? h.Lead.Unit.Name : null,
+                Source = h.Lead.Source,
+                ToStage = h.StageLabel,
+                h.ChangedAt,
+            })
+            .ToListAsync(ct);
+
+        var leadIds = raw.Select(x => x.LeadId).Distinct().ToList();
+        var historiesByLead = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => leadIds.Contains(h.LeadId))
+            .OrderBy(h => h.LeadId).ThenBy(h => h.ChangedAt)
+            .Select(h => new { h.Id, h.LeadId, h.StageLabel, h.ChangedAt })
+            .ToListAsync(ct);
+
+        var prevByEntry = historiesByLead
+            .GroupBy(h => h.LeadId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.ChangedAt).ToList());
+
+        var items = raw.Select(r =>
+        {
+            string? from = null;
+            if (prevByEntry.TryGetValue(r.LeadId, out var list))
+            {
+                var idx = list.FindIndex(x => x.Id == r.Id);
+                if (idx > 0) from = list[idx - 1].StageLabel;
+            }
+            return new StageChangeDto
+            {
+                Id = r.Id,
+                LeadId = r.LeadId,
+                LeadName = r.LeadName,
+                LeadPhone = r.LeadPhone,
+                UnitId = r.UnitId,
+                UnitName = r.UnitName,
+                Source = r.Source,
+                FromStage = from,
+                ToStage = r.ToStage,
+                ChangedAt = r.ChangedAt,
+            };
+        }).ToList();
+
+        return new StageChangesSummaryDto
+        {
+            Total = total,
+            Daily = daily,
+            ByDestination = byDestination,
+            Items = items,
+        };
+    }
+
+    private static DateTime? ToUtcStart(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        var d = value.Value.Date;
+        return DateTime.SpecifyKind(d, DateTimeKind.Utc);
+    }
+
+    private static DateTime? ToUtcEndExclusive(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        var d = value.Value.Date.AddDays(1);
+        return DateTime.SpecifyKind(d, DateTimeKind.Utc);
+    }
+
+    public async Task<ConversionAnalyticsDto> GetConversionAnalyticsAsync(
+        int clinicId,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        int? unitId,
+        CancellationToken ct = default)
+    {
+        var fromUtc = ToUtcStart(dateFrom) ?? DateTime.UtcNow.Date.AddDays(-30);
+        var toUtcExcl = ToUtcEndExclusive(dateTo) ?? DateTime.UtcNow.Date.AddDays(1);
+
+        var baseQ = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                     && l.CreatedAt >= fromUtc
+                     && l.CreatedAt < toUtcExcl);
+
+        if (unitId.HasValue) baseQ = baseQ.Where(l => l.UnitId == unitId.Value);
+
+        var totalEntradas = await baseQ.CountAsync(ct);
+
+        // Converte = chegou em estágio de fechamento OU tem ConvertedAt
+        var convertidosQ = baseQ.Where(l =>
+            l.ConvertedAt != null
+            || l.CurrentStage == LeadStages.FechouTratamento
+            || l.CurrentStage == LeadStages.EmTratamento);
+
+        var totalConvertidos = await convertidosQ.CountAsync(ct);
+
+        // Não converte = chegou em estágio terminal sem fechar
+        var naoConvertidosQ = baseQ.Where(l =>
+            l.CurrentStage == LeadStages.NaoFechouTratamento
+            || l.CurrentStage == LeadStages.Faltou);
+
+        var totalNaoConvertidos = await naoConvertidosQ.CountAsync(ct);
+
+        var totalEmAndamento = totalEntradas - totalConvertidos - totalNaoConvertidos;
+        if (totalEmAndamento < 0) totalEmAndamento = 0;
+
+        var taxaConversao = totalEntradas > 0
+            ? Math.Round(totalConvertidos * 100.0 / totalEntradas, 2)
+            : 0;
+        var taxaNaoConversao = totalEntradas > 0
+            ? Math.Round(totalNaoConvertidos * 100.0 / totalEntradas, 2)
+            : 0;
+
+        // Tempo até conversão (em dias) — média e mediana. Calculamos em memória
+        // porque o Postgres não tem DateDiffDay; o conjunto é pequeno (só convertidos).
+        var convertidosDatas = await convertidosQ
+            .Where(l => l.ConvertedAt != null)
+            .Select(l => new { l.CreatedAt, ConvertedAt = l.ConvertedAt!.Value })
+            .ToListAsync(ct);
+
+        var convertidosTempos = convertidosDatas
+            .Select(x => (x.ConvertedAt - x.CreatedAt).TotalDays)
+            .ToList();
+
+        double? mediaDias = convertidosTempos.Count > 0
+            ? Math.Round(convertidosTempos.Average(), 1)
+            : null;
+        double? medianaDias = null;
+        if (convertidosTempos.Count > 0)
+        {
+            var ord = convertidosTempos.OrderBy(x => x).ToList();
+            medianaDias = ord.Count % 2 == 1
+                ? Math.Round(ord[ord.Count / 2], 1)
+                : Math.Round((ord[ord.Count / 2 - 1] + ord[ord.Count / 2]) / 2.0, 1);
+        }
+
+        // Pega não convertidos com observações pra classificar motivos
+        var naoConvertidos = await naoConvertidosQ
+            .OrderByDescending(l => l.UpdatedAt)
+            .Select(l => new
+            {
+                l.Id,
+                l.Name,
+                Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
+                l.CurrentStage,
+                l.Observations,
+                l.Source,
+                l.CreatedAt,
+                l.UpdatedAt,
+            })
+            .ToListAsync(ct);
+
+        // Classificação heurística em memória
+        var classificados = naoConvertidos.Select(l => new
+        {
+            l.Id,
+            l.Name,
+            l.Phone,
+            l.CurrentStage,
+            l.Observations,
+            l.Source,
+            l.CreatedAt,
+            l.UpdatedAt,
+            MotivoKey = RejectionReasons.Classify(l.Observations),
+        }).ToList();
+
+        var motivoGroups = classificados
+            .GroupBy(c => c.MotivoKey ?? "sem_motivo")
+            .Select(g =>
+            {
+                var cat = g.Key == "sem_motivo" ? null : RejectionReasons.Get(g.Key);
+                return new NaoConversaoMotivoDto
+                {
+                    Motivo = cat?.Label ?? "Sem motivo registrado",
+                    Categoria = g.Key,
+                    Quantidade = g.Count(),
+                    Percentual = totalNaoConvertidos > 0
+                        ? Math.Round(g.Count() * 100.0 / totalNaoConvertidos, 2)
+                        : 0,
+                    PalavrasChave = cat?.Keywords.Take(4).ToList() ?? new List<string>(),
+                };
+            })
+            .OrderByDescending(m => m.Quantidade)
+            .ToList();
+
+        // Lista de exemplos (top 30 não convertidos com observação preenchida)
+        var exemplos = classificados
+            .Where(l => !string.IsNullOrWhiteSpace(l.Observations))
+            .Take(30)
+            .Select(l =>
+            {
+                var cat = l.MotivoKey is null ? null : RejectionReasons.Get(l.MotivoKey);
+                return new NaoConvertidoItemDto
+                {
+                    LeadId = l.Id,
+                    Name = l.Name,
+                    Phone = l.Phone,
+                    CurrentStage = l.CurrentStage,
+                    Observations = l.Observations,
+                    MotivoCategoria = cat?.Label,
+                    Source = l.Source,
+                    CreatedAt = l.CreatedAt,
+                    UpdatedAt = l.UpdatedAt,
+                };
+            })
+            .ToList();
+
+        // Funil bruto: contagem por etapa atual no período
+        var funil = await baseQ
+            .GroupBy(l => string.IsNullOrWhiteSpace(l.CurrentStage) ? "SEM_ETAPA" : l.CurrentStage)
+            .Select(g => new ConversaoFunilEtapaDto { Stage = g.Key, Quantidade = g.Count() })
+            .OrderBy(g => g.Stage)
+            .ToListAsync(ct);
+
+        return new ConversionAnalyticsDto
+        {
+            DateFrom = fromUtc,
+            DateTo = toUtcExcl.AddDays(-1),
+            TotalEntradas = totalEntradas,
+            TotalConvertidos = totalConvertidos,
+            TotalNaoConvertidos = totalNaoConvertidos,
+            TotalEmAndamento = totalEmAndamento,
+            TaxaConversao = taxaConversao,
+            TaxaNaoConversao = taxaNaoConversao,
+            MediaDiasAteConversao = mediaDias,
+            MedianaDiasAteConversao = medianaDias,
+            Motivos = motivoGroups,
+            Exemplos = exemplos,
+            Funil = funil,
         };
     }
 

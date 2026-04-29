@@ -3,6 +3,7 @@ using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Jobs;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
+using LeadAnalytics.Api.Service.Insights;
 using LeadAnalytics.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -154,6 +155,10 @@ builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
 builder.Services.AddScoped<DuplicateContactService>();
+
+// ── Insights (CAPI mockado + analytics agregadas) ────────────────────────────
+builder.Services.AddScoped<MetaCapiService>();
+builder.Services.AddScoped<InsightsService>();
 
 // ── Background jobs: delete em lote de contatos duplicados ───────────────────
 builder.Services.AddSingleton<IDuplicateDeleteJobQueue, InMemoryDuplicateDeleteJobQueue>();

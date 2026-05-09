@@ -1,5 +1,32 @@
 namespace LeadAnalytics.Api.DTOs.Sdr;
 
+public class SdrSyncRequestDto
+{
+    /// <summary>Unidade alvo. Obrigatório para operadores não super-admin.</summary>
+    public int? UnitId { get; set; }
+
+    /// <summary>Início da janela (UTC). Default: now - 30 dias.</summary>
+    public DateTime? From { get; set; }
+
+    /// <summary>Fim da janela (UTC). Default: now.</summary>
+    public DateTime? To { get; set; }
+
+    /// <summary>
+    /// Preset de turno: "morning" (08:00-12:00), "overnight" (20:00-07:50),
+    /// "custom" (usa TimeStart/TimeEnd) ou null/empty (sem filtro de horário).
+    /// </summary>
+    public string? Shift { get; set; }
+
+    /// <summary>Início da janela de horário "HH:mm" (Brasília). Usado quando Shift = "custom".</summary>
+    public string? TimeStart { get; set; }
+
+    /// <summary>Fim da janela de horário "HH:mm" (Brasília). Se &lt; TimeStart, atravessa meia-noite.</summary>
+    public string? TimeEnd { get; set; }
+
+    /// <summary>Limite de leads na resposta (1..2000). Default: 500.</summary>
+    public int? Limit { get; set; }
+}
+
 public class SdrLeadResponseDto
 {
     public int Id { get; set; }
@@ -44,4 +71,11 @@ public class SdrSyncSummaryDto
     public int Updated { get; set; }
     public int Failed { get; set; }
     public List<SdrLeadResponseDto> Items { get; set; } = new();
+
+    /// <summary>Janela usada na consulta (eco para o front confirmar).</summary>
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public int? UnitId { get; set; }
+    public string? ShiftStart { get; set; }
+    public string? ShiftEnd { get; set; }
 }

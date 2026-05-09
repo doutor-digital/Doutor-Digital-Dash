@@ -105,11 +105,22 @@ public class AuthService
         if (!user.IsActive)
             return (null, "Usuário inativo.");
 
-        // Vincula GoogleSub no primeiro login
+        // Vincula GoogleSub + avatar no primeiro login (atualiza avatar se mudou)
+        var changed = false;
         if (string.IsNullOrEmpty(user.GoogleSub))
         {
             user.GoogleSub = info.Sub;
             user.AuthMethod = "google";
+            changed = true;
+        }
+        if (!string.IsNullOrWhiteSpace(info.Picture) &&
+            !string.Equals(user.PhotoPath, info.Picture, StringComparison.Ordinal))
+        {
+            user.PhotoPath = info.Picture;
+            changed = true;
+        }
+        if (changed)
+        {
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
         }
@@ -145,6 +156,7 @@ public class AuthService
                 PasswordHash = string.Empty,
                 GoogleSub = info.Sub,
                 AuthMethod = "google",
+                PhotoPath = info.Picture,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -159,6 +171,10 @@ public class AuthService
             {
                 user.GoogleSub = info.Sub;
                 user.AuthMethod = "google";
+            }
+            if (!string.IsNullOrWhiteSpace(info.Picture))
+            {
+                user.PhotoPath = info.Picture;
             }
             user.UpdatedAt = DateTime.UtcNow;
         }
@@ -178,6 +194,28 @@ public class AuthService
 
         await _db.SaveChangesAsync(ct);
         await _invitationService.MarkAcceptedAsync(inv.Id, ct);
+
+        // Email de boas-vindas — síncrono mas não falha o aceite se cair.
+        try
+        {
+            var unitName = await _db.Units.AsNoTracking()
+                .Where(u => u.Id == inv.UnitId)
+                .Select(u => u.Name)
+                .FirstOrDefaultAsync(ct) ?? "sua unidade";
+
+            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+                ?? "https://dashboard.doutordigitalconsultoria.com";
+
+            await _emailService.SendWelcomeAsync(
+                toEmail: user.Email,
+                userName: user.Name,
+                unitName: unitName,
+                dashboardUrl: frontendUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao enviar email de boas-vindas para {Email}", user.Email);
+        }
 
         var response = await BuildLoginResponseAsync(user, "google");
         return (response, null);
@@ -214,6 +252,8 @@ public class AuthService
             UserName = user.Name,
             Email = user.Email,
             Role = user.Role,
+            PhotoUrl = user.PhotoPath,
+            AuthMethod = authMethod,
             TokenType = "Bearer",
             AccessToken = accessToken,
             RefreshToken = refreshToken,

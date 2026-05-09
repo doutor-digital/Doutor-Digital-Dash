@@ -31,6 +31,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserUnit> UserUnits { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
 
+    public DbSet<Consultation> Consultations { get; set; }
+    public DbSet<Treatment> Treatments { get; set; }
+    public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
+    public DbSet<WebhookEnvelope> WebhookEnvelopes { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ─── Lead ────────────────────────────────────────────────
@@ -287,5 +292,85 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasIndex(u => u.GoogleSub)
             .IsUnique()
             .HasFilter("\"google_sub\" IS NOT NULL");
+
+        // ─── Consultation ────────────────────────────────────────
+        modelBuilder.Entity<Consultation>(entity =>
+        {
+            entity.ToTable("consultations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.PaymentMethod).HasMaxLength(30);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.HasOne(e => e.Lead)
+                  .WithMany()
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Unit)
+                  .WithMany()
+                  .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => new { e.TenantId, e.ScheduledAt });
+            entity.HasIndex(e => e.LeadId);
+            entity.HasIndex(e => new { e.TenantId, e.Status });
+        });
+
+        // ─── Treatment ──────────────────────────────────────────
+        modelBuilder.Entity<Treatment>(entity =>
+        {
+            entity.ToTable("treatments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.TreatmentType).HasMaxLength(120);
+            entity.Property(e => e.RejectionReason).HasMaxLength(300);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.HasOne(e => e.Lead)
+                  .WithMany()
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Consultation)
+                  .WithMany(c => c.Treatments)
+                  .HasForeignKey(e => e.ConsultationId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => new { e.TenantId, e.Status });
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+            entity.HasIndex(e => e.LeadId);
+            entity.HasIndex(e => e.PaymentId);
+        });
+
+        // ─── TreatmentInstallment ───────────────────────────────
+        modelBuilder.Entity<TreatmentInstallment>(entity =>
+        {
+            entity.ToTable("treatment_installments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PaymentMethod).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Notes).HasMaxLength(500);
+            entity.HasOne(e => e.Treatment)
+                  .WithMany(t => t.Installments)
+                  .HasForeignKey(e => e.TreatmentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.TreatmentId, e.Sequence }).IsUnique();
+        });
+
+        // ─── WebhookEnvelope ────────────────────────────────────
+        modelBuilder.Entity<WebhookEnvelope>(entity =>
+        {
+            entity.ToTable("webhook_envelopes");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Provider).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.ContactId).HasMaxLength(120).IsRequired();
+            entity.Property(e => e.StageFrom).HasMaxLength(60);
+            entity.Property(e => e.StageTo).HasMaxLength(60).IsRequired();
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.LastError).HasMaxLength(2000);
+
+            // CHAVE DE IDEMPOTÊNCIA — duplicate webhook é absorvido pelo INSERT ON CONFLICT.
+            entity.HasIndex(e => new { e.Provider, e.ContactId, e.StageTo, e.OccurredAt })
+                  .IsUnique();
+
+            // Worker scheduler — pega pending por NextAttemptAt asc
+            entity.HasIndex(e => new { e.Status, e.NextAttemptAt });
+            entity.HasIndex(e => e.TenantId);
+        });
     }
 }

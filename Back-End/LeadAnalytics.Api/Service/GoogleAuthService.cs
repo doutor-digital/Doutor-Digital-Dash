@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace LeadAnalytics.Api.Service;
 
-public record GoogleUserInfo(string Email, string Name, string Sub);
+public record GoogleUserInfo(string Email, string Name, string Sub, string? Picture);
 
 public class GoogleAuthService
 {
@@ -104,7 +104,8 @@ public class GoogleAuthService
             return new GoogleUserInfo(
                 Email: info.Email.Trim().ToLowerInvariant(),
                 Name: info.Name ?? info.Email,
-                Sub: info.Sub
+                Sub: info.Sub,
+                Picture: info.Picture
             );
         }
         catch (Exception ex)
@@ -122,6 +123,7 @@ public class GoogleAuthService
         [JsonPropertyName("email")] public string? Email { get; set; }
         [JsonPropertyName("email_verified")] public string? EmailVerified { get; set; }
         [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("picture")] public string? Picture { get; set; }
         [JsonPropertyName("exp")] public string? Exp { get; set; }
     }
 }

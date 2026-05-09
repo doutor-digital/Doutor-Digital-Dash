@@ -5,6 +5,8 @@ public class LoginResponseDto
     public string UserName { get; set; } = string.Empty;
     public string? Email { get; set; }
     public string Role { get; set; } = "user";
+    public string? PhotoUrl { get; set; }
+    public string AuthMethod { get; set; } = "password";
     public string TokenType { get; set; } = "Bearer";
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;

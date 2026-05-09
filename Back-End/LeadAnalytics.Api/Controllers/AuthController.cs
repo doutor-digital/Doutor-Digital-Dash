@@ -3,6 +3,7 @@ using LeadAnalytics.Api.DTOs.Auth;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Controllers;
 
@@ -118,25 +119,52 @@ public class AuthController(AuthService authService, UnitService unitService) : 
     [HttpGet("me")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public IActionResult Me()
+    public async Task<IActionResult> Me([FromServices] LeadAnalytics.Api.Data.AppDbContext db)
     {
-        var profile = new
-        {
-            name = User.FindFirstValue(ClaimTypes.Name),
-            email = User.FindFirstValue(ClaimTypes.Email),
-            role = User.FindFirstValue(ClaimTypes.Role),
-            clinicIds = User.Claims
-                .Where(c => c.Type == "clinic_id")
-                .Select(c => c.Value)
-                .Distinct()
-                .ToList(),
-            unitIds = User.Claims
-                .Where(c => c.Type == "unit_id")
-                .Select(c => c.Value)
-                .Distinct()
-                .ToList()
-        };
+        var idStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(idStr, out var userId))
+            return Unauthorized();
 
-        return Ok(profile);
+        // Pega o usuário fresco do banco — JWT não traz photo_path / phone.
+        var user = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new
+            {
+                u.Id,
+                u.Name,
+                u.Email,
+                u.Role,
+                u.Phone,
+                u.PhotoPath,
+                u.AuthMethod,
+                u.TenantId,
+                u.LastLoginAt,
+                u.CreatedAt,
+            })
+            .FirstOrDefaultAsync();
+
+        if (user == null) return Unauthorized();
+
+        var unitIds = User.Claims
+            .Where(c => c.Type == "unit_id")
+            .Select(c => c.Value)
+            .Distinct()
+            .ToList();
+
+        return Ok(new
+        {
+            id = user.Id,
+            name = user.Name,
+            email = user.Email,
+            role = user.Role,
+            phone = user.Phone,
+            photoUrl = user.PhotoPath,
+            authMethod = user.AuthMethod,
+            tenantId = user.TenantId,
+            lastLoginAt = user.LastLoginAt,
+            createdAt = user.CreatedAt,
+            unitIds = unitIds,
+        });
     }
 }

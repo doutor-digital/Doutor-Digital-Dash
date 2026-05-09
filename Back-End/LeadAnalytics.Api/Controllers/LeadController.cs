@@ -94,17 +94,35 @@ public class WebhooksController(
         return Ok(timeline);
     }
 
+    /// <summary>
+    /// Webhook de entrada da Cloudia.
+    /// O endpoint apenas ENFILEIRA o evento em webhook_envelopes (idempotente).
+    /// O processamento real (criação/atualização de Lead, Consulta, Tratamento)
+    /// é feito em background por <see cref="Service.WebhookProcessorJob"/>.
+    ///
+    /// Devolve 200 quase instantâneo — não bloqueia a Cloudia em retries.
+    /// </summary>
     [HttpPost("cloudia")]
     [AllowAnonymous]
-    public async Task<IActionResult> Cloudia([FromBody] CloudiaWebhookDto dto)
+    public async Task<IActionResult> Cloudia(
+        [FromBody] CloudiaWebhookDto dto,
+        [FromServices] Service.WebhookEnqueueService enqueueService,
+        CancellationToken ct)
     {
         if (!ModelState.IsValid)
-        {
             return BadRequest(ModelState);
-        }
 
-        var result = await _leadService.SaveLeadAsync(dto);
-        return Ok(result);
+        var result = await enqueueService.EnqueueCloudiaAsync(dto, ct);
+
+        return result.Status switch
+        {
+            Service.EnqueueStatus.Invalid =>
+                BadRequest(new { message = result.Reason ?? "Payload inválido" }),
+            Service.EnqueueStatus.Duplicate =>
+                Ok(new { status = "duplicate", message = "Evento já processado anteriormente." }),
+            _ =>
+                Ok(new { status = "queued", envelopeId = result.EnvelopeId }),
+        };
     }
 
     /// <summary>

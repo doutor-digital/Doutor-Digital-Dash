@@ -146,6 +146,7 @@ builder.Services.AddScoped<MetaWebhookService>();
 builder.Services.AddScoped<ConfigurationService>();
 builder.Services.AddScoped<LeadAnalyticsService>();
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddHttpClient<ResendClient>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpClient<GoogleAuthService>();
 builder.Services.AddScoped<InvitationService>();
@@ -173,6 +174,15 @@ builder.Services.AddHostedService<DuplicateDeleteJobWorker>();
 builder.Services.AddSingleton<IContactsBulkDeleteJobQueue, InMemoryContactsBulkDeleteJobQueue>();
 builder.Services.AddScoped<ContactsBulkDeleteJobStore>();
 builder.Services.AddHostedService<ContactsBulkDeleteJobWorker>();
+
+// ── Webhook pipeline: enqueue + dispatch + processor ──────────────────────────
+builder.Services.AddScoped<WebhookEnqueueService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.StageWebhookDispatcher>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.ProcessarWebhooksJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPreenchimentoPendenteJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasadoJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.ReconciliacaoCloudiaJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();

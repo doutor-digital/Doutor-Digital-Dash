@@ -59,6 +59,12 @@ public class User
     [Column("reset_password_requested_at")]
     public DateTime? ResetPasswordRequestedAt { get; set; }
 
+    [Column("google_sub")]
+    public string? GoogleSub { get; set; }
+
+    [Column("auth_method")]
+    public string AuthMethod { get; set; } = "password";
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

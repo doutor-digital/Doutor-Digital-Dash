@@ -54,6 +54,65 @@ public class EmailService(IOptions<SmtpOptions> options, ILogger<EmailService> l
         }
     }
 
+    public Task SendInvitationAsync(
+        string toEmail,
+        string inviterName,
+        string unitName,
+        string role,
+        string acceptUrl,
+        int validHours)
+    {
+        var subject = $"Convite para acessar {unitName} · Doutor Digital";
+
+        var roleLabel = role switch
+        {
+            "sdr" => "SDR",
+            "manager" => "Gerente",
+            "unit_user" => "Usuário",
+            _ => role
+        };
+
+        var html = $@"
+<!doctype html>
+<html lang=""pt-br"">
+  <body style=""font-family: Arial, Helvetica, sans-serif; background:#f5f6fa; margin:0; padding:24px;"">
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width:560px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e5e7eb;"">
+      <tr>
+        <td style=""padding:24px 32px; background:#0f172a; color:#fff;"">
+          <h2 style=""margin:0; font-size:18px;"">Doutor Digital · Convite</h2>
+        </td>
+      </tr>
+      <tr>
+        <td style=""padding:32px;"">
+          <p style=""margin:0 0 12px; color:#111827;""><strong>{WebUtility.HtmlEncode(inviterName)}</strong> convidou você para acessar o painel.</p>
+          <p style=""margin:0 0 16px; color:#374151;"">Você terá acesso à unidade <strong>{WebUtility.HtmlEncode(unitName)}</strong> com o papel <strong>{WebUtility.HtmlEncode(roleLabel)}</strong>.</p>
+          <div style=""text-align:center; margin:28px 0;"">
+            <a href=""{WebUtility.HtmlEncode(acceptUrl)}"" style=""display:inline-block; background:#0077CC; color:#fff; text-decoration:none; padding:12px 22px; border-radius:8px; font-weight:600;"">Aceitar convite</a>
+          </div>
+          <p style=""margin:0 0 12px; color:#374151;"">O convite expira em <strong>{validHours} horas</strong>.</p>
+          <p style=""margin:0 0 12px; color:#6b7280; font-size:13px;"">Você precisará entrar com a sua conta Google ({WebUtility.HtmlEncode(toEmail)}). Se este email não bater, fale com quem te convidou.</p>
+          <p style=""margin:0; color:#6b7280; font-size:12px;"">Se o botão não funcionar, copie e cole este link no navegador:<br>{WebUtility.HtmlEncode(acceptUrl)}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style=""padding:16px 32px; background:#f9fafb; color:#9ca3af; font-size:12px; text-align:center;"">
+          © Doutor Digital — mensagem automática.
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>";
+
+        var text =
+            $"{inviterName} convidou você para o painel Doutor Digital.\n\n" +
+            $"Unidade: {unitName}\n" +
+            $"Papel: {roleLabel}\n\n" +
+            $"Aceite em: {acceptUrl}\n\n" +
+            $"Expira em {validHours} horas.\n";
+
+        return SendAsync(toEmail, subject, html, text);
+    }
+
     public Task SendPasswordResetCodeAsync(string toEmail, string userName, string code, int validMinutes)
     {
         var subject = "Código de recuperação de senha";

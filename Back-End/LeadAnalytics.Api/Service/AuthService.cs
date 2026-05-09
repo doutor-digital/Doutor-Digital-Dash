@@ -14,17 +14,23 @@ public class AuthService
     private readonly AppDbContext _db;
     private readonly JwtTokenService _jwtTokenService;
     private readonly EmailService _emailService;
+    private readonly GoogleAuthService _googleAuthService;
+    private readonly InvitationService _invitationService;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         AppDbContext db,
         JwtTokenService jwtTokenService,
         EmailService emailService,
+        GoogleAuthService googleAuthService,
+        InvitationService invitationService,
         ILogger<AuthService> logger)
     {
         _db = db;
         _jwtTokenService = jwtTokenService;
         _emailService = emailService;
+        _googleAuthService = googleAuthService;
+        _invitationService = invitationService;
         _logger = logger;
     }
 
@@ -49,7 +55,8 @@ public class AuthService
             return null;
         }
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        if (string.IsNullOrEmpty(user.PasswordHash) ||
+            !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             _logger.LogWarning("❌ Senha incorreta: {Email}", email);
             await HandleFailedLoginAsync(user);
@@ -68,17 +75,126 @@ public class AuthService
             return null;
         }
 
+        return await BuildLoginResponseAsync(user, "password");
+    }
+
+    public async Task<(LoginResponseDto? Result, string? Error)> LoginWithGoogleAsync(string idToken)
+    {
+        var info = await _googleAuthService.ValidateIdTokenAsync(idToken);
+        if (info is null)
+            return (null, "Token Google inválido.");
+
+        var user = await _db.Users
+            .Include(u => u.Unit)
+            .FirstOrDefaultAsync(u => u.Email == info.Email);
+
+        if (user == null)
+        {
+            // Pode haver convite pendente — mas o fluxo de aceite de convite usa
+            // outro endpoint (POST /api/invitations/{token}/accept). Aqui é login
+            // direto: exige que o usuário já exista.
+            var hasPendingInvite = await _db.Invitations.AnyAsync(i =>
+                i.Email == info.Email && i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > DateTime.UtcNow);
+
+            if (hasPendingInvite)
+                return (null, "Você tem um convite pendente. Use o link enviado por email para aceitar.");
+
+            return (null, "Sem acesso. Solicite um convite.");
+        }
+
+        if (!user.IsActive)
+            return (null, "Usuário inativo.");
+
+        // Vincula GoogleSub no primeiro login
+        if (string.IsNullOrEmpty(user.GoogleSub))
+        {
+            user.GoogleSub = info.Sub;
+            user.AuthMethod = "google";
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        var resp = await BuildLoginResponseAsync(user, "google");
+        return (resp, null);
+    }
+
+    public async Task<(LoginResponseDto? Result, string? Error)> AcceptInvitationWithGoogleAsync(
+        string token,
+        string idToken,
+        CancellationToken ct = default)
+    {
+        var info = await _googleAuthService.ValidateIdTokenAsync(idToken, ct);
+        if (info is null) return (null, "Token Google inválido.");
+
+        var (inv, err) = await _invitationService.AcceptAsync(token, info.Email, ct);
+        if (inv is null) return (null, err);
+
+        var existing = await _db.Users
+            .Include(u => u.Unit)
+            .FirstOrDefaultAsync(u => u.Email == inv.Email, ct);
+
+        User user;
+        if (existing == null)
+        {
+            user = new User
+            {
+                Email = inv.Email,
+                Name = info.Name,
+                Role = inv.Role,
+                TenantId = inv.TenantId,
+                PasswordHash = string.Empty,
+                GoogleSub = info.Sub,
+                AuthMethod = "google",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            user = existing;
+            if (string.IsNullOrEmpty(user.GoogleSub))
+            {
+                user.GoogleSub = info.Sub;
+                user.AuthMethod = "google";
+            }
+            user.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Garante UserUnit
+        var hasLink = await _db.UserUnits
+            .AnyAsync(uu => uu.UserId == user.Id && uu.UnitId == inv.UnitId, ct);
+        if (!hasLink)
+        {
+            _db.UserUnits.Add(new UserUnit
+            {
+                UserId = user.Id,
+                UnitId = inv.UnitId,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await _invitationService.MarkAcceptedAsync(inv.Id, ct);
+
+        var response = await BuildLoginResponseAsync(user, "google");
+        return (response, null);
+    }
+
+    private async Task<LoginResponseDto> BuildLoginResponseAsync(User user, string authMethod)
+    {
         var availableUnits = await GetUserUnitsAsync(user);
 
         if (availableUnits.Count == 0)
         {
-            _logger.LogWarning("❌ Usuário sem unidades: {Email}", email);
-            return null;
+            _logger.LogWarning("❌ Usuário sem unidades: {Email}", user.Email);
+            throw new InvalidOperationException("Usuário sem unidades disponíveis.");
         }
 
         var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateToken(
-            user,
-            availableUnits);
+            user, availableUnits, authMethod);
 
         var refreshToken = GenerateRefreshToken();
 
@@ -90,7 +206,8 @@ public class AuthService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("✅ Login bem-sucedido: {Email} ({Role})", email, user.Role);
+        _logger.LogInformation("✅ Login bem-sucedido: {Email} ({Role}, {Method})",
+            user.Email, user.Role, authMethod);
 
         return new LoginResponseDto
         {
@@ -108,28 +225,51 @@ public class AuthService
 
     private async Task<List<UnitSelectorOptionDto>> GetUserUnitsAsync(User user)
     {
+        var roleLower = (user.Role ?? string.Empty).ToLowerInvariant();
+        var isSuperAdmin = roleLower is "super_admin" or "super-admin" or "superadmin";
+        var isSdr = roleLower is "sdr";
+
         IQueryable<Unit> query;
 
-        if (user.Role == "super_admin")
+        if (isSuperAdmin)
         {
             query = _db.Units.AsNoTracking();
-
             _logger.LogInformation("🔓 Super admin: todas unidades");
-        }
-        else if (user.TenantId.HasValue)
-        {
-            query = _db.Units
-                .AsNoTracking()
-                .Where(u => u.ClinicId == user.TenantId.Value);
-
-            _logger.LogInformation(
-                "🔒 Usuário comum: tenant {TenantId}",
-                user.TenantId.Value);
         }
         else
         {
-            _logger.LogWarning("⚠️ Usuário sem tenant");
-            return [];
+            // Usuário ligado a unidades específicas via UserUnit?
+            var hasUserUnits = await _db.UserUnits
+                .AsNoTracking()
+                .AnyAsync(uu => uu.UserId == user.Id);
+
+            if (hasUserUnits && !isSdr)
+            {
+                // Convidado: só enxerga as unidades vinculadas
+                var unitIds = await _db.UserUnits
+                    .AsNoTracking()
+                    .Where(uu => uu.UserId == user.Id)
+                    .Select(uu => uu.UnitId)
+                    .ToListAsync();
+
+                query = _db.Units.AsNoTracking().Where(u => unitIds.Contains(u.Id));
+                _logger.LogInformation("🔒 Usuário com UserUnit ({Count} unidades)", unitIds.Count);
+            }
+            else if (user.TenantId.HasValue)
+            {
+                // SDR ou usuário "manager" antigo: todas as units do tenant
+                query = _db.Units
+                    .AsNoTracking()
+                    .Where(u => u.ClinicId == user.TenantId.Value);
+
+                _logger.LogInformation("🔒 Tenant-wide: tenant {TenantId}, role {Role}",
+                    user.TenantId.Value, user.Role);
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ Usuário sem tenant nem UserUnit");
+                return [];
+            }
         }
 
         var units = await query

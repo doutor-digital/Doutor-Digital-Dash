@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LeadAnalytics.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260509044855_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260509060852_AddAuthGoogleAndAudit")]
+    partial class AddAuthGoogleAndAudit
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -90,6 +90,93 @@ namespace LeadAnalytics.Api.Migrations
                     b.HasIndex("UnitId");
 
                     b.ToTable("attendants", (string)null);
+                });
+
+            modelBuilder.Entity("LeadAnalytics.Api.Models.AuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AuthMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("auth_method");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Ip")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ip");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("method");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("path");
+
+                    b.Property<string>("QueryString")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("query_string");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("role");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.Property<int?>("TenantId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("user_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Path", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("audit_logs", (string)null);
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.Contact", b =>
@@ -238,6 +325,73 @@ namespace LeadAnalytics.Api.Migrations
                     b.HasIndex("TenantId", "CreatedAt");
 
                     b.ToTable("import_batches", (string)null);
+                });
+
+            modelBuilder.Entity("LeadAnalytics.Api.Models.Invitation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("role");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("integer")
+                        .HasColumnName("unit_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("Email", "UnitId", "AcceptedAt");
+
+                    b.ToTable("invitations", (string)null);
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.Lead", b =>
@@ -733,586 +887,6 @@ namespace LeadAnalytics.Api.Migrations
                     b.ToTable("payment_splits", (string)null);
                 });
 
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrAgendaEvento", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("Data")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Descricao")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("HoraFim")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("character varying(5)");
-
-                    b.Property<string>("HoraInicio")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("character varying(5)");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("Observacao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("ResponsavelLogin")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<int?>("SdrLeadId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("agendado");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SdrLeadId");
-
-                    b.HasIndex("TenantId", "Data");
-
-                    b.HasIndex("TenantId", "Status");
-
-                    b.ToTable("sdr_agenda_eventos", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrAuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<string>("AfterJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BeforeJson")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EntityId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(45)
-                        .HasColumnType("character varying(45)");
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("UserEmail")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("UserName")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TenantId", "Action");
-
-                    b.HasIndex("TenantId", "CreatedAt");
-
-                    b.HasIndex("TenantId", "EntityType", "EntityId");
-
-                    b.ToTable("sdr_audit_logs", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrConsulta", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DataConsulta")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool?>("FechouTratamento")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MotivoNaoFechamento")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("Observacao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<bool>("Pago")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("SdrLeadId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TipoTratamentoIndicado")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("ValorConsulta")
-                        .HasColumnType("numeric(12,2)");
-
-                    b.Property<decimal?>("ValorTratamento")
-                        .HasColumnType("numeric(12,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SdrLeadId");
-
-                    b.HasIndex("TenantId", "DataConsulta");
-
-                    b.ToTable("sdr_consultas", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrLead", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("AgendouConsulta")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("AttendantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Clinica")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("CloudiaFields")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CloudiaReceivedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CloudiaWebhookEvent")
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("DataAgendamento")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("DataModificacao")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DataOrigem")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ExternalId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ImportBatchId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Interacao")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Login")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("MotivoNaoAgendamento")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("NomeResponsavel")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Observacao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Origem")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ReviewedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Situacao")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("cloudia");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("pendente_revisao");
-
-                    b.Property<string>("Telefone")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("TipoResgate")
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<int?>("UnitId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ImportBatchId");
-
-                    b.HasIndex("ReviewedByUserId");
-
-                    b.HasIndex("UnitId");
-
-                    b.HasIndex("TenantId", "CreatedAt");
-
-                    b.HasIndex("TenantId", "ExternalId")
-                        .IsUnique()
-                        .HasFilter("\"ExternalId\" IS NOT NULL");
-
-                    b.HasIndex("TenantId", "Source");
-
-                    b.HasIndex("TenantId", "Status");
-
-                    b.ToTable("sdr_leads", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrMeta", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Login")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("Mes")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
-
-                    b.Property<decimal>("MetaValor")
-                        .HasColumnType("numeric(12,2)");
-
-                    b.Property<int>("QtdTotal")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RealCadastro")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RealResgate")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Secretaria")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Unidade")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "Mes");
-
-                    b.HasIndex("TenantId", "Mes", "Login")
-                        .IsUnique();
-
-                    b.ToTable("sdr_metas", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrRecebimento", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DataRecebimento")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FormaPagamento")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("Ordem")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SdrConsultaId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SdrTratamentoId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Valor")
-                        .HasColumnType("numeric(12,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SdrConsultaId");
-
-                    b.HasIndex("SdrTratamentoId");
-
-                    b.HasIndex("TenantId", "DataRecebimento");
-
-                    b.ToTable("sdr_recebimentos", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrTarefa", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("ConcludedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DataVencimento")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Descricao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("Observacao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Prioridade")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("media");
-
-                    b.Property<string>("ResponsavelLogin")
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<int?>("SdrLeadId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("pendente");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SdrLeadId");
-
-                    b.HasIndex("TenantId", "DataVencimento");
-
-                    b.HasIndex("TenantId", "Status");
-
-                    b.ToTable("sdr_tarefas", (string)null);
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrTratamento", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Descricao")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Observacao")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<int>("SdrConsultaId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SdrLeadId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Situacao")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Tipo")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("Valor")
-                        .HasColumnType("numeric(12,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SdrConsultaId");
-
-                    b.HasIndex("SdrLeadId");
-
-                    b.HasIndex("TenantId", "CreatedAt");
-
-                    b.ToTable("sdr_tratamentos", (string)null);
-                });
-
             modelBuilder.Entity("LeadAnalytics.Api.Models.Unit", b =>
                 {
                     b.Property<int>("Id")
@@ -1348,6 +922,11 @@ namespace LeadAnalytics.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AuthMethod")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("auth_method");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1361,6 +940,10 @@ namespace LeadAnalytics.Api.Migrations
                     b.Property<int>("FailedLoginAttempts")
                         .HasColumnType("integer")
                         .HasColumnName("failed_login_attempts");
+
+                    b.Property<string>("GoogleSub")
+                        .HasColumnType("text")
+                        .HasColumnName("google_sub");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -1444,9 +1027,34 @@ namespace LeadAnalytics.Api.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("GoogleSub")
+                        .IsUnique()
+                        .HasFilter("\"google_sub\" IS NOT NULL");
+
                     b.HasIndex("UnitId");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("LeadAnalytics.Api.Models.UserUnit", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("integer")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.HasKey("UserId", "UnitId");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("user_units", (string)null);
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.WebhookEvent", b =>
@@ -1645,107 +1253,6 @@ namespace LeadAnalytics.Api.Migrations
                     b.Navigation("Payment");
                 });
 
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrAgendaEvento", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.SdrLead", "Lead")
-                        .WithMany()
-                        .HasForeignKey("SdrLeadId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Lead");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrAuditLog", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrConsulta", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.SdrLead", "Lead")
-                        .WithMany("Consultas")
-                        .HasForeignKey("SdrLeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Lead");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrLead", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.ImportBatch", "ImportBatch")
-                        .WithMany()
-                        .HasForeignKey("ImportBatchId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("LeadAnalytics.Api.Models.User", "ReviewedByUser")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("LeadAnalytics.Api.Models.Unit", "Unit")
-                        .WithMany()
-                        .HasForeignKey("UnitId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("ImportBatch");
-
-                    b.Navigation("ReviewedByUser");
-
-                    b.Navigation("Unit");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrRecebimento", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.SdrConsulta", "Consulta")
-                        .WithMany("Recebimentos")
-                        .HasForeignKey("SdrConsultaId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("LeadAnalytics.Api.Models.SdrTratamento", "Tratamento")
-                        .WithMany("Recebimentos")
-                        .HasForeignKey("SdrTratamentoId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("Consulta");
-
-                    b.Navigation("Tratamento");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrTarefa", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.SdrLead", "Lead")
-                        .WithMany()
-                        .HasForeignKey("SdrLeadId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Lead");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrTratamento", b =>
-                {
-                    b.HasOne("LeadAnalytics.Api.Models.SdrConsulta", "Consulta")
-                        .WithMany("Tratamentos")
-                        .HasForeignKey("SdrConsultaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LeadAnalytics.Api.Models.SdrLead", "Lead")
-                        .WithMany()
-                        .HasForeignKey("SdrLeadId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Consulta");
-
-                    b.Navigation("Lead");
-                });
-
             modelBuilder.Entity("LeadAnalytics.Api.Models.User", b =>
                 {
                     b.HasOne("LeadAnalytics.Api.Models.Unit", "Unit")
@@ -1753,6 +1260,25 @@ namespace LeadAnalytics.Api.Migrations
                         .HasForeignKey("UnitId");
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("LeadAnalytics.Api.Models.UserUnit", b =>
+                {
+                    b.HasOne("LeadAnalytics.Api.Models.Unit", "Unit")
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LeadAnalytics.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Unit");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.Attendant", b =>
@@ -1779,23 +1305,6 @@ namespace LeadAnalytics.Api.Migrations
             modelBuilder.Entity("LeadAnalytics.Api.Models.Payment", b =>
                 {
                     b.Navigation("Splits");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrConsulta", b =>
-                {
-                    b.Navigation("Recebimentos");
-
-                    b.Navigation("Tratamentos");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrLead", b =>
-                {
-                    b.Navigation("Consultas");
-                });
-
-            modelBuilder.Entity("LeadAnalytics.Api.Models.SdrTratamento", b =>
-                {
-                    b.Navigation("Recebimentos");
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.Unit", b =>

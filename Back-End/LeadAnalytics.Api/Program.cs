@@ -1,6 +1,7 @@
 using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Jobs;
+using LeadAnalytics.Api.Middleware;
 using LeadAnalytics.Api.Options;
 using LeadAnalytics.Api.Service;
 using LeadAnalytics.Api.Service.Insights;
@@ -146,6 +147,9 @@ builder.Services.AddScoped<ConfigurationService>();
 builder.Services.AddScoped<LeadAnalyticsService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddHttpClient<GoogleAuthService>();
+builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
@@ -173,15 +177,6 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();
 builder.Services.AddScoped<KommoAdapter>();
-
-// ── SDR · Cadastro unificado das secretárias ─────────────────────────────────
-builder.Services.AddScoped<SdrAuditLogService>();
-builder.Services.AddScoped<SdrLeadService>();
-builder.Services.AddScoped<SdrConsultaService>();
-builder.Services.AddScoped<SdrTratamentoService>();
-builder.Services.AddScoped<SdrTarefaService>();
-builder.Services.AddScoped<SdrAgendaService>();
-builder.Services.AddScoped<SdrMetaService>();
 
 builder.Services.AddCors(options =>
 {
@@ -260,6 +255,8 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseMiddleware<AuditLogMiddleware>();
 
 app.MapControllers();
 

@@ -16,7 +16,8 @@ public class JwtTokenService(IConfiguration config, ILogger<JwtTokenService> log
     /// </summary>
     public (string token, DateTime expiresAtUtc) GenerateToken(
         User user,
-        List<UnitSelectorOptionDto> availableUnits)
+        List<UnitSelectorOptionDto> availableUnits,
+        string authMethod = "password")
     {
         // ─────────────────────────────────────────────
         // CONFIG
@@ -63,6 +64,13 @@ public class JwtTokenService(IConfiguration config, ILogger<JwtTokenService> log
         if (user.TenantId.HasValue)
         {
             claims.Add(new Claim("tenant_id", user.TenantId.Value.ToString()));
+        }
+
+        claims.Add(new Claim("auth_method", authMethod));
+
+        foreach (var unit in availableUnits)
+        {
+            claims.Add(new Claim("unit_id", unit.Id.ToString()));
         }
 
         var unitsJson = System.Text.Json.JsonSerializer.Serialize(

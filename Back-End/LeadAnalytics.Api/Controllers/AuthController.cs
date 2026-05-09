@@ -37,6 +37,23 @@ public class AuthController(AuthService authService, UnitService unitService) : 
         return Ok(response);
     }
 
+    [HttpPost("google")]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequestDto request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.IdToken))
+            return BadRequest(new { message = "idToken é obrigatório." });
+
+        await _unitService.GetOrCreateAsync(8020);
+
+        var (response, error) = await _authService.LoginWithGoogleAsync(request.IdToken);
+        if (response == null)
+            return BadRequest(new { message = error ?? "Login Google inválido." });
+
+        return Ok(response);
+    }
+
     [HttpPost("forgot-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

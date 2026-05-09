@@ -16,8 +16,7 @@ public class MetaWebhookController(
     LeadService leadService,
     LeadEventService leadEventService,
     CloudiaAdapter cloudiaAdapter,
-    KommoAdapter kommoAdapter,
-    SdrLeadService sdrLeadService) : ControllerBase
+    KommoAdapter kommoAdapter) : ControllerBase
 {
     private readonly MetaWebhookService _metaWebhookService = metaWebhookService;
     private readonly ILogger<MetaWebhookController> _logger = logger;
@@ -25,7 +24,6 @@ public class MetaWebhookController(
     private readonly LeadEventService _leadEventService = leadEventService;
     private readonly CloudiaAdapter _cloudiaAdapter = cloudiaAdapter;
     private readonly KommoAdapter _kommoAdapter = kommoAdapter;
-    private readonly SdrLeadService _sdrLeadService = sdrLeadService;
     /// <summary>
     /// Endpoint de verificação do webhook da Meta
     /// </summary>
@@ -137,19 +135,6 @@ public class MetaWebhookController(
 
             var result = await _leadService.SaveLeadAsync(webhook);
 
-            // Espelha o lead pra fila de revisão SDR (fluxo CRM novo).
-            // Falha silenciosa: se algo der errado aqui, não invalida o lead já gravado.
-            try
-            {
-                await UpsertSdrLeadFromWebhook(webhook);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "⚠️ Falha ao espelhar lead Cloudia em sdr_leads (lead.id={Id}). Lead principal foi salvo.",
-                    webhook.Data?.Id);
-            }
-
             var message = result.Result switch
             {
                 ProcessResult.Created => "Lead criado com sucesso",
@@ -176,71 +161,6 @@ public class MetaWebhookController(
                 error = ex.Message
             });
         }
-    }
-
-    /// <summary>
-    /// Mapeia o payload do webhook Cloudia em uma row de <c>sdr_leads</c>.
-    /// Marca quais campos vieram preenchidos da Cloudia (CloudiaFields) pra que a UI
-    /// destaque com o badge emerald de "Auto · Cloudia". Status inicial = "pendente_revisao".
-    /// </summary>
-    private async Task UpsertSdrLeadFromWebhook(CloudiaWebhookDto webhook)
-    {
-        var data = webhook.Data ?? webhook.Customer;
-        if (data is null || data.Id == 0 || data.ClinicId == 0) return;
-
-        // Detecta tipo (Cadastro vs Resgate) pela origem
-        var origem = (data.Origin ?? "").Trim();
-        var resgateOrigens = new[]
-        {
-            "Resgate: Disparo em massa", "Resgate: Disparo de agendamento",
-            "Resgate: Ligação", "Resgate: Mensagem", "Resgate:Ligação 3C",
-        };
-        var isResgate = resgateOrigens.Contains(origem);
-        var tipo = isResgate ? "Resgate" : "Cadastro";
-        var tipoResgate = isResgate ? origem.Replace("Resgate: ", "").Replace("Resgate:", "").Trim() : null;
-
-        // Stage cloudia "Agendado" → AgendouConsulta=true
-        var stageLower = (data.Stage ?? "").ToLowerInvariant();
-        var agendou = stageLower.Contains("agendad");
-
-        // Interação: "active" ou "bot" → true
-        var convState = (data.ConversationState ?? "").ToLowerInvariant();
-        var interacao = convState == "active" || convState == "bot";
-
-        // Set de campos auto-preenchidos pela Cloudia (controla o destaque visual)
-        var cloudiaFields = new List<string>();
-        if (!string.IsNullOrWhiteSpace(data.Name)) cloudiaFields.Add("nome");
-        if (!string.IsNullOrWhiteSpace(data.Phone)) cloudiaFields.Add("telefone");
-        if (!string.IsNullOrWhiteSpace(origem)) cloudiaFields.Add("origem");
-        cloudiaFields.Add("tipo");
-        if (isResgate) cloudiaFields.Add("tipoResgate");
-        cloudiaFields.Add("interacao");
-        if (!string.IsNullOrWhiteSpace(webhook.AssignedUserName)) cloudiaFields.Add("nomeResponsavel");
-        if (!string.IsNullOrWhiteSpace(webhook.AssignedUserEmail)) cloudiaFields.Add("login");
-        if (!string.IsNullOrWhiteSpace(data.Observations)) cloudiaFields.Add("observacao");
-        if (!string.IsNullOrWhiteSpace(data.Stage)) cloudiaFields.Add("situacao");
-        cloudiaFields.Add("dataOrigem");
-        if (data.LastUpdatedAt.HasValue) cloudiaFields.Add("dataModificacao");
-
-        await _sdrLeadService.UpsertFromCloudiaAsync(
-            tenantId: data.ClinicId,
-            externalId: data.Id,
-            nome: data.Name ?? "(sem nome)",
-            telefone: data.Phone ?? "",
-            origem: string.IsNullOrWhiteSpace(origem) ? "Sem origem" : origem,
-            tipo: tipo,
-            tipoResgate: tipoResgate,
-            interacao: interacao,
-            agendouConsulta: agendou,
-            nomeResponsavel: webhook.AssignedUserName ?? "",
-            login: webhook.AssignedUserEmail,
-            observacao: data.Observations,
-            situacao: data.Stage,
-            clinica: null,  // O webhook não traz nome da clínica — só clinic_id (= TenantId).
-            dataOrigem: data.CreatedAt ?? DateTime.UtcNow,
-            dataModificacao: data.LastUpdatedAt,
-            cloudiaFields: cloudiaFields,
-            webhookEvent: webhook.Type);
     }
 
     [HttpPost("kommo")]

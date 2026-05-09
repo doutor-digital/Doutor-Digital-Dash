@@ -8,14 +8,21 @@ namespace LeadAnalytics.Api.Controllers;
 public class ConfigurationController(
     ConfigurationService configService,
     ILogger<ConfigurationController> logger,
-    IConfiguration configuration) : ControllerBase
+    IConfiguration configuration,
+    ICurrentUser currentUser) : ControllerBase
 {
     private readonly ConfigurationService _configService = configService;
     private readonly ILogger<ConfigurationController> _logger = logger;
     private readonly IConfiguration _configuration = configuration;
+    private readonly ICurrentUser _currentUser = currentUser;
 
     private async Task<bool> IsAdminAuthorizedAsync(string? adminKey)
     {
+        // Super-admin autenticado via JWT acessa direto, sem precisar
+        // do header X-Admin-Key separado.
+        if (_currentUser.IsSuperAdmin)
+            return true;
+
         var expectedFromConfig = _configuration["Admin:ApiKey"];
         var expectedFromDb = await _configService.GetAdminApiKeyAsync();
 

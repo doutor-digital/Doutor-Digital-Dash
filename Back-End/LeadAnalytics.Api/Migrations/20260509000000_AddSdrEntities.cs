@@ -54,12 +54,7 @@ namespace LeadAnalytics.Api.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_sdr_leads", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_sdr_leads_attendants_AttendantId",
-                        column: x => x.AttendantId,
-                        principalTable: "attendants",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                    // FK para attendants intencionalmente OMITIDA — tabela tem IDs duplicados (sem PK).
                     table.ForeignKey(
                         name: "FK_sdr_leads_import_batches_ImportBatchId",
                         column: x => x.ImportBatchId,
@@ -76,7 +71,7 @@ namespace LeadAnalytics.Api.Migrations
                         name: "FK_sdr_leads_users_ReviewedByUserId",
                         column: x => x.ReviewedByUserId,
                         principalTable: "users",
-                        principalColumn: "Id",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
                 });
 
@@ -336,7 +331,7 @@ namespace LeadAnalytics.Api.Migrations
                         name: "FK_sdr_audit_logs_users_UserId",
                         column: x => x.UserId,
                         principalTable: "users",
-                        principalColumn: "Id",
+                        principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
                 });
 

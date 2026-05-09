@@ -126,6 +126,24 @@ public class SdrLeadsController(
         var ok = await _leadService.DeleteAsync(tenantId.Value, id, ct);
         return ok ? NoContent() : NotFound();
     }
+
+    /// <summary>
+    /// Backfill: olha a tabela <c>leads</c> (legada, populada pelo webhook antigo) e cria
+    /// <c>sdr_leads</c> correspondentes que ainda não existam — pra não perder leads que
+    /// chegaram antes do fluxo de revisão SDR existir. Idempotente.
+    /// </summary>
+    [HttpPost("sync-from-cloudia")]
+    [ProducesResponseType(typeof(SdrLeadService.SyncSummary), 200)]
+    public async Task<IActionResult> SyncFromCloudia(CancellationToken ct = default)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null) return BadRequest();
+        var summary = await _leadService.SyncFromLegacyLeadsAsync(tenantId.Value, ct);
+        _logger.LogInformation(
+            "🔄 SDR sync (tenant={Tenant}): created={Created} skipped={Skipped} failed={Failed}",
+            tenantId, summary.Created, summary.Skipped, summary.Failed);
+        return Ok(summary);
+    }
 }
 
 // ───────────────────────────────────────────────────────────────────────────

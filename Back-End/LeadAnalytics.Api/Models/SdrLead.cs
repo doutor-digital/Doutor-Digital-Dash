@@ -59,8 +59,12 @@ public class SdrLead
     public int? UnitId { get; set; }
     public Unit? Unit { get; set; }
 
+    /// <summary>
+    /// ID do atendente, sem FK enforced no banco — a tabela <c>attendants</c> tem IDs duplicados
+    /// historicamente (8 linhas, 5 distintos), então não é seguro definir FK ainda. Quando essa
+    /// integridade for corrigida, dá pra adicionar a navegação <c>Attendant?</c> e a FK.
+    /// </summary>
     public int? AttendantId { get; set; }
-    public Attendant? Attendant { get; set; }
 
     public int? ImportBatchId { get; set; }
     public ImportBatch? ImportBatch { get; set; }

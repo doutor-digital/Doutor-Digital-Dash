@@ -271,6 +271,160 @@ public class SdrLeadService(
     }
 
     /// <summary>
+    /// Resultado do backfill manual disparado pelo botão "Sincronizar com Cloudia".
+    /// </summary>
+    public sealed record SyncSummary(
+        int Created,
+        int Skipped,
+        int Updated,
+        int Failed,
+        List<SdrLeadResponseDto> Items);
+
+    /// <summary>
+    /// Faz backfill de leads que já estão na tabela <c>leads</c> (legada, populada
+    /// pelo webhook antigo) mas ainda não têm um <c>sdr_leads</c> correspondente.
+    /// Idempotente: roda quantas vezes quiser, só cria o que falta.
+    ///
+    /// Match por <c>(TenantId, ExternalId)</c>. Se já existir SdrLead pra esse par,
+    /// pula (não sobrescreve — pode ter sido editado pela SDR).
+    /// </summary>
+    public async Task<SyncSummary> SyncFromLegacyLeadsAsync(int tenantId, CancellationToken ct = default)
+    {
+        var legacyLeads = await _db.Leads
+            .AsNoTracking()
+            .Where(l => l.TenantId == tenantId)
+            .OrderByDescending(l => l.CreatedAt)
+            .ToListAsync(ct);
+
+        if (legacyLeads.Count == 0)
+            return new SyncSummary(0, 0, 0, 0, []);
+
+        var legacyIds = legacyLeads.Select(l => l.ExternalId).ToList();
+        var existingExternalIds = await _db.SdrLeads
+            .AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.ExternalId != null && legacyIds.Contains(s.ExternalId.Value))
+            .Select(s => s.ExternalId!.Value)
+            .ToListAsync(ct);
+        var existingSet = new HashSet<int>(existingExternalIds);
+
+        var now = DateTime.UtcNow;
+        var created = 0;
+        var skipped = 0;
+        var failed = 0;
+        var newLeads = new List<SdrLead>();
+
+        foreach (var lead in legacyLeads)
+        {
+            if (existingSet.Contains(lead.ExternalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            try
+            {
+                var sdr = MapLegacyToSdr(lead, now);
+                _db.SdrLeads.Add(sdr);
+                newLeads.Add(sdr);
+                created++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _logger.LogWarning(ex,
+                    "Falha ao mapear lead legado {LeadId} (externalId={ExternalId}, tenant={Tenant})",
+                    lead.Id, lead.ExternalId, tenantId);
+            }
+        }
+
+        if (created > 0)
+        {
+            await _db.SaveChangesAsync(ct);
+            await _audit.RecordAsync(
+                tenantId,
+                action: "sdr_lead.synced_from_legacy",
+                entityType: "SdrLead",
+                entityId: 0,
+                summary: $"Sincronizou {created} leads da Cloudia legacy. Pulou {skipped} (já existiam).",
+                after: new { created, skipped, failed },
+                ct: ct);
+        }
+
+        var items = newLeads.Select(MapToDto).ToList();
+        return new SyncSummary(created, skipped, 0, failed, items);
+    }
+
+    private static SdrLead MapLegacyToSdr(Lead lead, DateTime now)
+    {
+        // Detecta tipo pela origem/source ou tags
+        var origem = NormalizeOrigem(lead.Source);
+        var resgateOrigens = new[]
+        {
+            "Resgate: Disparo em massa", "Resgate: Disparo de agendamento",
+            "Resgate: Ligação", "Resgate: Mensagem", "Resgate:Ligação 3C",
+        };
+        var isResgate = resgateOrigens.Contains(origem);
+        var stageLower = (lead.CurrentStage ?? "").ToLowerInvariant();
+
+        // Marca os campos auto-preenchidos pela Cloudia (mesmo set do webhook)
+        var cloudiaFields = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lead.Name)) cloudiaFields.Add("nome");
+        if (!string.IsNullOrWhiteSpace(lead.Phone)) cloudiaFields.Add("telefone");
+        cloudiaFields.Add("origem");
+        cloudiaFields.Add("tipo");
+        if (isResgate) cloudiaFields.Add("tipoResgate");
+        cloudiaFields.Add("interacao");
+        if (lead.HasAppointment) cloudiaFields.Add("agendouConsulta");
+        if (!string.IsNullOrWhiteSpace(lead.Observations)) cloudiaFields.Add("observacao");
+        if (!string.IsNullOrWhiteSpace(lead.CurrentStage)) cloudiaFields.Add("situacao");
+        cloudiaFields.Add("dataOrigem");
+
+        return new SdrLead
+        {
+            TenantId = lead.TenantId,
+            ExternalId = lead.ExternalId,
+            Nome = string.IsNullOrWhiteSpace(lead.Name) ? "(sem nome)" : lead.Name,
+            Telefone = lead.Phone ?? "",
+            Tipo = isResgate ? "Resgate" : "Cadastro",
+            Origem = string.IsNullOrWhiteSpace(origem) ? "Sem origem" : origem,
+            TipoResgate = isResgate ? origem : null,
+            Interacao = !string.IsNullOrWhiteSpace(lead.ConversationState),
+            AgendouConsulta = lead.HasAppointment || stageLower.Contains("agendad"),
+            NomeResponsavel = lead.Attendant?.Name ?? "",
+            Login = lead.Attendant?.Email,
+            Observacao = lead.Observations,
+            Situacao = lead.CurrentStage,
+            Clinica = null,
+            DataOrigem = DateTime.SpecifyKind(lead.CreatedAt, DateTimeKind.Utc),
+            DataModificacao = DateTime.SpecifyKind(lead.UpdatedAt, DateTimeKind.Utc),
+            Source = "cloudia",
+            Status = "pendente_revisao",
+            CloudiaFields = JsonSerializer.Serialize(cloudiaFields),
+            CloudiaReceivedAt = now,
+            CloudiaWebhookEvent = "BACKFILL_SYNC",
+            UnitId = lead.UnitId,
+            AttendantId = lead.AttendantId,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+    }
+
+    private static string NormalizeOrigem(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "Sem origem";
+        // Lead.Source é "Facebook", "Instagram", "DESCONHECIDO" etc — tenta mapear pra
+        // o vocabulário canônico da Cloudia. Quando não bate, mantém o raw mesmo.
+        return raw.ToUpperInvariant() switch
+        {
+            "FACEBOOK" => "Campanha Meta (Facebook)",
+            "INSTAGRAM" => "Campanha Meta (Instagram)",
+            "GOOGLE" => "Campanha Google",
+            "DESCONHECIDO" or "" => "Sem origem",
+            _ => raw,
+        };
+    }
+
+    /// <summary>
     /// Persistência de lead vindo do webhook Cloudia. Não chama auditoria humana
     /// (UserId=null no audit log → ação automática). Status="pendente_revisao".
     /// </summary>

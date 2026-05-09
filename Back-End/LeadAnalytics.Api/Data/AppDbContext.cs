@@ -273,10 +273,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(e => e.UnitId)
                   .OnDelete(DeleteBehavior.SetNull);
 
-            entity.HasOne(e => e.Attendant)
-                  .WithMany()
-                  .HasForeignKey(e => e.AttendantId)
-                  .OnDelete(DeleteBehavior.SetNull);
+            // FK para attendants intencionalmente OMITIDA: a tabela tem IDs duplicados em
+            // produção (precisa limpar antes de adicionar PK + FK).
+            // AttendantId fica como integer comum sem relacionamento configurado.
 
             entity.HasOne(e => e.ImportBatch)
                   .WithMany()

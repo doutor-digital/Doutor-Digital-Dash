@@ -206,6 +206,18 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Bootstrap: garante que os emails em Auth:SuperAdminEmails têm
+// User com Role = "super_admin". Sem isso ninguém faria o primeiro login.
+try
+{
+    await SuperAdminSeedService.EnsureAsync(app.Services);
+}
+catch (Exception ex)
+{
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    startupLogger.LogError(ex, "Falha no seed de super-admin");
+}
+
 app.UseCors("AllowAll");
 
 app.Use(async (context, next) =>

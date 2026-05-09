@@ -174,6 +174,15 @@ builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();
 builder.Services.AddScoped<KommoAdapter>();
 
+// ── SDR · Cadastro unificado das secretárias ─────────────────────────────────
+builder.Services.AddScoped<SdrAuditLogService>();
+builder.Services.AddScoped<SdrLeadService>();
+builder.Services.AddScoped<SdrConsultaService>();
+builder.Services.AddScoped<SdrTratamentoService>();
+builder.Services.AddScoped<SdrTarefaService>();
+builder.Services.AddScoped<SdrAgendaService>();
+builder.Services.AddScoped<SdrMetaService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

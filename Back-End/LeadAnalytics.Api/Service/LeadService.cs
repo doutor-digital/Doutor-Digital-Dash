@@ -1933,6 +1933,8 @@ public class LeadService(
         DateTime dateFrom,
         DateTime dateTo,
         int? unitId,
+        int? attendantId,
+        string? source,
         CancellationToken ct = default)
     {
         if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
@@ -1947,6 +1949,8 @@ public class LeadService(
                      && l.CreatedAt < endExclUtc);
 
         if (unitId.HasValue) baseQ = baseQ.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) baseQ = baseQ.Where(l => l.AttendantId == attendantId.Value);
+        if (!string.IsNullOrWhiteSpace(source)) baseQ = baseQ.Where(l => l.Source == source);
 
         var totalLeads = await baseQ.CountAsync(ct);
 
@@ -2110,6 +2114,9 @@ public class LeadService(
         DateTime dateTo,
         Granularity groupBy,
         CompareMode compare,
+        int? unitId,
+        int? attendantId,
+        string? source,
         CancellationToken ct = default)
     {
         if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
@@ -2118,7 +2125,7 @@ public class LeadService(
         var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
         var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
 
-        var currentPoints = await BucketSeriesAsync(clinicId, startUtc, endExclUtc, groupBy, ct);
+        var currentPoints = await BucketSeriesAsync(clinicId, startUtc, endExclUtc, groupBy, unitId, attendantId, source, ct);
 
         List<DashboardEvolutionPointDto>? comparePoints = null;
         DateTime? compareStart = null;
@@ -2135,7 +2142,7 @@ public class LeadService(
                 _ => (startUtc, endExclUtc)
             };
 
-            comparePoints = await BucketSeriesAsync(clinicId, cStart, cEnd, groupBy, ct);
+            comparePoints = await BucketSeriesAsync(clinicId, cStart, cEnd, groupBy, unitId, attendantId, source, ct);
             compareStart = cStart;
             compareEnd = cEnd.AddDays(-1);
         }
@@ -2166,16 +2173,23 @@ public class LeadService(
         DateTime startInclUtc,
         DateTime endExclUtc,
         Granularity groupBy,
+        int? unitId,
+        int? attendantId,
+        string? source,
         CancellationToken ct)
     {
         // Agregação client-side após trazer (tenantId, createdAt) — simples e sem dependências
         // de funções SQL específicas. Para datasets grandes podemos migrar para date_trunc.
-        var rows = await _db.Leads.AsNoTracking()
+        var q = _db.Leads.AsNoTracking()
             .Where(l => l.TenantId == clinicId
                      && l.CreatedAt >= startInclUtc
-                     && l.CreatedAt < endExclUtc)
-            .Select(l => l.CreatedAt)
-            .ToListAsync(ct);
+                     && l.CreatedAt < endExclUtc);
+
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
+        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+
+        var rows = await q.Select(l => l.CreatedAt).ToListAsync(ct);
 
         var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
 
@@ -2206,6 +2220,25 @@ public class LeadService(
             cursor = NextBucket(cursor, groupBy);
         }
         return result;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Origens distintas para popular dropdown de filtro do dashboard
+    // ════════════════════════════════════════════════════════════════
+    public async Task<List<string>> GetDistinctSourcesAsync(
+        int clinicId,
+        int? unitId,
+        CancellationToken ct = default)
+    {
+        var q = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        return await q
+            .Where(l => l.Source != null && l.Source != "")
+            .Select(l => l.Source!)
+            .Distinct()
+            .OrderBy(s => s)
+            .ToListAsync(ct);
     }
 
     private static DateTime BucketStart(DateTime dt, Granularity g) => g switch

@@ -435,7 +435,9 @@ public class WebhooksController(
         [FromQuery] int clinicId,
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo,
-        [FromQuery] int? unitId = null)
+        [FromQuery] int? unitId = null,
+        [FromQuery] int? attendantId = null,
+        [FromQuery] string? source = null)
     {
         if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
         if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
@@ -448,7 +450,7 @@ public class WebhooksController(
         try
         {
             var result = await _leadService.GetDashboardOverviewAsync(
-                clinicId, dateFrom, dateTo, unitId, HttpContext.RequestAborted);
+                clinicId, dateFrom, dateTo, unitId, attendantId, source, HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (ArgumentException ex)
@@ -490,9 +492,14 @@ public class WebhooksController(
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo,
         [FromQuery] string groupBy = "day",
-        [FromQuery] string compare = "none")
+        [FromQuery] string compare = "none",
+        [FromQuery] int? unitId = null,
+        [FromQuery] int? attendantId = null,
+        [FromQuery] string? source = null)
     {
         if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
+            return guard;
         if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
         if ((dateTo - dateFrom).TotalDays > 3 * 365)
             return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
@@ -505,13 +512,31 @@ public class WebhooksController(
         try
         {
             var result = await _leadService.GetEvolutionRangeAsync(
-                clinicId, dateFrom, dateTo, g, c, HttpContext.RequestAborted);
+                clinicId, dateFrom, dateTo, g, c, unitId, attendantId, source, HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (ArgumentException ex)
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Lista origens (Source) distintas registradas para o tenant.
+    /// Usado pelo dropdown de filtro do dashboard.
+    /// </summary>
+    [HttpGet("sources")]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), 200)]
+    public async Task<IActionResult> GetDistinctSources(
+        [FromQuery] int clinicId,
+        [FromQuery] int? unitId = null)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
+            return guard;
+
+        var sources = await _leadService.GetDistinctSourcesAsync(clinicId, unitId, HttpContext.RequestAborted);
+        return Ok(sources);
     }
 
     private static bool TryParseGranularity(string raw, out LeadService.Granularity g)

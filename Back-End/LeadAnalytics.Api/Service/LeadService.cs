@@ -65,6 +65,7 @@ public class LeadService(
             .Include(l => l.Assignments)
                 .ThenInclude(a => a.Attendant)
             .Include(l => l.Payments)
+            .Include(l => l.PaymentReceipts)
             .Where(l => l.Id == id);
 
         if (unitId.HasValue)
@@ -186,8 +187,154 @@ public class LeadService(
                     Amount = p.Amount,
                     PaidAt = p.PaidAt
                 })
-                .ToList()
+                .ToList(),
+
+            // ─── Revisão comercial ──────────────────────
+            LeadType = lead.LeadType,
+            RescueType = lead.RescueType,
+            HadInteraction = lead.HadInteraction,
+            ScheduledConsultation = lead.ScheduledConsultation,
+            AppointmentScheduledAt = lead.AppointmentScheduledAt,
+            NoAppointmentReason = lead.NoAppointmentReason,
+            NoAppointmentCity = lead.NoAppointmentCity,
+            NoCloseReason = lead.NoCloseReason,
+            ConsultationValue = lead.ConsultationValue,
+            ClosedTreatment = lead.ClosedTreatment,
+            IndicatedTreatment = lead.IndicatedTreatment,
+            TreatmentBudget = lead.TreatmentBudget,
+            TreatmentPlanCategory = lead.TreatmentPlanCategory,
+            TreatmentPlanValue = lead.TreatmentPlanValue,
+
+            PaymentReceipts = lead.PaymentReceipts
+                .OrderBy(r => r.Kind).ThenBy(r => r.Slot)
+                .Select(r => new LeadPaymentReceiptDto
+                {
+                    Id = r.Id,
+                    Kind = r.Kind,
+                    Slot = r.Slot,
+                    Amount = r.Amount,
+                    Method = r.Method,
+                    ReceivedAt = r.ReceivedAt,
+                    IsAdvance = r.IsAdvance,
+                })
+                .ToList(),
         };
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  PATCH /webhooks/{id}: atualização parcial do lead + receipts
+    // ════════════════════════════════════════════════════════════════
+
+    private static readonly string[] _allowedRescueTypes = { "mensagem", "ligacao", "disparo_massa" };
+    private static readonly string[] _allowedLeadTypes = { "cadastro", "resgate" };
+    private static readonly string[] _allowedReceiptKinds = { "consulta", "tratamento" };
+
+    public async Task<LeadDetailDto> PatchLeadAsync(
+        int id, int tenantId, DTOs.Request.UpdateLeadDto dto, CancellationToken ct = default)
+    {
+        var lead = await _db.Leads
+            .Include(l => l.PaymentReceipts)
+            .FirstOrDefaultAsync(l => l.Id == id && l.TenantId == tenantId, ct)
+            ?? throw new ArgumentException("Lead não encontrado para este tenant");
+
+        // ── Identificação
+        if (dto.Name is not null) lead.Name = dto.Name;
+        if (dto.Phone is not null) lead.Phone = dto.Phone;
+        if (dto.Email is not null) lead.Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email;
+        if (dto.Cpf is not null) lead.Cpf = string.IsNullOrWhiteSpace(dto.Cpf) ? null : dto.Cpf;
+        if (dto.Gender is not null) lead.Gender = string.IsNullOrWhiteSpace(dto.Gender) ? null : dto.Gender;
+
+        // ── Atribuição
+        if (dto.Source is not null) lead.Source = dto.Source;
+        if (dto.Channel is not null) lead.Channel = dto.Channel;
+        if (dto.Campaign is not null) lead.Campaign = dto.Campaign;
+        if (dto.Ad is not null) lead.Ad = string.IsNullOrWhiteSpace(dto.Ad) ? null : dto.Ad;
+
+        // ── Estado
+        if (dto.CurrentStage is not null) lead.CurrentStage = dto.CurrentStage;
+        if (dto.HasAppointment.HasValue) lead.HasAppointment = dto.HasAppointment.Value;
+        if (dto.HasPayment.HasValue) lead.HasPayment = dto.HasPayment.Value;
+        if (dto.HasHealthInsurancePlan.HasValue) lead.HasHealthInsurancePlan = dto.HasHealthInsurancePlan.Value;
+        if (dto.Observations is not null) lead.Observations = string.IsNullOrWhiteSpace(dto.Observations) ? null : dto.Observations;
+        if (dto.Tags is not null) lead.Tags = JsonSerializer.Serialize(dto.Tags);
+
+        if (dto.UnitId.HasValue) lead.UnitId = dto.UnitId.Value == 0 ? null : dto.UnitId.Value;
+        if (dto.AttendantId.HasValue) lead.AttendantId = dto.AttendantId.Value == 0 ? null : dto.AttendantId.Value;
+
+        // ── Revisão comercial
+        if (dto.LeadType is not null)
+        {
+            var lt = dto.LeadType.Trim().ToLowerInvariant();
+            if (lt.Length == 0) lead.LeadType = null;
+            else if (!_allowedLeadTypes.Contains(lt))
+                throw new ArgumentException($"leadType inválido (use {string.Join("|", _allowedLeadTypes)})");
+            else lead.LeadType = lt;
+        }
+        if (dto.RescueType is not null)
+        {
+            var rt = dto.RescueType.Trim().ToLowerInvariant();
+            if (rt.Length == 0) lead.RescueType = null;
+            else if (!_allowedRescueTypes.Contains(rt))
+                throw new ArgumentException($"rescueType inválido (use {string.Join("|", _allowedRescueTypes)})");
+            else lead.RescueType = rt;
+        }
+        if (dto.HadInteraction.HasValue) lead.HadInteraction = dto.HadInteraction.Value;
+        if (dto.ScheduledConsultation.HasValue) lead.ScheduledConsultation = dto.ScheduledConsultation.Value;
+        if (dto.AppointmentScheduledAt.HasValue) lead.AppointmentScheduledAt = dto.AppointmentScheduledAt.Value;
+        if (dto.NoAppointmentReason is not null) lead.NoAppointmentReason = string.IsNullOrWhiteSpace(dto.NoAppointmentReason) ? null : dto.NoAppointmentReason;
+        if (dto.NoAppointmentCity is not null) lead.NoAppointmentCity = string.IsNullOrWhiteSpace(dto.NoAppointmentCity) ? null : dto.NoAppointmentCity;
+        if (dto.NoCloseReason is not null) lead.NoCloseReason = string.IsNullOrWhiteSpace(dto.NoCloseReason) ? null : dto.NoCloseReason;
+        if (dto.ConsultationValue.HasValue) lead.ConsultationValue = dto.ConsultationValue.Value;
+        if (dto.ClosedTreatment.HasValue) lead.ClosedTreatment = dto.ClosedTreatment.Value;
+        if (dto.IndicatedTreatment is not null) lead.IndicatedTreatment = string.IsNullOrWhiteSpace(dto.IndicatedTreatment) ? null : dto.IndicatedTreatment;
+        if (dto.TreatmentBudget.HasValue) lead.TreatmentBudget = dto.TreatmentBudget.Value;
+        if (dto.TreatmentPlanCategory is not null) lead.TreatmentPlanCategory = string.IsNullOrWhiteSpace(dto.TreatmentPlanCategory) ? null : dto.TreatmentPlanCategory;
+        if (dto.TreatmentPlanValue.HasValue) lead.TreatmentPlanValue = dto.TreatmentPlanValue.Value;
+
+        // ── Receipts (replace strategy)
+        if (dto.PaymentReceipts is not null)
+        {
+            // valida
+            foreach (var r in dto.PaymentReceipts)
+            {
+                var k = (r.Kind ?? "").Trim().ToLowerInvariant();
+                if (!_allowedReceiptKinds.Contains(k))
+                    throw new ArgumentException($"receipt.kind inválido (use {string.Join("|", _allowedReceiptKinds)})");
+                if (k == "consulta" && (r.Slot < 1 || r.Slot > 2))
+                    throw new ArgumentException("receipt.slot de consulta deve ser 1..2");
+                if (k == "tratamento" && (r.Slot < 1 || r.Slot > 6))
+                    throw new ArgumentException("receipt.slot de tratamento deve ser 1..6");
+            }
+
+            // remove os antigos
+            _db.LeadPaymentReceipts.RemoveRange(lead.PaymentReceipts);
+
+            // recria
+            foreach (var r in dto.PaymentReceipts)
+            {
+                // se a linha está totalmente vazia (sem amount nem data nem method), pula
+                if (r.Amount is null && r.ReceivedAt is null && string.IsNullOrWhiteSpace(r.Method)) continue;
+
+                _db.LeadPaymentReceipts.Add(new LeadPaymentReceipt
+                {
+                    LeadId = lead.Id,
+                    TenantId = tenantId,
+                    Kind = r.Kind.Trim().ToLowerInvariant(),
+                    Slot = r.Slot,
+                    Amount = r.Amount,
+                    Method = string.IsNullOrWhiteSpace(r.Method) ? null : r.Method.Trim().ToLowerInvariant(),
+                    ReceivedAt = r.ReceivedAt,
+                    IsAdvance = r.IsAdvance,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                });
+            }
+        }
+
+        lead.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return (await GetLeadByIdAsync(id, tenantId))!;
     }
 
     // LeadService.cs - CreateLeadAsync
@@ -2072,6 +2219,111 @@ public class LeadService(
             .ToDictionaryAsync(x => x.State, x => x.Count);
 
         return counts;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Drill-downs do dashboard (consultas agendadas / compareceram)
+    // ════════════════════════════════════════════════════════════════
+
+    public async Task<List<DashboardLeadListItemDto>> GetScheduledLeadsAsync(
+        int clinicId,
+        DateTime dateFrom,
+        DateTime dateTo,
+        int? unitId,
+        int? attendantId,
+        string? source,
+        CancellationToken ct = default)
+    {
+        var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
+        var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
+
+        var q = _db.Leads.AsNoTracking()
+            .Include(l => l.Unit)
+            .Include(l => l.Attendant)
+            .Where(l => l.TenantId == clinicId
+                     && l.CreatedAt >= startUtc
+                     && l.CreatedAt < endExclUtc
+                     && (l.CurrentStage == LeadStages.AgendadoSemPagamento
+                      || l.CurrentStage == LeadStages.AgendadoComPagamento
+                      || l.CurrentStage == LeadStages.Faltou
+                      || l.CurrentStage == LeadStages.NaoFechouTratamento
+                      || l.CurrentStage == LeadStages.FechouTratamento
+                      || l.CurrentStage == LeadStages.EmTratamento));
+
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
+        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+
+        return await q
+            .OrderByDescending(l => l.AppointmentScheduledAt ?? l.CreatedAt)
+            .Select(l => new DashboardLeadListItemDto
+            {
+                Id = l.Id,
+                Name = l.Name,
+                Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
+                UnitId = l.UnitId,
+                UnitName = l.Unit != null ? l.Unit.Name : null,
+                AttendantId = l.AttendantId,
+                AttendantName = l.Attendant != null ? l.Attendant.Name : null,
+                Source = l.Source,
+                Campaign = l.Campaign,
+                CurrentStage = l.CurrentStage,
+                AttendanceStatus = l.AttendanceStatus,
+                AppointmentScheduledAt = l.AppointmentScheduledAt,
+                AttendanceStatusAt = l.AttendanceStatusAt,
+                CreatedAt = l.CreatedAt,
+                ConsultationValue = l.ConsultationValue,
+                ClosedTreatment = l.ClosedTreatment,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<DashboardLeadListItemDto>> GetAttendedLeadsAsync(
+        int clinicId,
+        DateTime dateFrom,
+        DateTime dateTo,
+        int? unitId,
+        int? attendantId,
+        string? source,
+        CancellationToken ct = default)
+    {
+        var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
+        var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
+
+        var q = _db.Leads.AsNoTracking()
+            .Include(l => l.Unit)
+            .Include(l => l.Attendant)
+            .Where(l => l.TenantId == clinicId
+                     && l.CreatedAt >= startUtc
+                     && l.CreatedAt < endExclUtc
+                     && l.AttendanceStatus == LeadStages.AttendedCompareceu);
+
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
+        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+
+        return await q
+            .OrderByDescending(l => l.AttendanceStatusAt ?? l.UpdatedAt)
+            .Select(l => new DashboardLeadListItemDto
+            {
+                Id = l.Id,
+                Name = l.Name,
+                Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
+                UnitId = l.UnitId,
+                UnitName = l.Unit != null ? l.Unit.Name : null,
+                AttendantId = l.AttendantId,
+                AttendantName = l.Attendant != null ? l.Attendant.Name : null,
+                Source = l.Source,
+                Campaign = l.Campaign,
+                CurrentStage = l.CurrentStage,
+                AttendanceStatus = l.AttendanceStatus,
+                AppointmentScheduledAt = l.AppointmentScheduledAt,
+                AttendanceStatusAt = l.AttendanceStatusAt,
+                CreatedAt = l.CreatedAt,
+                ConsultationValue = l.ConsultationValue,
+                ClosedTreatment = l.ClosedTreatment,
+            })
+            .ToListAsync(ct);
     }
 
     // ════════════════════════════════════════════════════════════════

@@ -36,6 +36,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
     public DbSet<WebhookEnvelope> WebhookEnvelopes { get; set; }
     public DbSet<RecoveryAttempt> RecoveryAttempts { get; set; }
+    public DbSet<LeadPaymentReceipt> LeadPaymentReceipts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -135,6 +136,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(e => new { e.LeadId, e.CreatedAt });
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+        });
+
+        // ─── LeadPaymentReceipt ──────────────────────────────────
+        modelBuilder.Entity<LeadPaymentReceipt>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Lead)
+                  .WithMany(l => l.PaymentReceipts)
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.LeadId, e.Kind, e.Slot }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.IsAdvance });
         });
 
         // ─── Payment ─────────────────────────────────────────────

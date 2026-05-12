@@ -48,6 +48,35 @@ public class LeadDetailDto
     public List<LeadConversationDto> Conversations { get; set; } = new();
     public List<LeadAssignmentDto> Assignments { get; set; } = new();
     public List<LeadPaymentDto> Payments { get; set; } = new();
+
+    // ─── Revisão comercial (formulário /leads/:id/revisar) ───
+    public string? LeadType { get; set; }
+    public string? RescueType { get; set; }
+    public bool? HadInteraction { get; set; }
+    public bool? ScheduledConsultation { get; set; }
+    public DateTime? AppointmentScheduledAt { get; set; }
+    public string? NoAppointmentReason { get; set; }
+    public string? NoAppointmentCity { get; set; }
+    public string? NoCloseReason { get; set; }
+    public decimal? ConsultationValue { get; set; }
+    public bool? ClosedTreatment { get; set; }
+    public string? IndicatedTreatment { get; set; }
+    public decimal? TreatmentBudget { get; set; }
+    public string? TreatmentPlanCategory { get; set; }
+    public decimal? TreatmentPlanValue { get; set; }
+
+    public List<LeadPaymentReceiptDto> PaymentReceipts { get; set; } = new();
+}
+
+public class LeadPaymentReceiptDto
+{
+    public int Id { get; set; }
+    public string Kind { get; set; } = "consulta";   // consulta | tratamento
+    public int Slot { get; set; }
+    public decimal? Amount { get; set; }
+    public string? Method { get; set; }
+    public DateTime? ReceivedAt { get; set; }
+    public bool IsAdvance { get; set; }
 }
 
 public class LeadStageHistoryDto

@@ -60,6 +60,33 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Atualização parcial do lead. Aceita campos básicos, atribuição,
+    /// dados da revisão comercial e a lista completa de recibos de pagamento
+    /// (replace strategy).
+    /// </summary>
+    [HttpPatch("{id:int}")]
+    [ProducesResponseType(typeof(LeadDetailDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> PatchLead(
+        int id, [FromBody] DTOs.Request.UpdateLeadDto dto, CancellationToken ct)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null)
+            return BadRequest(new ProblemDetails { Title = "Operação requer um tenant específico", Status = 400 });
+
+        try
+        {
+            var result = await _leadService.PatchLeadAsync(id, tenantId.Value, dto, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
+    }
+
+    /// <summary>
     /// Timeline detalhada do lead: stages com tempo em cada um, atribuições,
     /// conversas, interações, atribuição de origem (CTWA) e insights agregados.
     /// </summary>
@@ -502,6 +529,56 @@ public class WebhooksController(
         }
     }
  
+    /// <summary>
+    /// Drill-down do KPI "consultas agendadas": lista leads que têm consulta agendada
+    /// (estágios AgendadoSem/ComPagamento) dentro do período.
+    /// </summary>
+    [HttpGet("dashboard/scheduled")]
+    [ProducesResponseType(typeof(List<DashboardLeadListItemDto>), 200)]
+    public async Task<IActionResult> GetScheduledLeads(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
+        [FromQuery] int? unitId = null,
+        [FromQuery] int? attendantId = null,
+        [FromQuery] string? source = null,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+        if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
+
+        var result = await _leadService.GetScheduledLeadsAsync(
+            clinicId, dateFrom, dateTo, unitId, attendantId, source, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Drill-down do KPI "compareceram": lista leads que compareceram à consulta
+    /// dentro do período (AttendanceStatus = compareceu).
+    /// </summary>
+    [HttpGet("dashboard/attended")]
+    [ProducesResponseType(typeof(List<DashboardLeadListItemDto>), 200)]
+    public async Task<IActionResult> GetAttendedLeads(
+        [FromQuery] int clinicId,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
+        [FromQuery] int? unitId = null,
+        [FromQuery] int? attendantId = null,
+        [FromQuery] string? source = null,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
+            return guard;
+        if (dateTo < dateFrom) return BadRequest(new { error = "dateTo deve ser >= dateFrom" });
+
+        var result = await _leadService.GetAttendedLeadsAsync(
+            clinicId, dateFrom, dateTo, unitId, attendantId, source, ct);
+        return Ok(result);
+    }
+
     /// <summary>
     /// Overview consolidado do dashboard. Todos os KPIs filtrados por dateFrom/dateTo
     /// (baseados em Lead.CreatedAt). Usado pela DashboardPage.

@@ -162,14 +162,92 @@ public class WebhooksController(
     [HttpGet("recuperacao")]
     [ProducesResponseType(typeof(List<RecoveryLeadDto>), 200)]
     public async Task<IActionResult> GetRecoveryQueue(
-        [FromQuery] int clinicId, [FromQuery] int? unitId = null, CancellationToken ct = default)
+        [FromQuery] int clinicId,
+        [FromQuery] int? unitId = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] int? attendantId = null,
+        [FromQuery] string? attempts = null,
+        CancellationToken ct = default)
     {
         if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
         if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, ct) is { } guard)
             return guard;
 
-        var result = await _leadService.GetRecoveryQueueAsync(clinicId, unitId, ct);
+        var attemptsNormalized = attempts?.ToLowerInvariant();
+        if (attemptsNormalized != null && attemptsNormalized != "with" && attemptsNormalized != "without")
+            return BadRequest(new { error = "attempts deve ser 'with' ou 'without'" });
+
+        var result = await _leadService.GetRecoveryQueueAsync(
+            clinicId, unitId, dateFrom, dateTo, attendantId, attemptsNormalized, ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Lista tentativas de recuperação de um lead.
+    /// </summary>
+    [HttpGet("{id:int}/recovery-attempts")]
+    [ProducesResponseType(typeof(List<RecoveryAttemptDto>), 200)]
+    public async Task<IActionResult> ListRecoveryAttempts(int id, CancellationToken ct)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null)
+            return BadRequest(new ProblemDetails { Title = "Operação requer um tenant específico", Status = 400 });
+
+        var attempts = await _leadService.ListRecoveryAttemptsAsync(id, tenantId.Value, ct);
+        return Ok(attempts);
+    }
+
+    /// <summary>
+    /// Registra nova tentativa de recuperação (whatsapp/call/email/visit/other)
+    /// com outcome (no_answer/scheduled/recovered/lost/follow_up).
+    /// </summary>
+    [HttpPost("{id:int}/recovery-attempts")]
+    [ProducesResponseType(typeof(RecoveryAttemptDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> CreateRecoveryAttempt(
+        int id, [FromBody] CreateRecoveryAttemptDto dto, CancellationToken ct)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null)
+            return BadRequest(new ProblemDetails { Title = "Operação requer um tenant específico", Status = 400 });
+
+        try
+        {
+            var attempt = await _leadService.CreateRecoveryAttemptAsync(
+                id, tenantId.Value, dto, _currentUser.UserId, ct);
+            return Ok(attempt);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
+    }
+
+    /// <summary>
+    /// Marca o lead como recuperado (move para FechouTratamento) e registra
+    /// uma tentativa com outcome="recovered".
+    /// </summary>
+    [HttpPost("{id:int}/mark-recovered")]
+    [ProducesResponseType(typeof(RecoveryAttemptDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> MarkRecovered(
+        int id, [FromBody] MarkRecoveredDto? dto, CancellationToken ct)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } denied) return denied;
+        if (tenantId is null)
+            return BadRequest(new ProblemDetails { Title = "Operação requer um tenant específico", Status = 400 });
+
+        try
+        {
+            var attempt = await _leadService.MarkRecoveredAsync(
+                id, tenantId.Value, dto?.Notes, _currentUser.UserId, ct);
+            return Ok(attempt);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
     }
 
     /// <summary>

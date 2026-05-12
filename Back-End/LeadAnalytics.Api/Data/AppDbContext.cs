@@ -35,6 +35,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Treatment> Treatments { get; set; }
     public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
     public DbSet<WebhookEnvelope> WebhookEnvelopes { get; set; }
+    public DbSet<RecoveryAttempt> RecoveryAttempts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,6 +122,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(e => e.Conversation)
                   .WithMany(c => c.Interactions)
                   .HasForeignKey(e => e.LeadConversationId);
+        });
+
+        // ─── RecoveryAttempt ─────────────────────────────────────
+        modelBuilder.Entity<RecoveryAttempt>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Lead)
+                  .WithMany()
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.LeadId, e.CreatedAt });
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
         });
 
         // ─── Payment ─────────────────────────────────────────────

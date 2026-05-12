@@ -1037,30 +1037,181 @@ public class LeadService(
     }
 
     public async Task<List<RecoveryLeadDto>> GetRecoveryQueueAsync(
-        int clinicId, int? unitId = null, CancellationToken ct = default)
+        int clinicId,
+        int? unitId = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        int? attendantId = null,
+        string? attemptsFilter = null, // "with" | "without" | null
+        CancellationToken ct = default)
     {
         var q = _db.Leads.AsNoTracking()
             .Include(l => l.Unit)
+            .Include(l => l.Attendant)
             .Where(l => l.TenantId == clinicId
                      && l.CurrentStage == LeadStages.NaoFechouTratamento);
 
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
 
-        return await q
-            .OrderByDescending(l => l.AttendanceStatusAt ?? l.UpdatedAt)
-            .Select(l => new RecoveryLeadDto
+        if (dateFrom.HasValue)
+        {
+            var fromUtc = DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc);
+            q = q.Where(l => (l.AttendanceStatusAt ?? l.UpdatedAt) >= fromUtc);
+        }
+        if (dateTo.HasValue)
+        {
+            var toExclUtc = DateTime.SpecifyKind(dateTo.Value.Date.AddDays(1), DateTimeKind.Utc);
+            q = q.Where(l => (l.AttendanceStatusAt ?? l.UpdatedAt) < toExclUtc);
+        }
+
+        // Sub-query de attempts por lead
+        var attempts = _db.RecoveryAttempts.AsNoTracking()
+            .Where(a => a.TenantId == clinicId);
+
+        var projected = q.Select(l => new
+        {
+            Lead = l,
+            AttemptsCount = attempts.Count(a => a.LeadId == l.Id),
+            LastAttempt = attempts
+                .Where(a => a.LeadId == l.Id)
+                .OrderByDescending(a => a.CreatedAt)
+                .FirstOrDefault(),
+        });
+
+        if (attemptsFilter == "with") projected = projected.Where(x => x.AttemptsCount > 0);
+        else if (attemptsFilter == "without") projected = projected.Where(x => x.AttemptsCount == 0);
+
+        var rows = await projected
+            .OrderByDescending(x => x.Lead.AttendanceStatusAt ?? x.Lead.UpdatedAt)
+            .ToListAsync(ct);
+
+        return rows.Select(x => new RecoveryLeadDto
+        {
+            Id = x.Lead.Id,
+            Name = x.Lead.Name,
+            Phone = x.Lead.Phone == "AGUARDANDO_COLETA" ? null : x.Lead.Phone,
+            UnitId = x.Lead.UnitId,
+            UnitName = x.Lead.Unit?.Name,
+            Source = x.Lead.Source,
+            Campaign = x.Lead.Campaign,
+            AttendantId = x.Lead.AttendantId,
+            AttendantName = x.Lead.Attendant?.Name,
+            AttendanceStatusAt = x.Lead.AttendanceStatusAt,
+            UpdatedAt = x.Lead.UpdatedAt,
+            AttemptsCount = x.AttemptsCount,
+            LastAttemptAt = x.LastAttempt?.CreatedAt,
+            LastAttemptOutcome = x.LastAttempt?.Outcome,
+        }).ToList();
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Tentativas de recuperação (histórico estruturado)
+    // ════════════════════════════════════════════════════════════════
+
+    private static readonly string[] _allowedMethods = { "whatsapp", "call", "email", "visit", "other" };
+    private static readonly string[] _allowedOutcomes = { "no_answer", "scheduled", "recovered", "lost", "follow_up" };
+
+    public async Task<List<RecoveryAttemptDto>> ListRecoveryAttemptsAsync(
+        int leadId, int clinicId, CancellationToken ct = default)
+    {
+        return await _db.RecoveryAttempts.AsNoTracking()
+            .Where(a => a.LeadId == leadId && a.TenantId == clinicId)
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new RecoveryAttemptDto
             {
-                Id = l.Id,
-                Name = l.Name,
-                Phone = l.Phone == "AGUARDANDO_COLETA" ? null : l.Phone,
-                UnitId = l.UnitId,
-                UnitName = l.Unit != null ? l.Unit.Name : null,
-                Source = l.Source,
-                Campaign = l.Campaign,
-                AttendanceStatusAt = l.AttendanceStatusAt,
-                UpdatedAt = l.UpdatedAt,
+                Id = a.Id,
+                LeadId = a.LeadId,
+                Method = a.Method,
+                Outcome = a.Outcome,
+                Notes = a.Notes,
+                AttendantId = a.AttendantId,
+                AttendantName = a.AttendantId != null
+                    ? _db.Attendants.Where(at => at.Id == a.AttendantId).Select(at => at.Name).FirstOrDefault()
+                    : null,
+                CreatedByUserId = a.CreatedByUserId,
+                CreatedAt = a.CreatedAt,
             })
             .ToListAsync(ct);
+    }
+
+    public async Task<RecoveryAttemptDto> CreateRecoveryAttemptAsync(
+        int leadId, int clinicId, CreateRecoveryAttemptDto dto, int? createdByUserId, CancellationToken ct = default)
+    {
+        var lead = await _db.Leads.FirstOrDefaultAsync(l => l.Id == leadId && l.TenantId == clinicId, ct)
+            ?? throw new ArgumentException("Lead não encontrado para este tenant");
+
+        var method = (dto.Method ?? "").Trim().ToLowerInvariant();
+        var outcome = (dto.Outcome ?? "").Trim().ToLowerInvariant();
+        if (!_allowedMethods.Contains(method))
+            throw new ArgumentException($"method inválido (use {string.Join("|", _allowedMethods)})");
+        if (!_allowedOutcomes.Contains(outcome))
+            throw new ArgumentException($"outcome inválido (use {string.Join("|", _allowedOutcomes)})");
+
+        var attempt = new RecoveryAttempt
+        {
+            LeadId = leadId,
+            TenantId = clinicId,
+            Method = method,
+            Outcome = outcome,
+            Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
+            AttendantId = lead.AttendantId,
+            CreatedByUserId = createdByUserId,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        _db.RecoveryAttempts.Add(attempt);
+        await _db.SaveChangesAsync(ct);
+
+        return new RecoveryAttemptDto
+        {
+            Id = attempt.Id,
+            LeadId = attempt.LeadId,
+            Method = attempt.Method,
+            Outcome = attempt.Outcome,
+            Notes = attempt.Notes,
+            AttendantId = attempt.AttendantId,
+            CreatedByUserId = attempt.CreatedByUserId,
+            CreatedAt = attempt.CreatedAt,
+        };
+    }
+
+    public async Task<RecoveryAttemptDto> MarkRecoveredAsync(
+        int leadId, int clinicId, string? notes, int? createdByUserId, CancellationToken ct = default)
+    {
+        var lead = await _db.Leads.FirstOrDefaultAsync(l => l.Id == leadId && l.TenantId == clinicId, ct)
+            ?? throw new ArgumentException("Lead não encontrado para este tenant");
+
+        // Move o lead pra FechouTratamento (recuperação concretizada)
+        lead.CurrentStage = LeadStages.FechouTratamento;
+        lead.UpdatedAt = DateTime.UtcNow;
+
+        var attempt = new RecoveryAttempt
+        {
+            LeadId = leadId,
+            TenantId = clinicId,
+            Method = "other",
+            Outcome = "recovered",
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            AttendantId = lead.AttendantId,
+            CreatedByUserId = createdByUserId,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _db.RecoveryAttempts.Add(attempt);
+
+        await _db.SaveChangesAsync(ct);
+
+        return new RecoveryAttemptDto
+        {
+            Id = attempt.Id,
+            LeadId = attempt.LeadId,
+            Method = attempt.Method,
+            Outcome = attempt.Outcome,
+            Notes = attempt.Notes,
+            AttendantId = attempt.AttendantId,
+            CreatedByUserId = attempt.CreatedByUserId,
+            CreatedAt = attempt.CreatedAt,
+        };
     }
 
    public async Task<int> GetLeadsTotal(int? clinicId)

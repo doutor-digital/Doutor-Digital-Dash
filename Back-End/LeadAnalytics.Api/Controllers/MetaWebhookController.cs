@@ -163,21 +163,49 @@ public class MetaWebhookController(
         }
     }
 
+    /// <summary>
+    /// Recebe webhooks do Kommo CRM.
+    ///
+    /// O Kommo envia <c>application/x-www-form-urlencoded</c> com notação de colchetes
+    /// aninhada (ex.: <c>leads[add][0][id]=123</c>), NÃO JSON — por isso lemos
+    /// <see cref="Microsoft.AspNetCore.Http.HttpRequest.Form"/> e parseamos manualmente.
+    ///
+    /// O serviço do Kommo espera resposta 2xx em até 2 segundos, senão reenvia o webhook
+    /// (até 5 tentativas) e pode desativá-lo após muitas respostas inválidas. Por isso
+    /// processamos rápido e sempre devolvemos 2xx.
+    /// </summary>
     [HttpPost("kommo")]
-    public async Task<IActionResult> ReceiveKommoWebhook([FromBody] KommoWebhookDto webhook)
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> ReceiveKommoWebhook()
     {
         try
         {
-            _logger.LogInformation("📨 Webhook Kommo recebido: {Id}", webhook.Id);
+            if (!Request.HasFormContentType)
+            {
+                _logger.LogWarning("⚠️ Webhook Kommo recebido sem corpo de formulário (Content-Type={ContentType})", Request.ContentType);
+                return Ok(new { success = false, message = "Formato inesperado: esperado x-www-form-urlencoded" });
+            }
 
-            var leadEvent = _kommoAdapter.ToLeadEvent(webhook);
-            await _leadEventService.ProcessAsync(leadEvent);
+            var form = await Request.ReadFormAsync();
+            var payload = KommoFormParser.Parse(form);
+            var events = _kommoAdapter.ToLeadEvents(payload);
 
-            return Ok(new { success = true, message = "Evento Kommo processado" });
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "📨 Webhook Kommo recebido | account={Account} eventos={Count}",
+                    payload.Account?.Subdomain ?? payload.Account?.Id, events.Count);
+            }
+
+            foreach (var ev in events)
+                await _leadEventService.ProcessAsync(ev);
+
+            return Ok(new { success = true, message = "Webhook Kommo processado", eventsProcessed = events.Count });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Erro ao processar webhook do Kommo");
+            // 2xx para evitar reenvio/desativação do webhook no Kommo.
             return Ok(new { success = false, message = "Erro ao processar webhook", error = ex.Message });
         }
     }

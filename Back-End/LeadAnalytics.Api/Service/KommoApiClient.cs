@@ -72,6 +72,16 @@ public class KommoApiClient
         return await GetAsync<KommoPipelinesResponse>(url, token, ct);
     }
 
+    /// <summary>
+    /// Lista as definições dos custom fields cadastrados nos leads da conta.
+    /// Usado pelo dashboard pra montar filtros dinâmicos por campo (texto/enum/etc).
+    /// </summary>
+    public async Task<KommoCustomFieldsResponse?> GetCustomFieldsAsync(string subdomainOrHost, string token, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads/custom_fields?limit=250";
+        return await GetAsync<KommoCustomFieldsResponse>(url, token, ct);
+    }
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -197,6 +207,36 @@ public class KommoAccountResponse
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("subdomain")] public string? Subdomain { get; set; }
+}
+
+public class KommoCustomFieldsResponse
+{
+    [JsonPropertyName("_total_items")] public int TotalItems { get; set; }
+    [JsonPropertyName("_embedded")] public KommoCustomFieldsEmbedded? Embedded { get; set; }
+}
+
+public class KommoCustomFieldsEmbedded
+{
+    [JsonPropertyName("custom_fields")] public List<KommoApiCustomFieldDef>? CustomFields { get; set; }
+}
+
+public class KommoApiCustomFieldDef
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; set; }
+    [JsonPropertyName("code")] public string? Code { get; set; }
+    [JsonPropertyName("sort")] public int Sort { get; set; }
+    [JsonPropertyName("is_api_only")] public bool IsApiOnly { get; set; }
+    [JsonPropertyName("enums")] public List<KommoApiCustomFieldEnum>? Enums { get; set; }
+}
+
+public class KommoApiCustomFieldEnum
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("value")] public string? Value { get; set; }
+    [JsonPropertyName("code")] public string? Code { get; set; }
+    [JsonPropertyName("sort")] public int Sort { get; set; }
 }
 
 public class KommoPipelinesResponse

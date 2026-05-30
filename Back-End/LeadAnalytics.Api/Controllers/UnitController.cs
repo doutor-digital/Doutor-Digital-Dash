@@ -261,6 +261,55 @@ public class UnitController(
         }
     }
 
+    /// <summary>
+    /// Lista as definições dos custom fields cadastrados nos leads da Kommo
+    /// (GET /api/v4/leads/custom_fields). Usado pelo dashboard pra montar
+    /// filtros dinâmicos por campo (texto/enum/etc).
+    /// </summary>
+    [HttpGet("{id:int}/kommo-custom-fields")]
+    [ProducesResponseType(typeof(List<KommoCustomFieldDto>), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetKommoCustomFields(int id, CancellationToken ct)
+    {
+        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (unit is null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { message = "Unidade sem KommoSubdomain/KommoAccessToken configurados." });
+
+        try
+        {
+            var resp = await _kommoApi.GetCustomFieldsAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, ct);
+            var fields = (resp?.Embedded?.CustomFields ?? new())
+                .OrderBy(f => f.Sort)
+                .Select(f => new KommoCustomFieldDto
+                {
+                    Id = f.Id,
+                    Name = f.Name ?? $"Campo {f.Id}",
+                    Type = f.Type ?? "text",
+                    Code = f.Code,
+                    IsApiOnly = f.IsApiOnly,
+                    Enums = (f.Enums ?? new())
+                        .OrderBy(e => e.Sort)
+                        .Select(e => new KommoCustomFieldEnumDto
+                        {
+                            Id = e.Id,
+                            Value = e.Value ?? string.Empty,
+                            Code = e.Code,
+                        })
+                        .ToList(),
+                })
+                .ToList();
+
+            return Ok(fields);
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(new { message = $"Erro ao consultar Kommo: {ex.Message}" });
+        }
+    }
+
     [HttpGet("quantity-leads")]
     public async Task<IActionResult> GetQuantityLeadsUnit(int clinicId)
     {

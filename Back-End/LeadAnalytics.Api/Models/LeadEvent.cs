@@ -25,4 +25,11 @@ public class LeadEvent
     public string? OldStage { get; set; }
     public string? OldAttendantId { get; set; }
     public string? AccountId { get; set; }
+
+    // ─── Snapshot de dados da Kommo (JSON cru) ───────────────
+    /// <summary>JSON com os custom fields do lead (array de {field_id, field_name, field_code, type, value}).</summary>
+    public string? CustomFieldsJson { get; set; }
+
+    /// <summary>JSON com as tags do lead (array de strings).</summary>
+    public string? TagsJson { get; set; }
 }

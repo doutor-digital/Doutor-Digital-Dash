@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LeadAnalytics.Api.Models;
 
 namespace LeadAnalytics.Api.Service;
@@ -126,6 +127,8 @@ public class KommoSyncService
                 AccountId = lead.AccountId?.ToString(),
                 Phone = phone,
                 Email = email,
+                CustomFieldsJson = SerializeCustomFields(lead.CustomFieldsValues),
+                TagsJson = SerializeTags(lead.Embedded?.Tags),
             });
         }
 
@@ -162,6 +165,32 @@ public class KommoSyncService
         var field = fields.FirstOrDefault(f =>
             string.Equals(f.FieldCode, code, StringComparison.OrdinalIgnoreCase));
         return field?.Values?.FirstOrDefault()?.GetStringValue();
+    }
+
+    /// <summary>
+    /// Serializa os custom fields da Kommo num array JSON enxuto. Pega só
+    /// o primeiro value (a Kommo permite múltiplos mas raramente são usados).
+    /// </summary>
+    private static string? SerializeCustomFields(List<KommoApiCustomField>? fields)
+    {
+        if (fields is null || fields.Count == 0) return null;
+        var slim = fields.Select(f => new
+        {
+            field_id = f.FieldId,
+            field_name = f.FieldName,
+            field_code = f.FieldCode,
+            type = f.FieldType,
+            value = f.Values?.FirstOrDefault()?.GetStringValue(),
+        }).ToList();
+        return JsonSerializer.Serialize(slim);
+    }
+
+    private static string? SerializeTags(List<KommoApiTag>? tags)
+    {
+        if (tags is null || tags.Count == 0) return null;
+        var names = tags.Where(t => !string.IsNullOrWhiteSpace(t.Name)).Select(t => t.Name!).ToList();
+        if (names.Count == 0) return null;
+        return JsonSerializer.Serialize(names);
     }
 
     private static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int size)

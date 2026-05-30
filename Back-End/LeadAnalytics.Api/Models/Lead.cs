@@ -50,6 +50,16 @@ public class Lead
     // ─── RAW DATA (NÃO CONFIÁVEL) ────────────
     public string? Tags { get; set; }
 
+    // ─── DADOS DA KOMMO (sincronizados via REST + webhook) ────
+    /// <summary>
+    /// Array JSON dos custom fields do lead na Kommo:
+    /// <c>[{"field_id":123,"field_name":"Cidade","field_code":"CITY","type":"text","value":"São Paulo"}, …]</c>.
+    /// </summary>
+    public string? CustomFieldsJson { get; set; }
+
+    /// <summary>Array JSON das tags do lead na Kommo: <c>["VIP","Recorrente"]</c>.</summary>
+    public string? TagsJson { get; set; }
+
     // ─── RELACIONAMENTOS ─────────────────────
     public int? UnitId { get; set; }
     public Unit? Unit { get; set; }

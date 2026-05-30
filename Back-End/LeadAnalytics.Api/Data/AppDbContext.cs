@@ -59,6 +59,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.Property(l => l.AttendanceStatus).HasMaxLength(20);
             entity.HasIndex(l => new { l.TenantId, l.AttendanceStatus });
+
+            // Dados sincronizados da Kommo (custom_fields + tags) — JSONB pra
+            // permitir queries com operadores @> / ? quando vierem filtros.
+            entity.Property(l => l.CustomFieldsJson).HasColumnType("jsonb");
+            entity.Property(l => l.TagsJson).HasColumnType("jsonb");
         });
 
         // ─── Unit ────────────────────────────────────────────────

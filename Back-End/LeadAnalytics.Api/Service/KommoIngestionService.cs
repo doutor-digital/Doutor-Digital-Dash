@@ -100,6 +100,11 @@ public class KommoIngestionService(
                 lead.UpdatedAt = now;
             }
 
+            // Snapshot dos custom_fields + tags da Kommo (vem do sync REST; webhook
+            // ainda não preenche porque o payload é parcial — solução = sync periódico).
+            if (ev.CustomFieldsJson != null) lead.CustomFieldsJson = ev.CustomFieldsJson;
+            if (ev.TagsJson != null) lead.TagsJson = ev.TagsJson;
+
             // Etapa (status_id da Kommo): se a unidade mapeou esse status_id para uma etapa
             // canônica, gravamos o código LeadStages.* equivalente em CurrentStage — assim
             // as queries do dashboard (que comparam contra LeadStages.*) funcionam para leads

@@ -1,8 +1,10 @@
+using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.DTOs.Units;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Controllers;
 
@@ -17,11 +19,15 @@ namespace LeadAnalytics.Api.Controllers;
 public class UnitController(
     UnitService unitService,
     IConfiguration configuration,
-    IWebHostEnvironment env) : ControllerBase
+    IWebHostEnvironment env,
+    AppDbContext db,
+    KommoSyncService kommoSync) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
     private readonly IConfiguration _configuration = configuration;
     private readonly IWebHostEnvironment _env = env;
+    private readonly AppDbContext _db = db;
+    private readonly KommoSyncService _kommoSync = kommoSync;
 
     private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private const long MaxPhotoBytes = 5 * 1024 * 1024; // 5 MB
@@ -135,6 +141,65 @@ public class UnitController(
 
         var url = $"{BaseUrl()}/uploads/units/{fileName}";
         return Ok(new { url });
+    }
+
+    /// <summary>
+    /// Puxa leads/contatos existentes da Kommo (paginação 250/página, cap default
+    /// 5000) e ingere pelo mesmo pipeline do webhook — idempotente. Usa o token
+    /// do body OU o salvo na unidade.
+    /// </summary>
+    [HttpPost("{id:int}/sync-from-kommo")]
+    [ProducesResponseType(typeof(KommoSyncResponseDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SyncFromKommo(
+        int id, [FromBody] KommoSyncRequestDto body, CancellationToken ct)
+    {
+        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (unit is null) return NotFound();
+
+        var token = !string.IsNullOrWhiteSpace(body.AccessToken)
+            ? body.AccessToken.Trim()
+            : unit.KommoAccessToken;
+
+        if (string.IsNullOrWhiteSpace(token))
+            return BadRequest(new { message = "Informe um AccessToken da Kommo (ou salve um na unidade)." });
+
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain))
+            return BadRequest(new { message = "A unidade precisa ter um KommoSubdomain configurado (ex.: minhaclinica.kommo.com)." });
+
+        // Salva o token na unidade se o caller pediu (default true) e veio body.AccessToken
+        if (body.PersistToken && !string.IsNullOrWhiteSpace(body.AccessToken) && unit.KommoAccessToken != token)
+        {
+            unit.KommoAccessToken = token;
+            unit.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        var max = body.MaxLeads.HasValue ? Math.Clamp(body.MaxLeads.Value, 1, 20000) : 5000;
+
+        try
+        {
+            var result = await _kommoSync.SyncAsync(unit, token, max, ct);
+            return Ok(new KommoSyncResponseDto
+            {
+                Success = string.IsNullOrEmpty(result.Error),
+                Error = result.Error,
+                PagesFetched = result.PagesFetched,
+                LeadsFetched = result.LeadsFetched,
+                ContactsFetched = result.ContactsFetched,
+                LeadsPersisted = result.LeadsPersisted,
+                DurationMs = result.DurationMs,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(new KommoSyncResponseDto { Success = false, Error = ex.Message });
+        }
     }
 
     [HttpGet("quantity-leads")]

@@ -184,6 +184,10 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         if (dto.ResponsibleName is not null) unit.ResponsibleName = dto.ResponsibleName.Trim();
         if (dto.KommoSubdomain is not null) unit.KommoSubdomain = dto.KommoSubdomain.Trim();
         if (dto.KommoAccountId is not null) unit.KommoAccountId = dto.KommoAccountId.Trim();
+        if (dto.KommoAccessToken is not null)
+            unit.KommoAccessToken = string.IsNullOrWhiteSpace(dto.KommoAccessToken)
+                ? null
+                : dto.KommoAccessToken.Trim();
         if (dto.KommoStageMapJson is not null)
             unit.KommoStageMapJson = string.IsNullOrWhiteSpace(dto.KommoStageMapJson) ? null : dto.KommoStageMapJson.Trim();
         if (dto.IsActive.HasValue) unit.IsActive = dto.IsActive.Value;
@@ -366,6 +370,7 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         KommoSubdomain = u.KommoSubdomain,
         KommoAccountId = u.KommoAccountId,
         KommoStageMapJson = u.KommoStageMapJson,
+        HasKommoToken = !string.IsNullOrWhiteSpace(u.KommoAccessToken),
         WebhookUrl = BuildWebhookUrl(baseUrl, u.Slug),
         LeadCount = leadCount,
         CreatedAt = u.CreatedAt,

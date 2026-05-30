@@ -28,6 +28,8 @@ public class UnitDto
     public string? KommoSubdomain { get; set; }
     public string? KommoAccountId { get; set; }
     public string? KommoStageMapJson { get; set; }
+    /// <summary>True quando a unidade tem um access token salvo (não retorna o token em si).</summary>
+    public bool HasKommoToken { get; set; }
 
     /// <summary>URL completa do webhook desta unidade — cole na Kommo. Pode ser null se faltar slug.</summary>
     public string? WebhookUrl { get; set; }

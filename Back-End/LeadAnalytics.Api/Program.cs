@@ -181,6 +181,11 @@ builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
 builder.Services.AddScoped<KommoIngestionService>();
+builder.Services.AddScoped<KommoSyncService>();
+builder.Services.AddHttpClient<KommoApiClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddSingleton<WebhookExecutionLogger>();
 
 builder.Services.AddCors(options =>

@@ -37,6 +37,11 @@ public class UpdateUnitDto
     public string? KommoAccountId { get; set; }
 
     /// <summary>
+    /// Token de longa duração da API Kommo. String vazia limpa o token salvo.
+    /// </summary>
+    public string? KommoAccessToken { get; set; }
+
+    /// <summary>
     /// Mapa JSON status_id da Kommo → etapa canônica. Ex.:
     /// {"67548619":"AGENDADO_COM_PAGAMENTO"}. Etapas válidas: ENTRADA_LEAD,
     /// AGENDADO_SEM_PAGAMENTO, AGENDADO_COM_PAGAMENTO, NAO_COMPARECEU,

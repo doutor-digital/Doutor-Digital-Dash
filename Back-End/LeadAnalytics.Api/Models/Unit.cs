@@ -47,6 +47,14 @@ public class Unit
     public string? KommoSubdomain { get; set; }
 
     /// <summary>
+    /// Token de longa duração da API da Kommo (Perfil → Integrações → API).
+    /// Usado pra puxar leads/contatos existentes via REST quando o usuário
+    /// dispara <c>POST /units/{id}/sync-from-kommo</c>. Não é exposto em DTOs
+    /// de leitura; o front só sabe se está preenchido (HasKommoToken).
+    /// </summary>
+    public string? KommoAccessToken { get; set; }
+
+    /// <summary>
     /// Mapa JSON do status_id da Kommo para a etapa canônica do funil.
     /// Ex.: <c>{"67548619":"AGENDADO_COM_PAGAMENTO","67548607":"ENTRADA_LEAD"}</c>.
     /// Preenchido depois que o pipeline da Kommo da unidade existir. Vazio = sem

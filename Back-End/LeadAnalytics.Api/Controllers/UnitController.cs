@@ -178,9 +178,16 @@ public class UnitController(
 
         var max = body.MaxLeads.HasValue ? Math.Clamp(body.MaxLeads.Value, 1, 20000) : 5000;
 
+        // Desacopla o cancelamento do request HTTP — se o cliente do front
+        // desconectar (timeout 30s do axios), o sync continua até 10min.
+        // Importante porque sync de 5k leads paga + busca contatos pode
+        // levar 1-3min e queremos rodar até o fim mesmo offline.
+        using var syncCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        var syncCt = syncCts.Token;
+
         try
         {
-            var result = await _kommoSync.SyncAsync(unit, token, max, ct);
+            var result = await _kommoSync.SyncAsync(unit, token, max, syncCt);
             return Ok(new KommoSyncResponseDto
             {
                 Success = string.IsNullOrEmpty(result.Error),

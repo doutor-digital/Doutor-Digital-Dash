@@ -138,18 +138,42 @@ public class KommoAdapter
         AddUnsorted(env.Update, "update", sink, accountId);
 
         // Em "delete", aceitar/recusar são distinguidos por Action + *_result.
+        // Quando o usuário ACEITA, o Kommo manda os IDs reais dos leads criados —
+        // tratamos cada um como um lead "add" pra entrarem no nosso banco.
         foreach (var u in env.Delete ?? [])
         {
             var action = u.Action ?? "delete"; // accept | decline | delete
-            var leadIds = u.AcceptResult?.Leads ?? u.DeclineResult?.Leads;
-            var externalId = leadIds?.FirstOrDefault() ?? u.LeadId ?? u.Uid ?? string.Empty;
+
+            var acceptedLeadIds = u.AcceptResult?.Leads;
+            if (acceptedLeadIds is { Count: > 0 })
+            {
+                foreach (var leadId in acceptedLeadIds)
+                {
+                    sink.Add(new LeadEvent
+                    {
+                        SourceSystem = Source,
+                        EntityType = "lead",
+                        Action = "add",
+                        ExternalId = leadId,
+                        PipelineId = u.PipelineId,
+                        AccountId = u.AccountId ?? accountId,
+                    });
+                }
+                continue;
+            }
+
+            // Recusado ou delete puro — só log/auditoria.
+            var declinedOrJustDeleted = u.DeclineResult?.Leads?.FirstOrDefault()
+                ?? u.LeadId
+                ?? u.Uid
+                ?? string.Empty;
 
             sink.Add(new LeadEvent
             {
                 SourceSystem = Source,
                 EntityType = "unsorted",
                 Action = action,
-                ExternalId = externalId,
+                ExternalId = declinedOrJustDeleted,
                 PipelineId = u.PipelineId,
                 AccountId = u.AccountId ?? accountId,
             });
@@ -162,12 +186,31 @@ public class KommoAdapter
 
         foreach (var u in items)
         {
+            // Se o unsorted já traz um lead_id NUMÉRICO da Kommo, trata como
+            // evento de lead — assim o lead aparece no dashboard mesmo antes
+            // de ser triado/aceito manualmente na Kommo.
+            if (!string.IsNullOrWhiteSpace(u.LeadId)
+                && int.TryParse(u.LeadId, out var numericId) && numericId > 0)
+            {
+                sink.Add(new LeadEvent
+                {
+                    SourceSystem = Source,
+                    EntityType = "lead",
+                    Action = action,
+                    ExternalId = u.LeadId,
+                    PipelineId = u.PipelineId,
+                    AccountId = u.AccountId ?? accountId,
+                });
+                continue;
+            }
+
+            // Sem lead_id ainda: só guarda como evento "unsorted" pra log/audit.
             sink.Add(new LeadEvent
             {
                 SourceSystem = Source,
                 EntityType = "unsorted",
                 Action = action,
-                ExternalId = u.LeadId ?? u.Uid ?? string.Empty,
+                ExternalId = u.Uid ?? string.Empty,
                 PipelineId = u.PipelineId,
                 AccountId = u.AccountId ?? accountId,
             });

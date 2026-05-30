@@ -36,6 +36,12 @@ public class KommoWebhookController(
     [Consumes("application/x-www-form-urlencoded")]
     public async Task<IActionResult> Receive(string slug, CancellationToken ct)
     {
+        // Log de entrada visível em qualquer log level — quero ver no Railway
+        // que o webhook chegou mesmo se algo der errado depois.
+        _logger.LogInformation(
+            "🛬 Webhook Kommo chegou | slug={Slug} ct={ContentType} formKeys={Has}",
+            slug, Request.ContentType, Request.HasFormContentType);
+
         try
         {
             var unit = await _unitService.ResolveBySlugAsync(slug, ct);
@@ -43,7 +49,6 @@ public class KommoWebhookController(
             if (unit is null)
             {
                 _logger.LogWarning("Webhook Kommo para slug inexistente: {Slug}", slug);
-                // 2xx mesmo assim, pra não derrubar o webhook por engano de digitação.
                 return Ok(new { success = false, message = "Unidade não encontrada para o slug informado." });
             }
 
@@ -62,24 +67,41 @@ public class KommoWebhookController(
             }
 
             var form = await Request.ReadFormAsync(ct);
+
+            // Mostra as chaves principais que vieram (sem valores, pra não vazar dados).
+            // Ajuda muito a debugar quando "lead chegou mas nada salvou".
+            var topKeys = string.Join(",", form.Keys
+                .Select(k => k.Contains('[') ? k[..k.IndexOf('[')] : k)
+                .Distinct()
+                .Take(15));
+
+            _logger.LogInformation(
+                "📋 Webhook Kommo form recebido | slug={Slug} totalKeys={Total} topKeys=[{Keys}]",
+                slug, form.Keys.Count, topKeys);
+
             var payload = KommoFormParser.Parse(form);
             var events = _kommoAdapter.ToLeadEvents(payload);
 
+            // Quebra eventos por entityType + action pra ver o que tá entrando.
+            var summary = string.Join(",", events
+                .GroupBy(e => $"{e.EntityType}:{e.Action}")
+                .Select(g => $"{g.Key}={g.Count()}"));
+
+            _logger.LogInformation(
+                "🔀 Webhook Kommo eventos parseados | slug={Slug} total={Count} breakdown=[{Summary}]",
+                slug, events.Count, summary);
+
             var persisted = await _ingestionService.IngestAsync(events, unit, ct);
 
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "📨 Webhook Kommo | unidade={Slug} (tenant={Tenant}) account={Account} eventos={Count} leads={Persisted}",
-                    slug, unit.ClinicId, payload.Account?.Subdomain ?? payload.Account?.Id, events.Count, persisted);
-            }
+            _logger.LogInformation(
+                "✅ Webhook Kommo processado | unidade={Slug} (tenant={Tenant}) account={Account} eventos={Count} leadsPersistidos={Persisted}",
+                slug, unit.ClinicId, payload.Account?.Subdomain ?? payload.Account?.Id, events.Count, persisted);
 
             return Ok(new { success = true, eventsReceived = events.Count, leadsPersisted = persisted });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Erro ao processar webhook Kommo para slug {Slug}", slug);
-            // 2xx para evitar reenvio/desativação do webhook na Kommo.
             return Ok(new { success = false, message = "Erro ao processar webhook", error = ex.Message });
         }
     }

@@ -40,15 +40,17 @@ public class KommoIngestionService(
         {
             if (!string.Equals(ev.EntityType, "lead", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogDebug(
-                    "Kommo evento ignorado (entidade={Entity} ação={Action}) unidade={Slug}",
-                    ev.EntityType, ev.Action, unit.Slug);
+                _logger.LogInformation(
+                    "↪️ Evento ignorado (entidade={Entity} ação={Action} extId={ExtId}) unidade={Slug}",
+                    ev.EntityType, ev.Action, ev.ExternalId, unit.Slug);
                 continue;
             }
 
             if (!int.TryParse(ev.ExternalId, out var externalId) || externalId == 0)
             {
-                _logger.LogWarning("Kommo lead sem ExternalId numérico válido ('{Id}') — ignorado", ev.ExternalId);
+                _logger.LogWarning(
+                    "⚠️ Lead sem ExternalId numérico válido ('{Id}', ação={Action}) — ignorado",
+                    ev.ExternalId, ev.Action);
                 continue;
             }
 

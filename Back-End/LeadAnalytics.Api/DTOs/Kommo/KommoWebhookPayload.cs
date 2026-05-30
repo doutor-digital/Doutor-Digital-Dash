@@ -146,12 +146,45 @@ public class KommoUnsorted
     [JsonPropertyName("pipeline_id")] public string? PipelineId { get; set; }
     [JsonPropertyName("account_id")] public string? AccountId { get; set; }
     [JsonPropertyName("lead_id")] public string? LeadId { get; set; }
+    [JsonPropertyName("source_id")] public string? SourceId { get; set; }
+    [JsonPropertyName("source")] public string? Source { get; set; }
     [JsonPropertyName("created_at")] public string? CreatedAt { get; set; }
 
     /// <summary>"accept" ou "decline" (somente em delete).</summary>
     [JsonPropertyName("action")] public string? Action { get; set; }
     [JsonPropertyName("accept_result")] public KommoUnsortedResult? AcceptResult { get; set; }
     [JsonPropertyName("decline_result")] public KommoUnsortedResult? DeclineResult { get; set; }
+
+    /// <summary>
+    /// O Kommo aninha um lead-rascunho dentro de <c>data.leads[0]</c> com nome,
+    /// pipeline e os custom_fields que o formulário capturou.
+    /// </summary>
+    [JsonPropertyName("data")] public KommoUnsortedData? Data { get; set; }
+
+    /// <summary>Dados de origem da fonte (formulário, e-mail, etc.).</summary>
+    [JsonPropertyName("source_data")] public KommoUnsortedSourceData? SourceData { get; set; }
+}
+
+public class KommoUnsortedData
+{
+    [JsonPropertyName("leads")] public List<KommoUnsortedDraftLead>? Leads { get; set; }
+}
+
+public class KommoUnsortedDraftLead
+{
+    [JsonPropertyName("id")] public string? Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("status_id")] public string? StatusId { get; set; }
+    [JsonPropertyName("pipeline_id")] public string? PipelineId { get; set; }
+    [JsonPropertyName("source_id")] public string? SourceId { get; set; }
+    [JsonPropertyName("custom_fields")] public List<KommoCustomField>? CustomFields { get; set; }
+}
+
+public class KommoUnsortedSourceData
+{
+    [JsonPropertyName("form_id")] public string? FormId { get; set; }
+    [JsonPropertyName("form_name")] public string? FormName { get; set; }
+    [JsonPropertyName("from")] public string? From { get; set; }
 }
 
 public class KommoUnsortedResult

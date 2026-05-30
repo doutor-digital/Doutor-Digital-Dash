@@ -186,20 +186,30 @@ public class KommoAdapter
 
         foreach (var u in items)
         {
-            // Se o unsorted já traz um lead_id NUMÉRICO da Kommo, trata como
-            // evento de lead — assim o lead aparece no dashboard mesmo antes
-            // de ser triado/aceito manualmente na Kommo.
-            if (!string.IsNullOrWhiteSpace(u.LeadId)
-                && int.TryParse(u.LeadId, out var numericId) && numericId > 0)
+            // O Kommo aninha um lead-rascunho em data.leads[0] com nome e
+            // custom_fields capturados pelo formulário. Pegamos o que houver.
+            var draft = u.Data?.Leads?.FirstOrDefault();
+
+            // ID externo: prioriza lead_id top-level; senão data.leads[0].id.
+            var externalId = !string.IsNullOrWhiteSpace(u.LeadId) ? u.LeadId : draft?.Id;
+
+            // Se temos ID numérico, classificamos como evento de lead pra
+            // entrar no dashboard. Senão fica como unsorted (log/audit).
+            if (!string.IsNullOrWhiteSpace(externalId)
+                && int.TryParse(externalId, out var numericId) && numericId > 0)
             {
                 sink.Add(new LeadEvent
                 {
                     SourceSystem = Source,
                     EntityType = "lead",
                     Action = action,
-                    ExternalId = u.LeadId,
-                    PipelineId = u.PipelineId,
+                    ExternalId = externalId,
+                    Name = draft?.Name,
+                    Stage = draft?.StatusId ?? string.Empty,
+                    PipelineId = draft?.PipelineId ?? u.PipelineId,
                     AccountId = u.AccountId ?? accountId,
+                    Phone = FindCustomField(draft?.CustomFields, PhoneCode) ?? string.Empty,
+                    Email = FindCustomField(draft?.CustomFields, EmailCode),
                 });
                 continue;
             }
@@ -211,6 +221,7 @@ public class KommoAdapter
                 EntityType = "unsorted",
                 Action = action,
                 ExternalId = u.Uid ?? string.Empty,
+                Name = draft?.Name,
                 PipelineId = u.PipelineId,
                 AccountId = u.AccountId ?? accountId,
             });

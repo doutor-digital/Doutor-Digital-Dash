@@ -1777,6 +1777,122 @@ public class LeadService(
             .OrderByDescending(o => o.Quantidade)
             .ToListAsync(ct);
 
+        // Origens das consultas (leads agendados+)
+        var origensConsultas = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.AgendadoSemPagamento
+                     || l.CurrentStage == LeadStages.AgendadoComPagamento
+                     || l.CurrentStage == LeadStages.Faltou
+                     || l.CurrentStage == LeadStages.NaoFechouTratamento
+                     || l.CurrentStage == LeadStages.FechouTratamento
+                     || l.CurrentStage == LeadStages.EmTratamento)
+            .GroupBy(l => l.Source)
+            .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+            .OrderByDescending(o => o.Quantidade)
+            .ToListAsync(ct);
+
+        // Origens dos tratamentos fechados
+        var origensTratamentos = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.FechouTratamento)
+            .GroupBy(l => l.Source)
+            .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+            .OrderByDescending(o => o.Quantidade)
+            .ToListAsync(ct);
+
+        // ─── Funnel por tipo de base (geral/cadastro/resgate) ───────
+        // Uma única ida ao banco agrupando por LeadType e contando cada etapa.
+        var funnelRows = await baseQ
+            .GroupBy(l => l.LeadType ?? "indefinido")
+            .Select(g => new
+            {
+                Type = g.Key,
+                Total = g.Count(),
+                Interacoes = g.Count(l => l.HadInteraction == true),
+                Agendados = g.Count(l => l.CurrentStage == LeadStages.AgendadoSemPagamento
+                                      || l.CurrentStage == LeadStages.AgendadoComPagamento),
+                Consultas = g.Count(l => l.CurrentStage == LeadStages.EmTratamento
+                                      || l.CurrentStage == LeadStages.FechouTratamento
+                                      || l.CurrentStage == LeadStages.NaoFechouTratamento),
+                Tratamentos = g.Count(l => l.CurrentStage == LeadStages.FechouTratamento),
+                NoShow = g.Count(l => l.CurrentStage == LeadStages.Faltou
+                                    || l.AttendanceStatus == LeadStages.AttendedFaltou),
+            })
+            .ToListAsync(ct);
+
+        FunnelGroupDto BuildFunnel(string? type)
+        {
+            if (type == null)
+            {
+                return new FunnelGroupDto
+                {
+                    Total = funnelRows.Sum(r => r.Total),
+                    Interacoes = funnelRows.Sum(r => r.Interacoes),
+                    Agendados = funnelRows.Sum(r => r.Agendados),
+                    Consultas = funnelRows.Sum(r => r.Consultas),
+                    Tratamentos = funnelRows.Sum(r => r.Tratamentos),
+                    NoShow = funnelRows.Sum(r => r.NoShow),
+                };
+            }
+            var row = funnelRows.FirstOrDefault(r => r.Type == type);
+            if (row == null) return new FunnelGroupDto();
+            return new FunnelGroupDto
+            {
+                Total = row.Total,
+                Interacoes = row.Interacoes,
+                Agendados = row.Agendados,
+                Consultas = row.Consultas,
+                Tratamentos = row.Tratamentos,
+                NoShow = row.NoShow,
+            };
+        }
+
+        // ─── Séries temporais ─────────────────────────────────────
+        // Projeção leve pra agregar em memória (evita necessidade de funções de data
+        // específicas do provider). N tipicamente < 50k por período no caso de uso.
+        var dateStageRows = await baseQ
+            .Select(l => new { l.CreatedAt, l.CurrentStage })
+            .ToListAsync(ct);
+
+        static string WeekKey(DateTime d)
+        {
+            var week = System.Globalization.ISOWeek.GetWeekOfYear(d);
+            var year = System.Globalization.ISOWeek.GetYear(d);
+            return $"{year}-W{week:D2}";
+        }
+
+        var leadsPorSemana = dateStageRows
+            .GroupBy(r => WeekKey(r.CreatedAt))
+            .OrderBy(g => g.Key)
+            .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
+            .ToList();
+
+        var consultasPorSemana = dateStageRows
+            .Where(r => r.CurrentStage == LeadStages.EmTratamento
+                     || r.CurrentStage == LeadStages.FechouTratamento
+                     || r.CurrentStage == LeadStages.NaoFechouTratamento)
+            .GroupBy(r => WeekKey(r.CreatedAt))
+            .OrderBy(g => g.Key)
+            .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
+            .ToList();
+
+        var tratamentosPorSemana = dateStageRows
+            .Where(r => r.CurrentStage == LeadStages.FechouTratamento)
+            .GroupBy(r => WeekKey(r.CreatedAt))
+            .OrderBy(g => g.Key)
+            .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
+            .ToList();
+
+        // Dia da semana: .NET DayOfWeek = 0(Dom)..6(Sab) → mapear para 1..7.
+        var dowCounts = dateStageRows
+            .GroupBy(r => (int)r.CreatedAt.DayOfWeek)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var leadsPorDiaSemana = Enumerable.Range(0, 7)
+            .Select(d => new DiaSemanaQtdDto
+            {
+                Dia = d + 1,
+                Quantidade = dowCounts.TryGetValue(d, out var q) ? q : 0,
+            })
+            .ToList();
+
         var conversaoRate = totalLeads > 0 ? consultas * 100.0 / totalLeads : 0;
         var pagamentoRate = totalLeads > 0 ? comPag * 100.0 / totalLeads : 0;
         var semPagRate = totalLeads > 0 ? semPag * 100.0 / totalLeads : 0;
@@ -1807,6 +1923,15 @@ public class LeadService(
             States = states,
             Etapas = etapas,
             Origens = origens,
+            OrigensConsultas = origensConsultas,
+            OrigensTratamentos = origensTratamentos,
+            FunnelLeads = BuildFunnel(null),
+            FunnelCadastro = BuildFunnel("cadastro"),
+            FunnelResgate = BuildFunnel("resgate"),
+            LeadsPorSemana = leadsPorSemana,
+            ConsultasPorSemana = consultasPorSemana,
+            TratamentosPorSemana = tratamentosPorSemana,
+            LeadsPorDiaSemana = leadsPorDiaSemana,
         };
     }
 

@@ -172,17 +172,12 @@ builder.Services.AddSingleton<IContactsBulkDeleteJobQueue, InMemoryContactsBulkD
 builder.Services.AddScoped<ContactsBulkDeleteJobStore>();
 builder.Services.AddHostedService<ContactsBulkDeleteJobWorker>();
 
-// ── Webhook pipeline: enqueue + dispatch + processor ──────────────────────────
-builder.Services.AddScoped<WebhookEnqueueService>();
-builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.StageWebhookDispatcher>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.ProcessarWebhooksJob>();
+// ── Background jobs ──────────────────────────────────────────────────────────
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPreenchimentoPendenteJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasadoJob>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.ReconciliacaoCloudiaJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
-builder.Services.AddScoped<CloudiaAdapter>();
 builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
 builder.Services.AddScoped<KommoIngestionService>();

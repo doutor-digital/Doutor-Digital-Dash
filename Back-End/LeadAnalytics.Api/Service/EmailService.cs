@@ -200,7 +200,7 @@ public class EmailService
               {RenderFeatureRow("Revisar leads", "Confira e aprove leads que chegaram pelos seus canais.")}
               {RenderFeatureRow("Acompanhar consultas", "Veja agendamentos, comparecimentos e tratamentos fechados.")}
               {RenderFeatureRow("Visualizar métricas", "Conversão, origem dos leads, performance por unidade.")}
-              {RenderFeatureRow("Conectar integrações", "Cloudia, Meta Ads, n8n e mais — tudo num lugar só.")}
+              {RenderFeatureRow("Conectar integrações", "Kommo CRM, Meta Ads, n8n e mais — tudo num lugar só.")}
             </table>",
             ctaLabel: "Acessar o painel",
             ctaUrl: dashboardUrl,
@@ -214,7 +214,7 @@ public class EmailService
             $"Bem-vindo à Doutor Digital, {userName}!\n\n" +
             $"Sua conta foi ativada na unidade {unitName}.\n\n" +
             $"O que você pode fazer agora:\n" +
-            $"  • Revisar leads recebidos pela Cloudia\n" +
+            $"  • Revisar leads recebidos pelos seus canais\n" +
             $"  • Acompanhar consultas e tratamentos\n" +
             $"  • Visualizar métricas em tempo real\n" +
             $"  • Conectar integrações\n\n" +

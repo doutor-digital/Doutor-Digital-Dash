@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using LeadAnalytics.Api.DTOs.Cloudia;
 
 namespace LeadAnalytics.Api.DTOs.Response;
 

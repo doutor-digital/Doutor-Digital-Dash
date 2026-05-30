@@ -1,5 +1,4 @@
-﻿using LeadAnalytics.Api.DTOs.Cloudia;
-using LeadAnalytics.Api.DTOs.Response;
+﻿using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.DTOs.Timeline;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -119,37 +118,6 @@ public class WebhooksController(
             });
         }
         return Ok(timeline);
-    }
-
-    /// <summary>
-    /// Webhook de entrada da Cloudia.
-    /// O endpoint apenas ENFILEIRA o evento em webhook_envelopes (idempotente).
-    /// O processamento real (criação/atualização de Lead, Consulta, Tratamento)
-    /// é feito em background por <see cref="Service.WebhookProcessorJob"/>.
-    ///
-    /// Devolve 200 quase instantâneo — não bloqueia a Cloudia em retries.
-    /// </summary>
-    [HttpPost("cloudia")]
-    [AllowAnonymous]
-    public async Task<IActionResult> Cloudia(
-        [FromBody] CloudiaWebhookDto dto,
-        [FromServices] Service.WebhookEnqueueService enqueueService,
-        CancellationToken ct)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var result = await enqueueService.EnqueueCloudiaAsync(dto, ct);
-
-        return result.Status switch
-        {
-            Service.EnqueueStatus.Invalid =>
-                BadRequest(new { message = result.Reason ?? "Payload inválido" }),
-            Service.EnqueueStatus.Duplicate =>
-                Ok(new { status = "duplicate", message = "Evento já processado anteriormente." }),
-            _ =>
-                Ok(new { status = "queued", envelopeId = result.EnvelopeId }),
-        };
     }
 
     /// <summary>
@@ -427,15 +395,6 @@ public class WebhooksController(
         if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
 
         var result = await _leadService.GetVerifySourceFinal(clinicId);
-        return Ok(result);
-    }
-
-    [HttpGet("origem-cloudia")]
-    public async Task<IActionResult> GetOrigens(int clinicId)
-    {
-        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
-
-        var result = await _leadService.GetCheckSourceCloudia(clinicId);
         return Ok(result);
     }
 

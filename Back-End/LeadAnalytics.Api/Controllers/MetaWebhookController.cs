@@ -1,6 +1,5 @@
 ﻿using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.DTOs;
-using LeadAnalytics.Api.DTOs.Cloudia;
 using LeadAnalytics.Api.DTOs.Kommo;
 using LeadAnalytics.Api.DTOs.Meta;
 using LeadAnalytics.Api.Service;
@@ -13,16 +12,12 @@ namespace LeadAnalytics.Api.Controllers;
 public class MetaWebhookController(
     MetaWebhookService metaWebhookService,
     ILogger<MetaWebhookController> logger,
-    LeadService leadService,
     LeadEventService leadEventService,
-    CloudiaAdapter cloudiaAdapter,
     KommoAdapter kommoAdapter) : ControllerBase
 {
     private readonly MetaWebhookService _metaWebhookService = metaWebhookService;
     private readonly ILogger<MetaWebhookController> _logger = logger;
-    private readonly LeadService _leadService = leadService;
     private readonly LeadEventService _leadEventService = leadEventService;
-    private readonly CloudiaAdapter _cloudiaAdapter = cloudiaAdapter;
     private readonly KommoAdapter _kommoAdapter = kommoAdapter;
     /// <summary>
     /// Endpoint de verificação do webhook da Meta
@@ -109,50 +104,6 @@ public class MetaWebhookController(
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Erro ao processar webhook do n8n");
-
-            return Ok(new
-            {
-                success = false,
-                message = "Erro ao processar webhook",
-                error = ex.Message
-            });
-        }
-    }
-
-    // <summary>
-    /// Recebe webhooks da Cloudia
-    /// Eventos: CUSTOMER_CREATED, CUSTOMER_UPDATED, CUSTOMER_TAGS_UPDATED, USER_ASSIGNED_TO_CUSTOMER
-    /// </summary>
-    [HttpPost("cloudia")]
-    public async Task<IActionResult> ReceiveCloudiaWebhook([FromBody] CloudiaWebhookDto webhook)
-    {
-        try
-        {
-            _logger.LogInformation("📨 Webhook Cloudia recebido: {Type}", webhook.Type);
-
-            var leadEvent = _cloudiaAdapter.ToLeadEvent(webhook);
-            await _leadEventService.ProcessAsync(leadEvent);
-
-            var result = await _leadService.SaveLeadAsync(webhook);
-
-            var message = result.Result switch
-            {
-                ProcessResult.Created => "Lead criado com sucesso",
-                ProcessResult.Updated => "Lead atualizado com sucesso",
-                ProcessResult.Ignored => "Evento ignorado",
-                _ => "Processado"
-            };
-
-            return Ok(new
-            {
-                success = true,
-                message,
-                result = result.Result.ToString()
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Erro ao processar webhook da Cloudia");
 
             return Ok(new
             {

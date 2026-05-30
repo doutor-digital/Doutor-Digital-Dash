@@ -57,8 +57,8 @@ public class SdrLeadsController : ControllerBase
     ///   "limit": 500
     /// }
     /// </summary>
-    [HttpPost("sync-from-cloudia")]
-    public async Task<IActionResult> SyncFromCloudia(
+    [HttpPost("sync-from-leads")]
+    public async Task<IActionResult> SyncFromLeads(
         [FromBody] SdrSyncRequestDto? body,
         CancellationToken ct)
     {

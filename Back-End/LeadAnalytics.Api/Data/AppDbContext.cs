@@ -34,7 +34,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Consultation> Consultations { get; set; }
     public DbSet<Treatment> Treatments { get; set; }
     public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
-    public DbSet<WebhookEnvelope> WebhookEnvelopes { get; set; }
     public DbSet<RecoveryAttempt> RecoveryAttempts { get; set; }
     public DbSet<LeadPaymentReceipt> LeadPaymentReceipts { get; set; }
 
@@ -384,25 +383,5 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => new { e.TreatmentId, e.Sequence }).IsUnique();
         });
 
-        // ─── WebhookEnvelope ────────────────────────────────────
-        modelBuilder.Entity<WebhookEnvelope>(entity =>
-        {
-            entity.ToTable("webhook_envelopes");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Provider).HasMaxLength(30).IsRequired();
-            entity.Property(e => e.ContactId).HasMaxLength(120).IsRequired();
-            entity.Property(e => e.StageFrom).HasMaxLength(60);
-            entity.Property(e => e.StageTo).HasMaxLength(60).IsRequired();
-            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
-            entity.Property(e => e.LastError).HasMaxLength(2000);
-
-            // CHAVE DE IDEMPOTÊNCIA — duplicate webhook é absorvido pelo INSERT ON CONFLICT.
-            entity.HasIndex(e => new { e.Provider, e.ContactId, e.StageTo, e.OccurredAt })
-                  .IsUnique();
-
-            // Worker scheduler — pega pending por NextAttemptAt asc
-            entity.HasIndex(e => new { e.Status, e.NextAttemptAt });
-            entity.HasIndex(e => e.TenantId);
-        });
     }
 }

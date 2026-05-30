@@ -184,6 +184,8 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<CloudiaAdapter>();
 builder.Services.AddScoped<KommoAdapter>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
+builder.Services.AddScoped<KommoIngestionService>();
 
 builder.Services.AddCors(options =>
 {

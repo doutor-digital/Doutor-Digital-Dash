@@ -67,6 +67,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.ToTable("units");
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.ClinicId).IsUnique();
+
+            // Slug compõe a URL do webhook (/webhooks/kommo/{slug}); precisa ser único.
+            entity.HasIndex(e => e.Slug).IsUnique();
+            entity.Property(e => e.KommoStageMapJson).HasColumnType("jsonb");
         });
 
         // ─── Attendant ───────────────────────────────────────────

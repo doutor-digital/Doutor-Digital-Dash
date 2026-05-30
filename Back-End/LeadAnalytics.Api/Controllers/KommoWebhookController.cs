@@ -1,0 +1,86 @@
+using LeadAnalytics.Api.Adapters;
+using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace LeadAnalytics.Api.Controllers;
+
+/// <summary>
+/// Webhook dedicado da Kommo, isolado POR UNIDADE.
+///
+/// Cada unidade tem um slug único e uma URL própria:
+/// <c>POST /webhooks/kommo/{slug}</c>. O usuário cola essa URL em
+/// Configurações → Integrações → Web hooks da conta Kommo daquela unidade.
+/// Assim os dados já entram separados por tenant (Unit.ClinicId).
+///
+/// A Kommo envia <c>application/x-www-form-urlencoded</c> com notação de colchetes
+/// (ex.: <c>leads[add][0][id]=123</c>) e espera resposta 2xx em até 2 segundos —
+/// senão reenvia (até 5x) e pode desativar o webhook. Por isso respondemos sempre
+/// 2xx, rápido, e nunca lançamos exceção pra fora.
+/// </summary>
+[ApiController]
+[AllowAnonymous]
+[Route("webhooks/kommo")]
+public class KommoWebhookController(
+    UnitService unitService,
+    KommoAdapter kommoAdapter,
+    KommoIngestionService ingestionService,
+    ILogger<KommoWebhookController> logger) : ControllerBase
+{
+    private readonly UnitService _unitService = unitService;
+    private readonly KommoAdapter _kommoAdapter = kommoAdapter;
+    private readonly KommoIngestionService _ingestionService = ingestionService;
+    private readonly ILogger<KommoWebhookController> _logger = logger;
+
+    [HttpPost("{slug}")]
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> Receive(string slug, CancellationToken ct)
+    {
+        try
+        {
+            var unit = await _unitService.ResolveBySlugAsync(slug, ct);
+
+            if (unit is null)
+            {
+                _logger.LogWarning("Webhook Kommo para slug inexistente: {Slug}", slug);
+                // 2xx mesmo assim, pra não derrubar o webhook por engano de digitação.
+                return Ok(new { success = false, message = "Unidade não encontrada para o slug informado." });
+            }
+
+            if (!unit.IsActive)
+            {
+                _logger.LogInformation("Webhook Kommo para unidade inativa: {Slug}", slug);
+                return Ok(new { success = false, message = "Unidade inativa." });
+            }
+
+            if (!Request.HasFormContentType)
+            {
+                _logger.LogWarning(
+                    "Webhook Kommo ({Slug}) sem corpo de formulário (Content-Type={ContentType})",
+                    slug, Request.ContentType);
+                return Ok(new { success = false, message = "Formato inesperado: esperado x-www-form-urlencoded" });
+            }
+
+            var form = await Request.ReadFormAsync(ct);
+            var payload = KommoFormParser.Parse(form);
+            var events = _kommoAdapter.ToLeadEvents(payload);
+
+            var persisted = await _ingestionService.IngestAsync(events, unit, ct);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "📨 Webhook Kommo | unidade={Slug} (tenant={Tenant}) account={Account} eventos={Count} leads={Persisted}",
+                    slug, unit.ClinicId, payload.Account?.Subdomain ?? payload.Account?.Id, events.Count, persisted);
+            }
+
+            return Ok(new { success = true, eventsReceived = events.Count, leadsPersisted = persisted });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Erro ao processar webhook Kommo para slug {Slug}", slug);
+            // 2xx para evitar reenvio/desativação do webhook na Kommo.
+            return Ok(new { success = false, message = "Erro ao processar webhook", error = ex.Message });
+        }
+    }
+}

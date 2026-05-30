@@ -36,6 +36,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
     public DbSet<RecoveryAttempt> RecoveryAttempts { get; set; }
     public DbSet<LeadPaymentReceipt> LeadPaymentReceipts { get; set; }
+    public DbSet<WebhookExecution> WebhookExecutions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -381,6 +382,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(e => e.TreatmentId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => new { e.TreatmentId, e.Sequence }).IsUnique();
+        });
+
+        // ─── WebhookExecution ───────────────────────────────────
+        modelBuilder.Entity<WebhookExecution>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Provider).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Slug).HasMaxLength(120);
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Method).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Path).HasMaxLength(400).IsRequired();
+            entity.Property(e => e.Ip).HasMaxLength(64);
+            entity.Property(e => e.UserAgent).HasMaxLength(400);
+            entity.Property(e => e.ContentType).HasMaxLength(120);
+            entity.Property(e => e.KommoAccountId).HasMaxLength(40);
+            entity.Property(e => e.KommoSubdomain).HasMaxLength(120);
+
+            // Queries do painel — listagens por unidade/status ordenadas por data.
+            entity.HasIndex(e => e.ReceivedAt);
+            entity.HasIndex(e => new { e.UnitId, e.ReceivedAt });
+            entity.HasIndex(e => new { e.TenantId, e.ReceivedAt });
+            entity.HasIndex(e => new { e.Status, e.ReceivedAt });
         });
 
     }

@@ -25,8 +25,11 @@ public class Unit
     public string? Cnpj { get; set; }
     public string? Phone { get; set; }
     public string? AddressLine { get; set; }
+    public string? AddressNumber { get; set; }
+    public string? Neighborhood { get; set; }
     public string? City { get; set; }
     public string? State { get; set; }
+    public string? ZipCode { get; set; }
 
     /// <summary>URL da foto/logo da unidade. Default na imagem da Kommo.</summary>
     public string? PhotoUrl { get; set; }

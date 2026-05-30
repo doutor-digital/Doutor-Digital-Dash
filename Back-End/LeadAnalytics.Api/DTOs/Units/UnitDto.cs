@@ -16,8 +16,11 @@ public class UnitDto
     public string? Cnpj { get; set; }
     public string? Phone { get; set; }
     public string? AddressLine { get; set; }
+    public string? AddressNumber { get; set; }
+    public string? Neighborhood { get; set; }
     public string? City { get; set; }
     public string? State { get; set; }
+    public string? ZipCode { get; set; }
     public string? PhotoUrl { get; set; }
     public string? ResponsibleName { get; set; }
     public bool IsActive { get; set; }

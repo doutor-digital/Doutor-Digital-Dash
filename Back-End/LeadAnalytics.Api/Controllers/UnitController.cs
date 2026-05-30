@@ -2,6 +2,7 @@ using LeadAnalytics.Api.DTOs.Units;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
 
 namespace LeadAnalytics.Api.Controllers;
 
@@ -13,10 +14,17 @@ namespace LeadAnalytics.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("units")]
-public class UnitController(UnitService unitService, IConfiguration configuration) : ControllerBase
+public class UnitController(
+    UnitService unitService,
+    IConfiguration configuration,
+    IWebHostEnvironment env) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
     private readonly IConfiguration _configuration = configuration;
+    private readonly IWebHostEnvironment _env = env;
+
+    private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
+    private const long MaxPhotoBytes = 5 * 1024 * 1024; // 5 MB
 
     /// <summary>Base pública usada para montar a URL do webhook (config "Webhook:PublicBaseUrl" ou host atual).</summary>
     private string BaseUrl()
@@ -80,6 +88,42 @@ public class UnitController(UnitService unitService, IConfiguration configuratio
         {
             return Conflict(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Upload da foto/logo da unidade. Aceita multipart/form-data com o campo "file"
+    /// (jpg/png/webp, max 5MB). Retorna { url } absoluto para colar em PhotoUrl
+    /// no POST/PUT /units. A foto é hospedada na própria API em /uploads/units/.
+    /// </summary>
+    [HttpPost("upload-photo")]
+    [RequestSizeLimit(MaxPhotoBytes)]
+    public async Task<IActionResult> UploadPhoto(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "Envie um arquivo no campo 'file'." });
+
+        if (file.Length > MaxPhotoBytes)
+            return BadRequest(new { message = "Foto excede 5 MB." });
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (string.IsNullOrEmpty(ext) || !AllowedPhotoExtensions.Contains(ext))
+            return BadRequest(new { message = "Formato inválido. Use jpg, png ou webp." });
+
+        var webRoot = string.IsNullOrEmpty(_env.WebRootPath)
+            ? Path.Combine(_env.ContentRootPath, "wwwroot")
+            : _env.WebRootPath;
+
+        var folder = Path.Combine(webRoot, "uploads", "units");
+        Directory.CreateDirectory(folder);
+
+        var fileName = $"{Guid.NewGuid():N}{ext}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using (var stream = System.IO.File.Create(fullPath))
+            await file.CopyToAsync(stream, ct);
+
+        var url = $"{BaseUrl()}/uploads/units/{fileName}";
+        return Ok(new { url });
     }
 
     [HttpGet("quantity-leads")]

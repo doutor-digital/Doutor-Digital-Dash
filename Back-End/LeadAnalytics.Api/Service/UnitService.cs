@@ -145,8 +145,11 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
             Cnpj = NormalizeCnpj(dto.Cnpj),
             Phone = dto.Phone?.Trim(),
             AddressLine = dto.AddressLine?.Trim(),
+            AddressNumber = dto.AddressNumber?.Trim(),
+            Neighborhood = dto.Neighborhood?.Trim(),
             City = dto.City?.Trim(),
             State = dto.State?.Trim().ToUpperInvariant(),
+            ZipCode = NormalizeZipCode(dto.ZipCode),
             PhotoUrl = string.IsNullOrWhiteSpace(dto.PhotoUrl) ? DefaultPhotoUrl : dto.PhotoUrl!.Trim(),
             ResponsibleName = dto.ResponsibleName?.Trim(),
             KommoSubdomain = dto.KommoSubdomain?.Trim(),
@@ -172,8 +175,11 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         if (dto.Cnpj is not null) unit.Cnpj = NormalizeCnpj(dto.Cnpj);
         if (dto.Phone is not null) unit.Phone = dto.Phone.Trim();
         if (dto.AddressLine is not null) unit.AddressLine = dto.AddressLine.Trim();
+        if (dto.AddressNumber is not null) unit.AddressNumber = dto.AddressNumber.Trim();
+        if (dto.Neighborhood is not null) unit.Neighborhood = dto.Neighborhood.Trim();
         if (dto.City is not null) unit.City = dto.City.Trim();
         if (dto.State is not null) unit.State = dto.State.Trim().ToUpperInvariant();
+        if (dto.ZipCode is not null) unit.ZipCode = NormalizeZipCode(dto.ZipCode);
         if (dto.PhotoUrl is not null) unit.PhotoUrl = string.IsNullOrWhiteSpace(dto.PhotoUrl) ? DefaultPhotoUrl : dto.PhotoUrl.Trim();
         if (dto.ResponsibleName is not null) unit.ResponsibleName = dto.ResponsibleName.Trim();
         if (dto.KommoSubdomain is not null) unit.KommoSubdomain = dto.KommoSubdomain.Trim();
@@ -221,8 +227,11 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         Cnpj = u.Cnpj,
         Phone = u.Phone,
         AddressLine = u.AddressLine,
+        AddressNumber = u.AddressNumber,
+        Neighborhood = u.Neighborhood,
         City = u.City,
         State = u.State,
+        ZipCode = u.ZipCode,
         PhotoUrl = u.PhotoUrl ?? DefaultPhotoUrl,
         ResponsibleName = u.ResponsibleName,
         IsActive = u.IsActive,
@@ -280,6 +289,13 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
     {
         if (string.IsNullOrWhiteSpace(cnpj)) return null;
         var digits = new string(cnpj.Where(char.IsDigit).ToArray());
+        return digits.Length == 0 ? null : digits;
+    }
+
+    private static string? NormalizeZipCode(string? zip)
+    {
+        if (string.IsNullOrWhiteSpace(zip)) return null;
+        var digits = new string(zip.Where(char.IsDigit).ToArray());
         return digits.Length == 0 ? null : digits;
     }
 }

@@ -20,10 +20,15 @@ public class UpdateUnitDto
 
     public string? Phone { get; set; }
     public string? AddressLine { get; set; }
+    public string? AddressNumber { get; set; }
+    public string? Neighborhood { get; set; }
     public string? City { get; set; }
 
     [StringLength(2, MinimumLength = 2, ErrorMessage = "UF deve ter 2 letras.")]
     public string? State { get; set; }
+
+    [StringLength(10)]
+    public string? ZipCode { get; set; }
 
     public string? PhotoUrl { get; set; }
     public string? ResponsibleName { get; set; }

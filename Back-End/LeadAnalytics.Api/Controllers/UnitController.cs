@@ -26,13 +26,24 @@ public class UnitController(
     private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private const long MaxPhotoBytes = 5 * 1024 * 1024; // 5 MB
 
-    /// <summary>Base pública usada para montar a URL do webhook (config "Webhook:PublicBaseUrl" ou host atual).</summary>
+    /// <summary>
+    /// Base pública usada para montar a URL do webhook (config <c>Webhook:PublicBaseUrl</c>
+    /// ou host atual). Força <c>https://</c> quando o host não é localhost porque a Kommo
+    /// não consegue entregar via <c>http://</c> em hosts atrás de proxy com 301 redirect
+    /// (Railway, Cloudflare, etc.) — o POST body se perde no redirect.
+    /// </summary>
     private string BaseUrl()
     {
         var configured = _configuration["Webhook:PublicBaseUrl"];
-        return string.IsNullOrWhiteSpace(configured)
-            ? $"{Request.Scheme}://{Request.Host}"
-            : configured.TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured.TrimEnd('/');
+
+        var host = Request.Host.Host;
+        var isLocal = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                   || host.StartsWith("127.")
+                   || host == "::1";
+        var scheme = isLocal ? Request.Scheme : "https";
+        return $"{scheme}://{Request.Host}";
     }
 
     /// <summary>Lista todas as unidades (com URL do webhook e contagem de leads).</summary>

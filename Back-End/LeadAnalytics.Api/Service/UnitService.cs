@@ -195,20 +195,148 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         return ToDto(unit, baseUrl, count);
     }
 
+    /// <summary>
+    /// Apaga a unidade e TUDO ligado a ela (leads e dependentes em cascata,
+    /// atendentes, convites, atribuições, eventos de origem, user_units).
+    /// Não toca em <c>users</c> — apenas zera <c>UnitId</c> de quem aponta pra cá
+    /// pra manter o login funcionando. Tudo dentro de uma única transação:
+    /// se algo falhar no meio, nada é apagado.
+    /// </summary>
     public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
-        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
+        var unit = await _db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
         if (unit is null) return false;
 
-        var hasLeads = await _db.Leads.AnyAsync(l => l.TenantId == unit.ClinicId, ct);
-        if (hasLeads)
-            throw new InvalidOperationException(
-                "Esta unidade possui leads vinculados. Desative-a (IsActive=false) em vez de apagar.");
+        var clinicId = unit.ClinicId;
 
-        _db.Units.Remove(unit);
-        await _db.SaveChangesAsync(ct);
-        _logger.LogInformation("Unidade removida: {Id} (ClinicId={ClinicId})", id, unit.ClinicId);
-        return true;
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            // ── 1) Quebra qualquer referência de users.UnitId pra essa unidade.
+            //       (a coluna existe no banco mas não está mapeada no modelo User —
+            //       usamos SQL direto pra zerar.)
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE users SET \"UnitId\" = NULL WHERE \"UnitId\" = {id}", ct);
+
+            // ── 2) Filhos profundos de leads (a remoção dos leads é o ponto pivot;
+            //       muita coisa só consegue ser apagada se for antes dos leads)
+            //       leads.TenantId == clinicId cobre tudo do tenant.
+            //       Coleta os ids dos leads que vamos remover.
+            var leadIds = await _db.Leads
+                .Where(l => l.TenantId == clinicId)
+                .Select(l => l.Id)
+                .ToListAsync(ct);
+
+            if (leadIds.Count > 0)
+            {
+                await _db.LeadInteractions
+                    .Where(i => _db.LeadConversations
+                        .Where(c => leadIds.Contains(c.LeadId))
+                        .Select(c => c.Id).Contains(i.LeadConversationId))
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.LeadConversations
+                    .Where(c => leadIds.Contains(c.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.LeadStageHistories
+                    .Where(h => leadIds.Contains(h.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.LeadAssignments
+                    .Where(a => leadIds.Contains(a.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.RecoveryAttempts
+                    .Where(r => leadIds.Contains(r.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.LeadPaymentReceipts
+                    .Where(r => leadIds.Contains(r.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                // payments → payment_splits primeiro
+                var paymentIds = await _db.Payments
+                    .Where(p => leadIds.Contains(p.LeadId))
+                    .Select(p => p.Id)
+                    .ToListAsync(ct);
+
+                if (paymentIds.Count > 0)
+                {
+                    await _db.PaymentSplits
+                        .Where(s => paymentIds.Contains(s.PaymentId))
+                        .ExecuteDeleteAsync(ct);
+                    await _db.Payments
+                        .Where(p => paymentIds.Contains(p.Id))
+                        .ExecuteDeleteAsync(ct);
+                }
+
+                // treatments → installments primeiro
+                var treatmentIds = await _db.Treatments
+                    .Where(t => leadIds.Contains(t.LeadId))
+                    .Select(t => t.Id)
+                    .ToListAsync(ct);
+
+                if (treatmentIds.Count > 0)
+                {
+                    await _db.TreatmentInstallments
+                        .Where(i => treatmentIds.Contains(i.TreatmentId))
+                        .ExecuteDeleteAsync(ct);
+                    await _db.Treatments
+                        .Where(t => treatmentIds.Contains(t.Id))
+                        .ExecuteDeleteAsync(ct);
+                }
+
+                await _db.Consultations
+                    .Where(c => leadIds.Contains(c.LeadId))
+                    .ExecuteDeleteAsync(ct);
+
+                // attribuição / eventos de origem por TenantId
+                await _db.LeadAttributions
+                    .Where(a => a.TenantId == clinicId)
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.OriginEvents
+                    .Where(e => e.TenantId == clinicId)
+                    .ExecuteDeleteAsync(ct);
+
+                await _db.Leads
+                    .Where(l => leadIds.Contains(l.Id))
+                    .ExecuteDeleteAsync(ct);
+            }
+
+            // ── 3) Filhos da própria unit (UnitId / unit_id)
+            await _db.Invitations
+                .Where(i => i.UnitId == id)
+                .ExecuteDeleteAsync(ct);
+
+            await _db.Attendants
+                .Where(a => a.UnitId == id)
+                .ExecuteDeleteAsync(ct);
+
+            await _db.UserUnits
+                .Where(uu => uu.UnitId == id)
+                .ExecuteDeleteAsync(ct);
+
+            // ── 4) Finalmente, a unidade
+            await _db.Units
+                .Where(u => u.Id == id)
+                .ExecuteDeleteAsync(ct);
+
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation(
+                "Unidade removida: {Id} (ClinicId={ClinicId}) — apagou {LeadCount} lead(s)",
+                id, clinicId, leadIds.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(ct);
+            _logger.LogError(ex, "Falha ao remover unidade {Id} (ClinicId={ClinicId})", id, clinicId);
+            throw new InvalidOperationException(
+                $"Não foi possível remover a unidade: {ex.Message}", ex);
+        }
     }
 
     /// <summary>Monta a URL pública do webhook da Kommo para um slug.</summary>

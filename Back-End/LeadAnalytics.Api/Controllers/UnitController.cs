@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.DTOs.Units;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -21,13 +22,15 @@ public class UnitController(
     IConfiguration configuration,
     IWebHostEnvironment env,
     AppDbContext db,
-    KommoSyncService kommoSync) : ControllerBase
+    KommoSyncService kommoSync,
+    KommoApiClient kommoApi) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
     private readonly IConfiguration _configuration = configuration;
     private readonly IWebHostEnvironment _env = env;
     private readonly AppDbContext _db = db;
     private readonly KommoSyncService _kommoSync = kommoSync;
+    private readonly KommoApiClient _kommoApi = kommoApi;
 
     private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private const long MaxPhotoBytes = 5 * 1024 * 1024; // 5 MB
@@ -206,6 +209,55 @@ public class UnitController(
         catch (HttpRequestException ex)
         {
             return BadRequest(new KommoSyncResponseDto { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Lista os pipelines/funis da Kommo da unidade — usado no front pra traduzir
+    /// status_id em nome amigável da etapa. Requer KommoSubdomain e KommoAccessToken
+    /// salvos na unidade.
+    /// </summary>
+    [HttpGet("{id:int}/kommo-pipelines")]
+    [ProducesResponseType(typeof(List<KommoPipelineDto>), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetKommoPipelines(int id, CancellationToken ct)
+    {
+        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (unit is null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { message = "Unidade sem KommoSubdomain/KommoAccessToken configurados." });
+
+        try
+        {
+            var resp = await _kommoApi.GetPipelinesAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, ct);
+            var pipelines = (resp?.Embedded?.Pipelines ?? new())
+                .Select(p => new KommoPipelineDto
+                {
+                    Id = p.Id,
+                    Name = p.Name ?? $"Funil {p.Id}",
+                    IsMain = p.IsMain,
+                    Statuses = (p.Embedded?.Statuses ?? new())
+                        .OrderBy(s => s.Sort)
+                        .Select(s => new KommoPipelineStatusDto
+                        {
+                            Id = s.Id,
+                            Name = s.Name ?? $"Etapa {s.Id}",
+                            Color = s.Color,
+                            Type = s.Type,
+                            PipelineId = s.PipelineId,
+                        })
+                        .ToList(),
+                })
+                .OrderByDescending(p => p.IsMain)
+                .ToList();
+
+            return Ok(pipelines);
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(new { message = $"Erro ao consultar Kommo: {ex.Message}" });
         }
     }
 

@@ -62,6 +62,16 @@ public class KommoApiClient
         return await GetAsync<KommoAccountResponse>(url, token, ct);
     }
 
+    /// <summary>
+    /// Lista todos os pipelines da conta com seus status. Usado pelo dashboard
+    /// para traduzir status_id em nome amigável da etapa.
+    /// </summary>
+    public async Task<KommoPipelinesResponse?> GetPipelinesAsync(string subdomainOrHost, string token, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads/pipelines";
+        return await GetAsync<KommoPipelinesResponse>(url, token, ct);
+    }
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -187,6 +197,42 @@ public class KommoAccountResponse
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("subdomain")] public string? Subdomain { get; set; }
+}
+
+public class KommoPipelinesResponse
+{
+    [JsonPropertyName("_total_items")] public int TotalItems { get; set; }
+    [JsonPropertyName("_embedded")] public KommoPipelinesEmbedded? Embedded { get; set; }
+}
+
+public class KommoPipelinesEmbedded
+{
+    [JsonPropertyName("pipelines")] public List<KommoApiPipeline>? Pipelines { get; set; }
+}
+
+public class KommoApiPipeline
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("sort")] public int Sort { get; set; }
+    [JsonPropertyName("is_main")] public bool IsMain { get; set; }
+    [JsonPropertyName("is_archive")] public bool IsArchive { get; set; }
+    [JsonPropertyName("_embedded")] public KommoApiPipelineEmbedded? Embedded { get; set; }
+}
+
+public class KommoApiPipelineEmbedded
+{
+    [JsonPropertyName("statuses")] public List<KommoApiStatus>? Statuses { get; set; }
+}
+
+public class KommoApiStatus
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("sort")] public int Sort { get; set; }
+    [JsonPropertyName("color")] public string? Color { get; set; }
+    [JsonPropertyName("type")] public int Type { get; set; }
+    [JsonPropertyName("pipeline_id")] public long PipelineId { get; set; }
 }
 
 public class KommoLinks

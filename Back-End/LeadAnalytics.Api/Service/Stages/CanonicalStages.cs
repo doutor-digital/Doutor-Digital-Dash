@@ -30,4 +30,20 @@ public static class CanonicalStages
 
     public static bool IsKnown(string? stage) =>
         !string.IsNullOrWhiteSpace(stage) && _known.Contains(stage.Trim());
+
+    /// <summary>
+    /// Converte uma etapa canônica para o código LeadStages.* equivalente, usado pelas
+    /// queries do dashboard (CurrentStage). Retorna null para etapas sem equivalência direta
+    /// (ex.: EntradaLead — o lead permanece com o status_id cru).
+    /// </summary>
+    public static string? ToLeadStage(string? canonical) => Normalize(canonical) switch
+    {
+        AgendadoSemPagamento => LeadStages.AgendadoSemPagamento,
+        AgendadoComPagamento => LeadStages.AgendadoComPagamento,
+        NaoCompareceu        => LeadStages.Faltou,
+        CompareceuConsulta   => LeadStages.EmTratamento,
+        TratamentoFechado    => LeadStages.FechouTratamento,
+        NaoDeuContinuidade   => LeadStages.NaoFechouTratamento,
+        _ => null,
+    };
 }

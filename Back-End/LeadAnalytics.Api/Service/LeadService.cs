@@ -1741,6 +1741,14 @@ public class LeadService(
                      || l.CurrentStage == LeadStages.EmTratamento)
             .CountAsync(ct);
 
+        // Leads ativos: tudo que ainda está no funil (não chegou a estado terminal:
+        // ganho/perda/faltou). Inclui leads em "entrada", "em atendimento", agendados etc.
+        var leadsAtivos = await baseQ
+            .Where(l => l.CurrentStage != LeadStages.FechouTratamento
+                     && l.CurrentStage != LeadStages.NaoFechouTratamento
+                     && l.CurrentStage != LeadStages.Faltou)
+            .CountAsync(ct);
+
         // Estados da conversa (bot/queue/service/concluido)
         var stateRows = await baseQ
             .GroupBy(l => l.ConversationState ?? "")
@@ -1793,6 +1801,7 @@ public class LeadService(
             Faltou = faltou,
             NaoFechou = naoFechou,
             Fechou = fechou,
+            LeadsAtivos = leadsAtivos,
             ComparecimentoRate = Math.Round(comparecimentoRate, 2),
             FechamentoRate = Math.Round(fechamentoRate, 2),
             States = states,

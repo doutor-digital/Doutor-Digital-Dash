@@ -44,6 +44,9 @@ public class DashboardOverviewDto
 
     public int Fechou { get; set; }
 
+    [JsonPropertyName("leads_ativos")]
+    public int LeadsAtivos { get; set; }
+
     [JsonPropertyName("comparecimento_rate")]
     public double ComparecimentoRate { get; set; }
 

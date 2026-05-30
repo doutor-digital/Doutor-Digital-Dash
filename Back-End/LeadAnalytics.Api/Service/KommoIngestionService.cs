@@ -100,26 +100,41 @@ public class KommoIngestionService(
                 lead.UpdatedAt = now;
             }
 
-            // Etapa (status_id da Kommo) → registra label cru + histórico.
+            // Etapa (status_id da Kommo): se a unidade mapeou esse status_id para uma etapa
+            // canônica, gravamos o código LeadStages.* equivalente em CurrentStage — assim
+            // as queries do dashboard (que comparam contra LeadStages.*) funcionam para leads
+            // vindos da Kommo. CurrentStageId mantém o status_id numérico cru para referência.
             var rawStage = ev.Stage?.Trim();
-            if (!string.IsNullOrWhiteSpace(rawStage) && rawStage != lead.CurrentStage)
+            int? rawStageId = int.TryParse(rawStage, out var parsedStageId) ? parsedStageId : null;
+            var stageChanged = !string.IsNullOrWhiteSpace(rawStage) && rawStageId != lead.CurrentStageId;
+
+            string? canonical = null;
+            if (!string.IsNullOrWhiteSpace(rawStage)
+                && stageMap.TryGetValue(rawStage, out var canonicalRaw)
+                && CanonicalStages.IsKnown(canonicalRaw))
             {
-                lead.CurrentStage = rawStage;
-                if (int.TryParse(rawStage, out var stageId)) lead.CurrentStageId = stageId;
+                canonical = canonicalRaw;
+            }
+
+            if (stageChanged)
+            {
+                var mappedLeadStage = canonical != null ? CanonicalStages.ToLeadStage(canonical) : null;
+                var newCurrentStage = mappedLeadStage ?? rawStage!;
+
+                lead.CurrentStage = newCurrentStage;
+                if (rawStageId.HasValue) lead.CurrentStageId = rawStageId;
 
                 lead.StageHistory.Add(new LeadStageHistory
                 {
                     LeadId = lead.Id,
                     StageId = lead.CurrentStageId ?? 0,
-                    StageLabel = rawStage,
+                    StageLabel = newCurrentStage,
                     ChangedAt = now,
                 });
             }
 
             // Automação de Consulta/Tratamento — só se a unidade mapeou esse status_id.
-            if (!string.IsNullOrWhiteSpace(rawStage)
-                && stageMap.TryGetValue(rawStage, out var canonical)
-                && CanonicalStages.IsKnown(canonical))
+            if (canonical != null)
             {
                 await _stageProcessor.ApplyAsync(lead, canonical, now, ct);
             }

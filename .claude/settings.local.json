@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet tool *)",
+      "Bash(dotnet ef *)",
+      "Bash(psql --version)",
+      "Bash(pg_dump --version)",
+      "Bash(pacman -Ss postgresql)",
+      "Bash(npx tsc *)",
+      "Bash(npm --version)",
+      "Bash(mkdir -p /tmp/pg-runner)",
+      "Read(//tmp/**)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(DATABASE_URL='postgresql://postgres:MWaBJnGrmPkcyaPXbzXtyGzTLVFlDDMd@crossover.proxy.rlwy.net:44184/railway' node count.js)",
+      "Bash(DATABASE_URL='postgresql://postgres:MWaBJnGrmPkcyaPXbzXtyGzTLVFlDDMd@crossover.proxy.rlwy.net:44184/railway' node count2.js)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

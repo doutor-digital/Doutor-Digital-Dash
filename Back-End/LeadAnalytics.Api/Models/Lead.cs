@@ -26,6 +26,9 @@ public class Lead
     public string CurrentStage { get; set; } = "NOVO";
     public int? CurrentStageId { get; set; }
 
+    /// <summary>Valor do negócio (campo <c>price</c> do lead na Kommo), em R$.</summary>
+    public decimal? Price { get; set; }
+
     public string Status { get; set; } = "new";
 
     public bool HasAppointment { get; set; }

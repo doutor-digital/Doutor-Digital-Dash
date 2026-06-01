@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Models;
@@ -104,6 +105,13 @@ public class KommoIngestionService(
             // ainda não preenche porque o payload é parcial — solução = sync periódico).
             if (ev.CustomFieldsJson != null) lead.CustomFieldsJson = ev.CustomFieldsJson;
             if (ev.TagsJson != null) lead.TagsJson = ev.TagsJson;
+
+            // Valor do negócio (price da Kommo) — string crua → decimal (invariant).
+            if (!string.IsNullOrWhiteSpace(ev.Price)
+                && decimal.TryParse(ev.Price, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
+            {
+                lead.Price = price;
+            }
 
             // Etapa (status_id da Kommo): se a unidade mapeou esse status_id para uma etapa
             // canônica, gravamos o código LeadStages.* equivalente em CurrentStage — assim

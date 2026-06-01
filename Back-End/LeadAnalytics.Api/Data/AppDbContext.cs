@@ -1,12 +1,19 @@
-﻿using LeadAnalytics.Api.Models;
+﻿using System.Text.Json;
+using LeadAnalytics.Api.Models;
+using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IDataProtectionKeyContext
+public class AppDbContext : DbContext, IDataProtectionKeyContext
 {
+    private readonly ICurrentUser? _currentUser;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser currentUser)
+        : base(options) => _currentUser = currentUser;
+
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<Unit> Units { get; set; }
@@ -30,6 +37,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invitation> Invitations { get; set; }
     public DbSet<UserUnit> UserUnits { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<LoginSession> LoginSessions { get; set; }
+    public DbSet<EntityChangeLog> EntityChangeLogs { get; set; }
 
     public DbSet<Consultation> Consultations { get; set; }
     public DbSet<Treatment> Treatments { get; set; }
@@ -324,6 +333,42 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => new { e.Path, e.CreatedAt });
         });
 
+        // ─── LoginSession ────────────────────────────────────────
+        modelBuilder.Entity<LoginSession>(entity =>
+        {
+            entity.ToTable("login_sessions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).HasMaxLength(180);
+            entity.Property(e => e.UserName).HasMaxLength(120);
+            entity.Property(e => e.Role).HasMaxLength(30);
+            entity.Property(e => e.AuthMethod).HasMaxLength(20);
+            entity.Property(e => e.Ip).HasMaxLength(64);
+            entity.Property(e => e.UserAgent).HasMaxLength(400);
+            entity.Property(e => e.Device).HasMaxLength(200);
+            entity.Property(e => e.GeoCountry).HasMaxLength(80);
+            entity.Property(e => e.GeoRegion).HasMaxLength(80);
+            entity.Property(e => e.GeoCity).HasMaxLength(120);
+            entity.Property(e => e.EndReason).HasMaxLength(40);
+            entity.HasIndex(e => new { e.UserId, e.LoginAt });
+            entity.HasIndex(e => e.IsActive);
+        });
+
+        // ─── EntityChangeLog ─────────────────────────────────────
+        modelBuilder.Entity<EntityChangeLog>(entity =>
+        {
+            entity.ToTable("entity_change_logs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).HasMaxLength(180);
+            entity.Property(e => e.Role).HasMaxLength(30);
+            entity.Property(e => e.EntityType).HasMaxLength(80).IsRequired();
+            entity.Property(e => e.EntityId).HasMaxLength(64);
+            entity.Property(e => e.Action).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ChangesJson).HasColumnType("jsonb");
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
         // ─── User updates: GoogleSub unique índex ────────────────
         modelBuilder.Entity<User>()
             .HasIndex(u => u.GoogleSub)
@@ -411,5 +456,130 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(e => new { e.Status, e.ReceivedAt });
         });
 
+    }
+
+    // ─── Trilha de alteração de entidades ────────────────────────────────
+    // Entidades cujas mudanças são auditadas (quem mudou o quê, antes → depois).
+    private static readonly HashSet<string> AuditedEntities =
+        new(StringComparer.Ordinal) { "Lead", "User", "Unit", "Invitation" };
+
+    // Campos de bookkeeping que não viram trilha (evita ruído de login/sync).
+    private static readonly HashSet<string> IgnoredProps =
+        new(StringComparer.Ordinal)
+        {
+            "UpdatedAt", "LastLoginAt", "RefreshToken", "RefreshTokenExpiresAt",
+            "FailedLoginAttempts", "LockedUntil", "ResetPasswordCodeHash",
+            "ResetPasswordCodeExpiresAt", "ResetPasswordAttempts", "ResetPasswordRequestedAt",
+        };
+
+    private bool _writingAudit;
+
+    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    {
+        if (_writingAudit)
+            return await base.SaveChangesAsync(ct);
+
+        var pending = CaptureChanges();
+        var result = await base.SaveChangesAsync(ct);
+
+        if (pending.Count > 0)
+        {
+            foreach (var p in pending)
+                p.Log.EntityId ??= ResolveKey(p.Entry);
+
+            _writingAudit = true;
+            try
+            {
+                EntityChangeLogs.AddRange(pending.Select(p => p.Log));
+                await base.SaveChangesAsync(ct);
+            }
+            finally { _writingAudit = false; }
+        }
+
+        return result;
+    }
+
+    public override int SaveChanges()
+        => SaveChangesAsync().GetAwaiter().GetResult();
+
+    private List<(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Entry, EntityChangeLog Log)> CaptureChanges()
+    {
+        var list = new List<(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry, EntityChangeLog)>();
+
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            var typeName = entry.Entity.GetType().Name;
+            if (!AuditedEntities.Contains(typeName)) continue;
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted))
+                continue;
+
+            var changes = new Dictionary<string, object?>();
+
+            if (entry.State == EntityState.Modified)
+            {
+                foreach (var prop in entry.Properties)
+                {
+                    if (!prop.IsModified) continue;
+                    if (IgnoredProps.Contains(prop.Metadata.Name)) continue;
+                    if (Equals(prop.OriginalValue, prop.CurrentValue)) continue;
+                    changes[prop.Metadata.Name] = new
+                    {
+                        from = Redact(prop.Metadata.Name, prop.OriginalValue),
+                        to = Redact(prop.Metadata.Name, prop.CurrentValue),
+                    };
+                }
+                if (changes.Count == 0) continue; // nada relevante mudou
+            }
+            else if (entry.State == EntityState.Added)
+            {
+                foreach (var prop in entry.Properties)
+                    changes[prop.Metadata.Name] = Redact(prop.Metadata.Name, prop.CurrentValue);
+            }
+            else // Deleted
+            {
+                foreach (var prop in entry.Properties)
+                    changes[prop.Metadata.Name] = Redact(prop.Metadata.Name, prop.OriginalValue);
+            }
+
+            var log = new EntityChangeLog
+            {
+                UserId = _currentUser?.UserId,
+                Email = _currentUser?.Email,
+                Role = _currentUser?.Role,
+                TenantId = _currentUser?.TenantId,
+                EntityType = typeName,
+                Action = entry.State.ToString(),
+                ChangesJson = JsonSerializer.Serialize(changes),
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            // Para Modified/Deleted a PK já é conhecida; Added resolve após o save.
+            if (entry.State != EntityState.Added)
+                log.EntityId = ResolveKey(entry);
+
+            list.Add((entry, log));
+        }
+
+        return list;
+    }
+
+    private static string? ResolveKey(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        var key = entry.Metadata.FindPrimaryKey();
+        if (key is null) return null;
+        var values = key.Properties
+            .Select(p => entry.Property(p.Name).CurrentValue?.ToString())
+            .Where(v => v is not null);
+        return string.Join(":", values);
+    }
+
+    /// <summary>Não grava valores sensíveis (hashes/tokens) na trilha.</summary>
+    private static object? Redact(string propName, object? value)
+    {
+        var n = propName.ToLowerInvariant();
+        if (value is null) return null;
+        if (n.Contains("password") || n.Contains("token") || n.Contains("hash") || n.Contains("secret"))
+            return "***";
+        return value;
     }
 }

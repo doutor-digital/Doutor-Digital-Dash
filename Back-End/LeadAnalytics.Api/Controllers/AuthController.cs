@@ -9,10 +9,16 @@ namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(AuthService authService, UnitService unitService) : ControllerBase
+public class AuthController(
+    AuthService authService,
+    UnitService unitService,
+    LoginSessionService loginSessions,
+    ICurrentUser currentUser) : ControllerBase
 {
     private readonly AuthService _authService = authService;
     private readonly UnitService _unitService = unitService;
+    private readonly LoginSessionService _loginSessions = loginSessions;
+    private readonly ICurrentUser _currentUser = currentUser;
 
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
@@ -166,5 +172,54 @@ public class AuthController(AuthService authService, UnitService unitService) : 
             createdAt = user.CreatedAt,
             unitIds = unitIds,
         });
+    }
+
+    /// <summary>
+    /// Heartbeat de atividade: o front pinga periodicamente (~60s) enquanto a aba
+    /// está ativa para acumular o tempo logado da sessão atual (claim <c>sid</c>).
+    /// </summary>
+    [Authorize]
+    [HttpPost("heartbeat")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Heartbeat(CancellationToken ct)
+    {
+        if (_currentUser.UserId is not int userId || _currentUser.SessionId is not long sid)
+            return NoContent();
+
+        await _loginSessions.HeartbeatAsync(sid, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Consentimento de localização: a secretária autoriza no navegador e o front
+    /// envia as coordenadas (GPS). Grava na sessão atual e marca o usuário.
+    /// </summary>
+    [Authorize]
+    [HttpPost("geo-consent")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GeoConsent([FromBody] GeoConsentRequestDto request, CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new { message = "Coordenadas são obrigatórias." });
+        if (_currentUser.UserId is not int userId || _currentUser.SessionId is not long sid)
+            return BadRequest(new { message = "Sessão inválida." });
+
+        var ok = await _loginSessions.SetGeoConsentAsync(
+            sid, userId, request.Latitude, request.Longitude, request.Accuracy, ct);
+
+        if (!ok) return BadRequest(new { message = "Não foi possível registrar a localização." });
+        return Ok(new { message = "Localização registrada. Obrigado!" });
+    }
+
+    /// <summary>Encerra a sessão atual (logout) — fecha o registro de tempo logado.</summary>
+    [Authorize]
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout(CancellationToken ct)
+    {
+        if (_currentUser.UserId is int userId && _currentUser.SessionId is long sid)
+            await _loginSessions.EndAsync(sid, userId, "logout", ct);
+        return NoContent();
     }
 }

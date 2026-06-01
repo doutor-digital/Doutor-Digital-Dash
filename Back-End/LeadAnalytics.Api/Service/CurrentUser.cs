@@ -7,8 +7,15 @@ public interface ICurrentUser
     int? UserId { get; }
     int? TenantId { get; }
     string? Role { get; }
+    string? Email { get; }
     bool IsSuperAdmin { get; }
+    /// <summary>super_admin OU analista_ti — acesso administrativo total + logs avançados.</summary>
+    bool IsAdminLevel { get; }
+    /// <summary>trafego_pago — acesso somente-leitura.</summary>
+    bool IsReadOnly { get; }
     bool IsAuthenticated { get; }
+    /// <summary>Id da sessão de login (claim <c>sid</c>), quando presente.</summary>
+    long? SessionId { get; }
 }
 
 public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
@@ -27,8 +34,14 @@ public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 
     public string? Role => Principal?.FindFirst(ClaimTypes.Role)?.Value;
 
-    public bool IsSuperAdmin =>
-        string.Equals(Role, "super_admin", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(Role, "super-admin", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(Role, "superadmin", StringComparison.OrdinalIgnoreCase);
+    public string? Email => Principal?.FindFirst(ClaimTypes.Email)?.Value;
+
+    public bool IsSuperAdmin => Roles.IsSuperAdmin(Role);
+
+    public bool IsAdminLevel => Roles.IsAdminLevel(Role);
+
+    public bool IsReadOnly => Roles.IsReadOnly(Role);
+
+    public long? SessionId =>
+        long.TryParse(Principal?.FindFirst("sid")?.Value, out var id) ? id : null;
 }

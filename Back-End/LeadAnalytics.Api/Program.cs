@@ -148,6 +148,12 @@ builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpClient<GoogleAuthService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<LoginSessionService>();
+builder.Services.AddScoped<AdminLogService>();
+builder.Services.AddHttpClient<GeoIpService>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+});
 builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
@@ -277,6 +283,9 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Bloqueia escrita para papéis somente-leitura (trafego_pago) antes de auditar.
+app.UseMiddleware<ReadOnlyRoleMiddleware>();
 
 app.UseMiddleware<AuditLogMiddleware>();
 

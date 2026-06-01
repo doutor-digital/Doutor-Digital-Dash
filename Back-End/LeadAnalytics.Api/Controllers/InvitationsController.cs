@@ -41,9 +41,7 @@ public class InvitationsController : ControllerBase
         var caller = await _db.Users.FirstOrDefaultAsync(u => u.Id == _currentUser.UserId.Value, ct);
         if (caller == null) return Unauthorized();
 
-        var roleLower = (caller.Role ?? string.Empty).ToLowerInvariant();
-        var allowed = roleLower is "super_admin" or "super-admin" or "superadmin" or "sdr" or "manager";
-        if (!allowed)
+        if (!Roles.CanInvite(caller.Role))
             return Forbid();
 
         var (result, error) = await _invitationService.CreateAsync(dto, caller, ct);

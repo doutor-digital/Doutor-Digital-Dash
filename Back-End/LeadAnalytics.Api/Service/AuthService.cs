@@ -16,6 +16,8 @@ public class AuthService
     private readonly EmailService _emailService;
     private readonly GoogleAuthService _googleAuthService;
     private readonly InvitationService _invitationService;
+    private readonly LoginSessionService _loginSessions;
+    private readonly IHttpContextAccessor _httpContext;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -24,6 +26,8 @@ public class AuthService
         EmailService emailService,
         GoogleAuthService googleAuthService,
         InvitationService invitationService,
+        LoginSessionService loginSessions,
+        IHttpContextAccessor httpContext,
         ILogger<AuthService> logger)
     {
         _db = db;
@@ -31,6 +35,8 @@ public class AuthService
         _emailService = emailService;
         _googleAuthService = googleAuthService;
         _invitationService = invitationService;
+        _loginSessions = loginSessions;
+        _httpContext = httpContext;
         _logger = logger;
     }
 
@@ -231,8 +237,13 @@ public class AuthService
             throw new InvalidOperationException("Usuário sem unidades disponíveis.");
         }
 
+        // Cria a sessão de login (IP/UA + GeoIP em background) antes de gerar o
+        // token, para embutir o id da sessão (claim "sid") usado pelo heartbeat.
+        var (ip, userAgent) = ResolveClient();
+        var sessionId = await _loginSessions.StartAsync(user, authMethod, ip, userAgent);
+
         var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateToken(
-            user, availableUnits, authMethod);
+            user, availableUnits, authMethod, sessionId);
 
         var refreshToken = GenerateRefreshToken();
 
@@ -263,18 +274,35 @@ public class AuthService
         };
     }
 
+    /// <summary>IP (X-Forwarded-For primeiro) + User-Agent do request atual.</summary>
+    private (string? Ip, string? UserAgent) ResolveClient()
+    {
+        var ctx = _httpContext.HttpContext;
+        if (ctx is null) return (null, null);
+
+        string? ip = null;
+        var fwd = ctx.Request.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(fwd))
+            ip = fwd.Split(',')[0].Trim();
+        if (string.IsNullOrWhiteSpace(ip))
+            ip = ctx.Connection.RemoteIpAddress?.ToString();
+
+        var ua = ctx.Request.Headers["User-Agent"].ToString();
+        return (ip, string.IsNullOrWhiteSpace(ua) ? null : ua);
+    }
+
     private async Task<List<UnitSelectorOptionDto>> GetUserUnitsAsync(User user)
     {
         var roleLower = (user.Role ?? string.Empty).ToLowerInvariant();
-        var isSuperAdmin = roleLower is "super_admin" or "super-admin" or "superadmin";
+        var isAdminLevel = Roles.IsAdminLevel(user.Role);
         var isSdr = roleLower is "sdr";
 
         IQueryable<Unit> query;
 
-        if (isSuperAdmin)
+        if (isAdminLevel)
         {
             query = _db.Units.AsNoTracking();
-            _logger.LogInformation("🔓 Super admin: todas unidades");
+            _logger.LogInformation("🔓 Admin-level ({Role}): todas unidades", user.Role);
         }
         else
         {

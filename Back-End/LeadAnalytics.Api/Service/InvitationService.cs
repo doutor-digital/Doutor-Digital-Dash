@@ -38,9 +38,14 @@ public class InvitationService
         if (dto.UnitId <= 0)
             return (null, "UnitId inválido.");
 
-        var role = (dto.Role ?? "unit_user").Trim().ToLowerInvariant();
-        if (role != "unit_user" && role != "sdr" && role != "manager")
-            return (null, "Role inválido (use unit_user, sdr ou manager).");
+        var role = Roles.Canonical(dto.Role ?? Roles.UnitUser);
+        if (string.IsNullOrEmpty(role)) role = Roles.UnitUser;
+        if (!Roles.IsValidInviteRole(role))
+            return (null, "Role inválido (use unit_user, sdr, manager, trafego_pago ou analista_ti).");
+
+        // Apenas admin-level (super_admin / analista_ti) pode conceder analista_ti.
+        if (Roles.IsAnalistaTi(role) && !Roles.IsAdminLevel(caller.Role))
+            return (null, "Apenas super_admin ou analista_ti pode conceder o papel analista_ti.");
 
         var email = dto.Email.Trim().ToLowerInvariant();
 

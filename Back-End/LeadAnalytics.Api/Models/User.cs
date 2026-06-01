@@ -65,6 +65,13 @@ public class User
     [Column("auth_method")]
     public string AuthMethod { get; set; } = "password";
 
+    /// <summary>Usuário consentiu compartilhar a localização precisa (GPS).</summary>
+    [Column("location_consent")]
+    public bool LocationConsent { get; set; } = false;
+
+    [Column("location_consent_at")]
+    public DateTime? LocationConsentAt { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

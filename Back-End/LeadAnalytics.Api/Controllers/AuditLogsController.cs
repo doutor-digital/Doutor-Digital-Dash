@@ -31,7 +31,7 @@ public class AuditLogsController : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
-        if (!_currentUser.IsSuperAdmin)
+        if (!_currentUser.IsAdminLevel)
             return Forbid();
 
         var data = await _auditLogService.QueryAsync(

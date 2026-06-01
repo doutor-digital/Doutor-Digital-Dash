@@ -17,7 +17,8 @@ public class JwtTokenService(IConfiguration config, ILogger<JwtTokenService> log
     public (string token, DateTime expiresAtUtc) GenerateToken(
         User user,
         List<UnitSelectorOptionDto> availableUnits,
-        string authMethod = "password")
+        string authMethod = "password",
+        long? sessionId = null)
     {
         // ─────────────────────────────────────────────
         // CONFIG
@@ -67,6 +68,9 @@ public class JwtTokenService(IConfiguration config, ILogger<JwtTokenService> log
         }
 
         claims.Add(new Claim("auth_method", authMethod));
+
+        if (sessionId.HasValue)
+            claims.Add(new Claim("sid", sessionId.Value.ToString()));
 
         foreach (var unit in availableUnits)
         {

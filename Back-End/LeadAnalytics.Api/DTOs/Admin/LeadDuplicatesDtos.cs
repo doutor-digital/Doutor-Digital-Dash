@@ -66,6 +66,8 @@ public class LeadDuplicateDeleteJobDto
     public int LeadsDeleted { get; set; }
     public int TaggedInKommo { get; set; }
     public int TagFailures { get; set; }
+    /// <summary>Leads que não puderam ser tagueados por falta de token/subdomínio na unidade (ou sem id da Kommo).</summary>
+    public int TagSkipped { get; set; }
     public int GroupsFound { get; set; }
     public int BatchesExecuted { get; set; }
 

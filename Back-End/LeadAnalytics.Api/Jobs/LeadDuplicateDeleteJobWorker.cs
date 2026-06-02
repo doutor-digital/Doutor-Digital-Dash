@@ -105,6 +105,7 @@ public class LeadDuplicateDeleteJobWorker(
             live.LeadsDeleted += res.Deleted;
             live.TaggedInKommo += res.Tagged;
             live.TagFailures += res.TagFailed;
+            live.TagSkipped += res.TagSkipped;
             live.BatchesExecuted += 1;
             await store.SaveAsync(live, stoppingToken);
 

@@ -41,7 +41,7 @@ public class DuplicateLeadService(
         "\"HasPayment\" DESC, \"HasAppointment\" DESC, COALESCE(\"Price\",0) DESC, " +
         "COALESCE(\"CurrentStageId\",-1) DESC, \"CreatedAt\" ASC, \"Id\" ASC";
 
-    public readonly record struct BatchResult(int Deleted, int Tagged, int TagFailed);
+    public readonly record struct BatchResult(int Deleted, int Tagged, int TagFailed, int TagSkipped);
 
     // ─── Relatório (dry-run) ────────────────────────────────────────────────
 
@@ -80,27 +80,29 @@ public class DuplicateLeadService(
         batchSize = Math.Clamp(batchSize, 1, MaxBatchSize);
 
         var rows = await SelectDeleteBatchAsync(tenantId, ignoreTenant, batchSize, ct);
-        if (rows.Count == 0) return new BatchResult(0, 0, 0);
+        if (rows.Count == 0) return new BatchResult(0, 0, 0, 0);
 
         var ids = rows.Select(r => r.Id).ToArray();
 
         var tagged = 0;
         var tagFailed = 0;
+        var tagSkipped = 0;
         if (tagInKommo)
-            (tagged, tagFailed) = await TagInKommoAsync(rows, ct);
+            (tagged, tagFailed, tagSkipped) = await TagInKommoAsync(rows, ct);
 
         var deleted = await DeleteLeadsCascadeAsync(ids, ct);
 
         _logger.LogInformation(
-            "🗑 Lote leads duplicados: apagados={Deleted} tagueados={Tagged} falhasTag={Failed}",
-            deleted, tagged, tagFailed);
+            "🗑 Lote leads duplicados: apagados={Deleted} tagueados={Tagged} falhasTag={Failed} puladosSemToken={Skipped}",
+            deleted, tagged, tagFailed, tagSkipped);
 
-        return new BatchResult(deleted, tagged, tagFailed);
+        return new BatchResult(deleted, tagged, tagFailed, tagSkipped);
     }
 
     // ─── Tagueia "DUPLICADO" na Kommo (best-effort, por unidade) ─────────────
+    // Retorna (tagueados, falhas HTTP, pulados por falta de token/externalId).
 
-    private async Task<(int Tagged, int Failed)> TagInKommoAsync(List<DeleteRow> rows, CancellationToken ct)
+    private async Task<(int Tagged, int Failed, int Skipped)> TagInKommoAsync(List<DeleteRow> rows, CancellationToken ct)
     {
         // Resolve unidades envolvidas (por UnitId e por ClinicId=TenantId como fallback).
         var unitIds = rows.Where(r => r.UnitId.HasValue).Select(r => r.UnitId!.Value).Distinct().ToList();
@@ -116,6 +118,7 @@ public class DuplicateLeadService(
 
         // Agrupa leads por unidade resolvida (que tenha subdomínio + token).
         var perUnit = new Dictionary<int, (string Sub, string Token, List<(long Id, List<string> Tags)> Items)>();
+        var skipped = 0;
 
         foreach (var r in rows)
         {
@@ -124,7 +127,11 @@ public class DuplicateLeadService(
 
             if (u is null || r.ExternalId <= 0 ||
                 string.IsNullOrWhiteSpace(u.KommoSubdomain) || string.IsNullOrWhiteSpace(u.KommoAccessToken))
+            {
+                // Sem token/subdomínio na unidade ou sem id da Kommo → não dá pra taguear.
+                skipped++;
                 continue;
+            }
 
             var tags = ParseTags(r.TagsJson);
             if (!tags.Contains(DuplicateTag, StringComparer.OrdinalIgnoreCase))
@@ -154,7 +161,7 @@ public class DuplicateLeadService(
             }
         }
 
-        return (tagged, failed);
+        return (tagged, failed, skipped);
     }
 
     private static List<string> ParseTags(string? tagsJson)

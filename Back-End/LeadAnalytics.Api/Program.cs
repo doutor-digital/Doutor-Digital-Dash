@@ -173,6 +173,12 @@ builder.Services.AddSingleton<IDuplicateDeleteJobQueue, InMemoryDuplicateDeleteJ
 builder.Services.AddScoped<DuplicateDeleteJobStore>();
 builder.Services.AddHostedService<DuplicateDeleteJobWorker>();
 
+// Deduplicação de LEADS (mantém o mais avançado; tagueia "DUPLICADO" na Kommo + apaga)
+builder.Services.AddScoped<DuplicateLeadService>();
+builder.Services.AddSingleton<ILeadDuplicateDeleteJobQueue, InMemoryLeadDuplicateDeleteJobQueue>();
+builder.Services.AddScoped<LeadDuplicateDeleteJobStore>();
+builder.Services.AddHostedService<LeadDuplicateDeleteJobWorker>();
+
 // ── Background jobs: bulk delete genérico de contatos (por IDs ou filtros) ───
 builder.Services.AddSingleton<IContactsBulkDeleteJobQueue, InMemoryContactsBulkDeleteJobQueue>();
 builder.Services.AddScoped<ContactsBulkDeleteJobStore>();

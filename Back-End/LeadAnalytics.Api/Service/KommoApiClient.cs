@@ -82,6 +82,53 @@ public class KommoApiClient
         return await GetAsync<KommoCustomFieldsResponse>(url, token, ct);
     }
 
+    /// <summary>
+    /// Adiciona/define tags em vários leads via PATCH em lote (até 50 por requisição).
+    /// Como o Kommo SUBSTITUI a lista de tags, o chamador deve enviar as tags atuais
+    /// + a nova (ex.: "DUPLICADO"). Retorna quantos leads foram enviados com sucesso.
+    /// Lança em caso de erro HTTP (o chamador trata por unidade).
+    /// </summary>
+    public async Task<int> PatchLeadsTagsAsync(
+        string subdomainOrHost, string token,
+        IEnumerable<(long Id, List<string> TagNames)> items,
+        CancellationToken ct)
+    {
+        var list = items.ToList();
+        if (list.Count == 0) return 0;
+
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads";
+        var sent = 0;
+
+        foreach (var chunk in list.Chunk(50))
+        {
+            var payload = chunk.Select(it => new
+            {
+                id = it.Id,
+                _embedded = new { tags = it.TagNames.Select(n => new { name = n }).ToArray() },
+            }).ToArray();
+
+            using var req = new HttpRequestMessage(HttpMethod.Patch, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new StringContent(
+                JsonSerializer.Serialize(payload, JsonOpts),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            using var resp = await _http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                _logger.LogWarning("Kommo PATCH tags {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
+                throw new HttpRequestException($"Kommo PATCH retornou {(int)resp.StatusCode}: {body}");
+            }
+
+            sent += chunk.Length;
+        }
+
+        return sent;
+    }
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);

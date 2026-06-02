@@ -14,6 +14,8 @@ public class KommoDedupJobDto
     public int? TenantId { get; set; }
     /// <summary>"phone" ou "name".</summary>
     public string Mode { get; set; } = "phone";
+    /// <summary>false = só busca/preview; true = aplica a tag DUPLICADO na Kommo.</summary>
+    public bool Apply { get; set; }
 
     public int LeadsFetched { get; set; }
     public int GroupsFound { get; set; }
@@ -39,6 +41,8 @@ public class StartKommoDedupRequest
 {
     public int UnitId { get; set; }
     public string Mode { get; set; } = "phone";
+    /// <summary>false = só busca/preview; true = aplica a tag DUPLICADO.</summary>
+    public bool Apply { get; set; }
 }
 
 public class StartKommoDedupResponse

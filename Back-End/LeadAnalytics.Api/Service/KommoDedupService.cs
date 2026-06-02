@@ -136,8 +136,17 @@ public partial class KommoDedupService(
         await store.SaveAsync(job, ct);
 
         _logger.LogWarning(
-            "🔎 Kommo dedup unit {Unit}: {Leads} leads, {Groups} grupos, {ToTag} a taguear (mode={Mode})",
-            unit.Id, leads.Count, groups, toTag.Count, job.Mode);
+            "🔎 Kommo dedup unit {Unit}: {Leads} leads, {Groups} grupos, {ToTag} a taguear (mode={Mode}, apply={Apply})",
+            unit.Id, leads.Count, groups, toTag.Count, job.Mode, job.Apply);
+
+        // Modo preview (Apply=false): só busca e mostra quantos. Não toca na Kommo.
+        if (!job.Apply)
+        {
+            job.Status = DuplicateDeleteJobStatus.Completed;
+            job.FinishedAt = DateTime.UtcNow;
+            await store.SaveAsync(job, ct);
+            return;
+        }
 
         // 5) Marca a tag DUPLICADO em lotes de 50, confirmando por re-GET.
         foreach (var chunk in Chunk(toTag, 50))

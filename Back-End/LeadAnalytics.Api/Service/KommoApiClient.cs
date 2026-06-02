@@ -106,7 +106,17 @@ public class KommoApiClient
             var payload = chunk.Select(it => new
             {
                 id = it.Id,
-                _embedded = new { tags = it.TagNames.Select(n => new { name = n }).ToArray() },
+                _embedded = new
+                {
+                    tags = it.TagNames.Select(n => new
+                    {
+                        name = n,
+                        // "DUPLICADO" sai vermelha (código de cor de tag da Kommo); demais sem cor.
+                        color = string.Equals(n, "DUPLICADO", StringComparison.OrdinalIgnoreCase)
+                            ? "FF8F92"
+                            : (string?)null,
+                    }).ToArray(),
+                },
             }).ToArray();
 
             using var req = new HttpRequestMessage(HttpMethod.Patch, url);

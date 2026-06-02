@@ -46,16 +46,17 @@ public class KommoDedupController(
             UnitId = body.UnitId,
             TenantId = _currentUser.TenantId,
             Mode = mode,
+            Apply = body.Apply,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = User.Identity?.Name ?? _currentUser.Email ?? "anonymous",
         };
 
         await _jobStore.SaveAsync(job, ct);
-        await _jobQueue.EnqueueAsync(new KommoDedupJobRequest(job.Id, body.UnitId, mode), ct);
+        await _jobQueue.EnqueueAsync(new KommoDedupJobRequest(job.Id, body.UnitId, mode, body.Apply), ct);
 
         _logger.LogWarning(
-            "📥 KommoDedup job enfileirado: {JobId} por {User} (unit={Unit}, mode={Mode})",
-            job.Id, job.CreatedBy, body.UnitId, mode);
+            "📥 KommoDedup job enfileirado: {JobId} por {User} (unit={Unit}, mode={Mode}, apply={Apply})",
+            job.Id, job.CreatedBy, body.UnitId, mode, body.Apply);
 
         return Accepted(
             $"/leads/kommo-dedup/jobs/{job.Id}",

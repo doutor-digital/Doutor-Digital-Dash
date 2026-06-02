@@ -2,7 +2,7 @@ using System.Threading.Channels;
 
 namespace LeadAnalytics.Api.Jobs;
 
-public record KommoDedupJobRequest(string JobId, int UnitId, string Mode);
+public record KommoDedupJobRequest(string JobId, int UnitId, string Mode, bool Apply);
 
 public interface IKommoDedupJobQueue
 {

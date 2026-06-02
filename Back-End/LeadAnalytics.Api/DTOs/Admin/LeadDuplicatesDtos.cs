@@ -8,6 +8,10 @@ namespace LeadAnalytics.Api.DTOs.Admin;
 public class LeadDuplicatesReportDto
 {
     public bool DryRun { get; set; } = true;
+    /// <summary>Critério de agrupamento usado: "phone" ou "name".</summary>
+    public string Mode { get; set; } = "phone";
+    /// <summary>Total de leads do tenant analisados (pra transparência: 0 = nada no banco).</summary>
+    public int LeadsScanned { get; set; }
     public int GroupsFound { get; set; }
     public int LeadsToDelete { get; set; }
     public int Page { get; set; } = 1;
@@ -43,6 +47,8 @@ public class StartLeadDuplicateDeleteJobRequest
     public int? BatchSize { get; set; }
     /// <summary>Marcar os duplicados como "DUPLICADO" na Kommo antes de apagar (default: true).</summary>
     public bool TagInKommo { get; set; } = true;
+    /// <summary>Critério: "phone" (default) ou "name".</summary>
+    public string Mode { get; set; } = "phone";
 }
 
 public class StartLeadDuplicateDeleteJobResponse
@@ -61,6 +67,7 @@ public class LeadDuplicateDeleteJobDto
     public bool IgnoreTenant { get; set; }
     public int BatchSize { get; set; }
     public bool TagInKommo { get; set; }
+    public string Mode { get; set; } = "phone";
 
     public int LeadsToDeleteTotal { get; set; }
     public int LeadsDeleted { get; set; }

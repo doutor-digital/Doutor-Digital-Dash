@@ -44,6 +44,12 @@ public class DuplicateLeadService(
         "THEN right(" + DigitsExpr + ", length(" + DigitsExpr + ") - 2) " +
         "ELSE " + DigitsExpr + " END)";
 
+    // Nome canônico p/ o modo "nome": minúsculo, sem espaços duplicados, aparado.
+    private const string NameExpr = "lower(btrim(regexp_replace(\"Name\", '\\s+', ' ', 'g')))";
+
+    public const string ModePhone = "phone";
+    public const string ModeName = "name";
+
     // rn=1 => lead mantido (o mais avançado). rn>1 => apagar.
     private const string RankOrder =
         "\"HasPayment\" DESC, \"HasAppointment\" DESC, COALESCE(\"Price\",0) DESC, " +
@@ -54,12 +60,14 @@ public class DuplicateLeadService(
     // ─── Relatório (dry-run) ────────────────────────────────────────────────
 
     public async Task<LeadDuplicatesReportDto> FindDuplicatesAsync(
-        int? tenantId, bool ignoreTenant, int page = 1, int pageSize = 50, CancellationToken ct = default)
+        int? tenantId, bool ignoreTenant, string mode, int page = 1, int pageSize = 50, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        mode = Normalize(mode);
 
-        var all = await QueryGroupsAsync(tenantId, ignoreTenant, ct);
+        var all = await QueryGroupsAsync(tenantId, ignoreTenant, mode, ct);
+        var scanned = await CountScannedAsync(tenantId, ignoreTenant, ct);
         var groupsFound = all.Count;
         var leadsToDelete = all.Sum(g => g.DeleteLeadIds.Count);
         var totalPages = groupsFound == 0 ? 1 : (int)Math.Ceiling(groupsFound / (double)pageSize);
@@ -67,6 +75,8 @@ public class DuplicateLeadService(
         return new LeadDuplicatesReportDto
         {
             DryRun = true,
+            Mode = mode,
+            LeadsScanned = scanned,
             GroupsFound = groupsFound,
             LeadsToDelete = leadsToDelete,
             Page = page,
@@ -77,17 +87,21 @@ public class DuplicateLeadService(
     }
 
     public Task<(int GroupsFound, int LeadsToDelete)> GetDeleteEstimateAsync(
-        int? tenantId, bool ignoreTenant, CancellationToken ct = default)
-        => CountDuplicatesAsync(tenantId, ignoreTenant, ct);
+        int? tenantId, bool ignoreTenant, string mode, CancellationToken ct = default)
+        => CountDuplicatesAsync(tenantId, ignoreTenant, Normalize(mode), ct);
+
+    private static string Normalize(string? mode)
+        => string.Equals(mode, ModeName, StringComparison.OrdinalIgnoreCase) ? ModeName : ModePhone;
 
     // ─── Exclusão de um lote ────────────────────────────────────────────────
 
     public async Task<BatchResult> DeleteOneBatchAsync(
-        int? tenantId, bool ignoreTenant, int batchSize, bool tagInKommo, CancellationToken ct = default)
+        int? tenantId, bool ignoreTenant, int batchSize, bool tagInKommo, string mode, CancellationToken ct = default)
     {
         batchSize = Math.Clamp(batchSize, 1, MaxBatchSize);
+        mode = Normalize(mode);
 
-        var rows = await SelectDeleteBatchAsync(tenantId, ignoreTenant, batchSize, ct);
+        var rows = await SelectDeleteBatchAsync(tenantId, ignoreTenant, mode, batchSize, ct);
         if (rows.Count == 0) return new BatchResult(0, 0, 0, 0, 0);
 
         var ids = rows.Select(r => r.Id).ToArray();
@@ -245,9 +259,9 @@ public class DuplicateLeadService(
     private readonly record struct DeleteRow(int Id, int ExternalId, int? UnitId, int TenantId, string? TagsJson);
 
     private async Task<List<DeleteRow>> SelectDeleteBatchAsync(
-        int? tenantId, bool ignoreTenant, int batchSize, CancellationToken ct)
+        int? tenantId, bool ignoreTenant, string mode, int batchSize, CancellationToken ct)
     {
-        var (partition, filter, useParam) = BuildPartitionFilter(tenantId, ignoreTenant);
+        var (partition, filter, useParam, _) = BuildPartitionFilter(tenantId, ignoreTenant, mode);
 
         var sql = $@"
             SELECT ""Id"", ""ExternalId"", ""UnitId"", ""TenantId"", ""TagsJson"" FROM (
@@ -281,9 +295,9 @@ public class DuplicateLeadService(
     }
 
     private async Task<(int GroupsFound, int LeadsToDelete)> CountDuplicatesAsync(
-        int? tenantId, bool ignoreTenant, CancellationToken ct)
+        int? tenantId, bool ignoreTenant, string mode, CancellationToken ct)
     {
-        var (partition, filter, useParam) = BuildPartitionFilter(tenantId, ignoreTenant);
+        var (partition, filter, useParam, _) = BuildPartitionFilter(tenantId, ignoreTenant, mode);
 
         var sql = $@"
             WITH grp AS (
@@ -309,16 +323,24 @@ public class DuplicateLeadService(
         return (reader.GetInt32(0), reader.GetInt32(1));
     }
 
-    private async Task<List<LeadDuplicateGroupDto>> QueryGroupsAsync(
-        int? tenantId, bool ignoreTenant, CancellationToken ct)
+    /// <summary>Quantos leads (do tenant) entram na análise — com chave válida no modo escolhido.</summary>
+    private async Task<int> CountScannedAsync(int? tenantId, bool ignoreTenant, CancellationToken ct)
     {
-        var (partition, filter, useParam) = BuildPartitionFilter(tenantId, ignoreTenant);
+        var q = _db.Leads.AsNoTracking().AsQueryable();
+        if (!ignoreTenant && tenantId.HasValue) q = q.Where(l => l.TenantId == tenantId.Value);
+        return await q.CountAsync(ct);
+    }
+
+    private async Task<List<LeadDuplicateGroupDto>> QueryGroupsAsync(
+        int? tenantId, bool ignoreTenant, string mode, CancellationToken ct)
+    {
+        var (partition, filter, useParam, keyExpr) = BuildPartitionFilter(tenantId, ignoreTenant, mode);
 
         var sql = $@"
             WITH ranked AS (
                 SELECT ""Id"", ""Name"", ""CurrentStage"", ""HasPayment"", ""HasAppointment"",
                        ""Price"", ""CreatedAt"", ""TenantId"",
-                       {PhoneExpr} AS phone,
+                       {keyExpr} AS phone,
                        ROW_NUMBER() OVER (PARTITION BY {partition} ORDER BY {RankOrder}) AS rn,
                        COUNT(*)     OVER (PARTITION BY {partition}) AS grp_count
                 FROM leads
@@ -378,18 +400,21 @@ public class DuplicateLeadService(
 
     // ─── Helpers de SQL ──────────────────────────────────────────────────────
 
-    private static (string Partition, string Filter, bool UseParam) BuildPartitionFilter(
-        int? tenantId, bool ignoreTenant)
+    private static (string Partition, string Filter, bool UseParam, string KeyExpr) BuildPartitionFilter(
+        int? tenantId, bool ignoreTenant, string mode)
     {
-        var baseFilter = $"WHERE length({PhoneExpr}) >= {MinPhoneDigits}";
+        // Chave de agrupamento + filtro de validade por modo.
+        var (keyExpr, validity) = mode == ModeName
+            ? (NameExpr, $"WHERE length({NameExpr}) >= 2")
+            : (PhoneExpr, $"WHERE length({PhoneExpr}) >= {MinPhoneDigits}");
 
         if (ignoreTenant)
-            return (PhoneExpr, baseFilter, false);
+            return (keyExpr, validity, false, keyExpr);
 
         if (tenantId.HasValue)
-            return ($"\"TenantId\", {PhoneExpr}", $"{baseFilter} AND \"TenantId\" = @p0", true);
+            return ($"\"TenantId\", {keyExpr}", $"{validity} AND \"TenantId\" = @p0", true, keyExpr);
 
-        return ($"\"TenantId\", {PhoneExpr}", baseFilter, false);
+        return ($"\"TenantId\", {keyExpr}", validity, false, keyExpr);
     }
 
     private static void AddTenantParam(System.Data.Common.DbCommand cmd, int tenantId)

@@ -7,7 +7,8 @@ public record LeadDuplicateDeleteJobRequest(
     int? TenantId,
     bool IgnoreTenant,
     int BatchSize,
-    bool TagInKommo);
+    bool TagInKommo,
+    string Mode);
 
 public interface ILeadDuplicateDeleteJobQueue
 {

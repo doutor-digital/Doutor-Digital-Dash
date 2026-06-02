@@ -48,6 +48,7 @@ public class AdminLeadDuplicatesController(
     public async Task<IActionResult> ListDuplicates(
         [FromQuery] int? tenantId,
         [FromQuery] bool ignoreTenant = false,
+        [FromQuery] string mode = "phone",
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
@@ -55,7 +56,7 @@ public class AdminLeadDuplicatesController(
         var (t, ig, error) = ResolveScope(tenantId, ignoreTenant);
         if (error is not null) return error;
 
-        var report = await _dedup.FindDuplicatesAsync(t, ig, page, pageSize, ct);
+        var report = await _dedup.FindDuplicatesAsync(t, ig, mode, page, pageSize, ct);
         return Ok(report);
     }
 
@@ -71,6 +72,10 @@ public class AdminLeadDuplicatesController(
         var batchSize = Math.Clamp(
             body.BatchSize ?? DuplicateLeadService.DefaultBatchSize, 1, DuplicateLeadService.MaxBatchSize);
 
+        var mode = string.Equals(body.Mode, DuplicateLeadService.ModeName, StringComparison.OrdinalIgnoreCase)
+            ? DuplicateLeadService.ModeName
+            : DuplicateLeadService.ModePhone;
+
         var job = new LeadDuplicateDeleteJobDto
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -79,13 +84,14 @@ public class AdminLeadDuplicatesController(
             IgnoreTenant = ig,
             BatchSize = batchSize,
             TagInKommo = body.TagInKommo,
+            Mode = mode,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = User.Identity?.Name ?? _currentUser.Email ?? "anonymous",
         };
 
         await _jobStore.SaveAsync(job, ct);
         await _jobQueue.EnqueueAsync(
-            new LeadDuplicateDeleteJobRequest(job.Id, t, ig, batchSize, body.TagInKommo), ct);
+            new LeadDuplicateDeleteJobRequest(job.Id, t, ig, batchSize, body.TagInKommo, mode), ct);
 
         _logger.LogWarning(
             "📥 Job de delete de LEADS enfileirado: {JobId} por {User} (tenant={Tenant}, tagKommo={Tag}, batch={Batch})",

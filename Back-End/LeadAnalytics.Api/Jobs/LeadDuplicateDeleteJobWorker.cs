@@ -51,7 +51,7 @@ public class LeadDuplicateDeleteJobWorker(
         }
 
         var (groupsFound, expectedTotal) = await dedup.GetDeleteEstimateAsync(
-            req.TenantId, req.IgnoreTenant, stoppingToken);
+            req.TenantId, req.IgnoreTenant, req.Mode, stoppingToken);
 
         job.Status = DuplicateDeleteJobStatus.Running;
         job.StartedAt = DateTime.UtcNow;
@@ -90,7 +90,7 @@ public class LeadDuplicateDeleteJobWorker(
             try
             {
                 res = await dedup.DeleteOneBatchAsync(
-                    req.TenantId, req.IgnoreTenant, req.BatchSize, req.TagInKommo, stoppingToken);
+                    req.TenantId, req.IgnoreTenant, req.BatchSize, req.TagInKommo, req.Mode, stoppingToken);
             }
             catch (Exception ex)
             {

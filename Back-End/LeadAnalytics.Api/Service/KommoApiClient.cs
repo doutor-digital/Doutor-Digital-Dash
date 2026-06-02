@@ -39,9 +39,11 @@ public class KommoApiClient
     }
 
     public async Task<KommoLeadsPageResponse?> GetLeadsPageAsync(
-        string subdomainOrHost, string token, int page, int limit, CancellationToken ct)
+        string subdomainOrHost, string token, int page, int limit, CancellationToken ct,
+        bool withContacts = false)
     {
-        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}";
+        var with = withContacts ? "&with=contacts" : string.Empty;
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}{with}";
         return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
     }
 

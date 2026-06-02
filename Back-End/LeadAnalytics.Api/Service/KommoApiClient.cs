@@ -129,6 +129,41 @@ public class KommoApiClient
         return sent;
     }
 
+    /// <summary>
+    /// Re-busca leads por ID (em páginas de 250) e retorna o conjunto de IDs que
+    /// realmente contêm a tag informada (case-insensitive). Usado para CONFIRMAR
+    /// que o tagueamento "pegou" na Kommo — não basta o PATCH retornar 200.
+    /// </summary>
+    public async Task<HashSet<long>> GetLeadIdsWithTagAsync(
+        string subdomainOrHost, string token, IEnumerable<long> ids, string tagName, CancellationToken ct)
+    {
+        var result = new HashSet<long>();
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0) return result;
+
+        foreach (var chunk in list.Chunk(250))
+        {
+            var qs = string.Join("&", chunk.Select(id => $"filter[id][]={id}"));
+            var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?{qs}&limit=250";
+
+            var page = await GetAsync<KommoLeadsPageResponse>(url, token, ct);
+            var leads = page?.Embedded?.Leads;
+            if (leads is null) continue;
+
+            foreach (var lead in leads)
+            {
+                var tags = lead.Embedded?.Tags;
+                if (tags is not null &&
+                    tags.Any(t => string.Equals(t.Name, tagName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(lead.Id);
+                }
+            }
+        }
+
+        return result;
+    }
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);

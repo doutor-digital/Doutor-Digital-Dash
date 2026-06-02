@@ -64,7 +64,10 @@ public class LeadDuplicateDeleteJobDto
 
     public int LeadsToDeleteTotal { get; set; }
     public int LeadsDeleted { get; set; }
+    /// <summary>PATCHs de tag enviados com sucesso (HTTP 2xx).</summary>
     public int TaggedInKommo { get; set; }
+    /// <summary>Confirmados via re-GET: a tag DUPLICADO realmente está no lead na Kommo.</summary>
+    public int TagConfirmed { get; set; }
     public int TagFailures { get; set; }
     /// <summary>Leads que não puderam ser tagueados por falta de token/subdomínio na unidade (ou sem id da Kommo).</summary>
     public int TagSkipped { get; set; }

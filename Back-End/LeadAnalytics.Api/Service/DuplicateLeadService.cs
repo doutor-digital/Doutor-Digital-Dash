@@ -41,7 +41,7 @@ public class DuplicateLeadService(
         "\"HasPayment\" DESC, \"HasAppointment\" DESC, COALESCE(\"Price\",0) DESC, " +
         "COALESCE(\"CurrentStageId\",-1) DESC, \"CreatedAt\" ASC, \"Id\" ASC";
 
-    public readonly record struct BatchResult(int Deleted, int Tagged, int TagFailed, int TagSkipped);
+    public readonly record struct BatchResult(int Deleted, int Tagged, int TagFailed, int TagSkipped, int TagConfirmed);
 
     // ─── Relatório (dry-run) ────────────────────────────────────────────────
 
@@ -80,29 +80,30 @@ public class DuplicateLeadService(
         batchSize = Math.Clamp(batchSize, 1, MaxBatchSize);
 
         var rows = await SelectDeleteBatchAsync(tenantId, ignoreTenant, batchSize, ct);
-        if (rows.Count == 0) return new BatchResult(0, 0, 0, 0);
+        if (rows.Count == 0) return new BatchResult(0, 0, 0, 0, 0);
 
         var ids = rows.Select(r => r.Id).ToArray();
 
         var tagged = 0;
         var tagFailed = 0;
         var tagSkipped = 0;
+        var tagConfirmed = 0;
         if (tagInKommo)
-            (tagged, tagFailed, tagSkipped) = await TagInKommoAsync(rows, ct);
+            (tagged, tagFailed, tagSkipped, tagConfirmed) = await TagInKommoAsync(rows, ct);
 
         var deleted = await DeleteLeadsCascadeAsync(ids, ct);
 
         _logger.LogInformation(
-            "🗑 Lote leads duplicados: apagados={Deleted} tagueados={Tagged} falhasTag={Failed} puladosSemToken={Skipped}",
-            deleted, tagged, tagFailed, tagSkipped);
+            "🗑 Lote leads duplicados: apagados={Deleted} tagueados={Tagged} confirmados={Confirmed} falhasTag={Failed} puladosSemToken={Skipped}",
+            deleted, tagged, tagConfirmed, tagFailed, tagSkipped);
 
-        return new BatchResult(deleted, tagged, tagFailed, tagSkipped);
+        return new BatchResult(deleted, tagged, tagFailed, tagSkipped, tagConfirmed);
     }
 
     // ─── Tagueia "DUPLICADO" na Kommo (best-effort, por unidade) ─────────────
-    // Retorna (tagueados, falhas HTTP, pulados por falta de token/externalId).
+    // Retorna (tagueados enviados, falhas HTTP, pulados sem token, confirmados via re-GET).
 
-    private async Task<(int Tagged, int Failed, int Skipped)> TagInKommoAsync(List<DeleteRow> rows, CancellationToken ct)
+    private async Task<(int Tagged, int Failed, int Skipped, int Confirmed)> TagInKommoAsync(List<DeleteRow> rows, CancellationToken ct)
     {
         // Resolve unidades envolvidas (por UnitId e por ClinicId=TenantId como fallback).
         var unitIds = rows.Where(r => r.UnitId.HasValue).Select(r => r.UnitId!.Value).Distinct().ToList();
@@ -147,8 +148,11 @@ public class DuplicateLeadService(
 
         var tagged = 0;
         var failed = 0;
+        var confirmed = 0;
         foreach (var (_, bucket) in perUnit)
         {
+            var ids = bucket.Items.Select(i => i.Id).ToList();
+
             try
             {
                 tagged += await _kommo.PatchLeadsTagsAsync(bucket.Sub, bucket.Token, bucket.Items, ct);
@@ -158,10 +162,22 @@ public class DuplicateLeadService(
                 failed += bucket.Items.Count;
                 _logger.LogWarning(ex, "Falha ao taguear {Count} lead(s) duplicados na Kommo (sub={Sub})",
                     bucket.Items.Count, bucket.Sub);
+                continue;
+            }
+
+            // Confirma que a tag realmente entrou (re-GET por ID).
+            try
+            {
+                var confirmedSet = await _kommo.GetLeadIdsWithTagAsync(bucket.Sub, bucket.Token, ids, DuplicateTag, ct);
+                confirmed += confirmedSet.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao confirmar tag na Kommo (sub={Sub}) — PATCH ok, verificação falhou", bucket.Sub);
             }
         }
 
-        return (tagged, failed, skipped);
+        return (tagged, failed, skipped, confirmed);
     }
 
     private static List<string> ParseTags(string? tagsJson)

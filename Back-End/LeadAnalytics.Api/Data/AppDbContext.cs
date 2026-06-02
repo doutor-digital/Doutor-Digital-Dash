@@ -47,6 +47,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<LeadPaymentReceipt> LeadPaymentReceipts { get; set; }
     public DbSet<WebhookExecution> WebhookExecutions { get; set; }
 
+    public DbSet<AgentConversation> AgentConversations { get; set; }
+    public DbSet<AgentMessage> AgentMessages { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ─── Lead ────────────────────────────────────────────────
@@ -454,6 +457,65 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(e => new { e.UnitId, e.ReceivedAt });
             entity.HasIndex(e => new { e.TenantId, e.ReceivedAt });
             entity.HasIndex(e => new { e.Status, e.ReceivedAt });
+        });
+
+        // ─── AgentConversation (I.A. / agente-Dt) ────────────────
+        modelBuilder.Entity<AgentConversation>(entity =>
+        {
+            entity.ToTable("agent_conversations");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ExternalId).HasMaxLength(160).IsRequired();
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.AgentName).HasMaxLength(80);
+            entity.Property(e => e.Channel).HasMaxLength(40);
+            entity.Property(e => e.ContactName).HasMaxLength(200);
+            entity.Property(e => e.ContactPhone).HasMaxLength(40);
+            entity.Property(e => e.PhoneNormalized).HasMaxLength(40);
+            entity.Property(e => e.Intent).HasMaxLength(80);
+            entity.Property(e => e.Sentiment).HasMaxLength(40);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+
+            // Identidade estável da conversa por tenant (upsert do webhook).
+            entity.HasIndex(e => new { e.TenantId, e.ExternalId }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.LastMessageAt });
+            entity.HasIndex(e => new { e.TenantId, e.Status });
+            entity.HasIndex(e => new { e.UnitId, e.StartedAt });
+            entity.HasIndex(e => e.PhoneNormalized);
+
+            entity.HasOne(e => e.Unit)
+                  .WithMany()
+                  .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Lead)
+                  .WithMany()
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Contact)
+                  .WithMany()
+                  .HasForeignKey(e => e.ContactId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── AgentMessage ────────────────────────────────────────
+        modelBuilder.Entity<AgentMessage>(entity =>
+        {
+            entity.ToTable("agent_messages");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Role).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ExternalId).HasMaxLength(160);
+            entity.Property(e => e.ToolName).HasMaxLength(120);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+
+            entity.HasOne(e => e.Conversation)
+                  .WithMany(c => c.Messages)
+                  .HasForeignKey(e => e.AgentConversationId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.AgentConversationId, e.SentAt });
         });
 
     }

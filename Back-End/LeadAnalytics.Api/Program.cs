@@ -188,6 +188,7 @@ builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
 builder.Services.AddScoped<KommoIngestionService>();
 builder.Services.AddScoped<KommoSyncService>();
+builder.Services.AddScoped<AgentIngestionService>();
 builder.Services.AddHttpClient<KommoApiClient>(c =>
 {
     c.Timeout = TimeSpan.FromSeconds(30);

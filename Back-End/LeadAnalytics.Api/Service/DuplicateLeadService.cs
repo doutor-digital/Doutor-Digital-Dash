@@ -34,7 +34,15 @@ public class DuplicateLeadService(
     private const int MinPhoneDigits = 8;
 
     // Telefone só com dígitos.
-    private const string PhoneExpr = "regexp_replace(\"Phone\", '[^0-9]', '', 'g')";
+    private const string DigitsExpr = "regexp_replace(\"Phone\", '[^0-9]', '', 'g')";
+
+    // Forma canônica do telefone: tira o código do país "55" quando o número tem
+    // 12-13 dígitos (caso clássico em que a Kommo grava uns com 55 e outros sem).
+    // Assim "5599999999999" e "99999999999" agrupam como o MESMO telefone.
+    private const string PhoneExpr =
+        "(CASE WHEN length(" + DigitsExpr + ") IN (12, 13) AND left(" + DigitsExpr + ", 2) = '55' " +
+        "THEN right(" + DigitsExpr + ", length(" + DigitsExpr + ") - 2) " +
+        "ELSE " + DigitsExpr + " END)";
 
     // rn=1 => lead mantido (o mais avançado). rn>1 => apagar.
     private const string RankOrder =

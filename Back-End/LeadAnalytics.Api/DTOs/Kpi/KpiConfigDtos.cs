@@ -168,6 +168,14 @@ public class CustomFieldsSummaryResponseDto
     public bool Truncated { get; set; }
 }
 
+/// <summary>Mapeamento dos campos do Perfil do Lead (ids de campo da Kommo) por unidade.</summary>
+public class LeadProfileConfigDto
+{
+    [JsonPropertyName("birthdate_field_id")] public long? BirthdateFieldId { get; set; }
+    [JsonPropertyName("appointment_field_id")] public long? AppointmentFieldId { get; set; }
+    [JsonPropertyName("doctor_field_id")] public long? DoctorFieldId { get; set; }
+}
+
 /// <summary>Resultado do preview.</summary>
 public class KpiPreviewResponseDto
 {

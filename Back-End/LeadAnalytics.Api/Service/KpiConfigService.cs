@@ -16,6 +16,11 @@ public class KpiConfigService(AppDbContext db)
 {
     private readonly AppDbContext _db = db;
 
+    // Chaves (em kpi_configurations) do mapeamento de campos do Perfil do Lead por unidade.
+    public const string ProfileBirthdateKey = "profile_birthdate";
+    public const string ProfileAppointmentKey = "profile_appointment_date";
+    public const string ProfileDoctorKey = "profile_doctor";
+
     // ─── CRUD ────────────────────────────────────────────────────────────────
 
     public Task<List<KpiConfiguration>> GetForUnitAsync(int unitId, CancellationToken ct = default) =>
@@ -406,6 +411,11 @@ public class KpiConfigService(AppDbContext db)
             })
             .ToListAsync(ct);
 
+        // Mapeamento de campos escolhido pelo analista (id do campo); se não houver, casa por nome.
+        var (cfgBirth, cfgAppt, cfgDoctor) = unitId.HasValue
+            ? await GetLeadProfileConfigAsync(unitId.Value, ct)
+            : ((long?)null, (long?)null, (long?)null);
+
         var ageSum = new Dictionary<string, double>();
         var ageCount = new Dictionary<string, int>();
         void AddAge(string seg, double age)
@@ -437,7 +447,8 @@ public class KpiConfigService(AppDbContext db)
 
             var cf = l.CustomFieldsJson;
 
-            if (TryComputeAge(cf, now) is double age)
+            var birthRaw = ExtractField(cf, cfgBirth, n => n.Contains("nascimento") || n.Contains("birth"));
+            if (TryAge(birthRaw, now) is double age)
             {
                 AddAge("contato", age);
                 if (isAgendou) AddAge("agendou", age);
@@ -446,7 +457,7 @@ public class KpiConfigService(AppDbContext db)
                 if (isFaltou) AddAge("faltou", age);
             }
 
-            var doc = ExtractFieldByName(cf, n => n.Contains("respons") || n.Contains("doutor") || n.Contains("doctor"));
+            var doc = ExtractField(cf, cfgDoctor, n => n.Contains("respons") || n.Contains("doutor") || n.Contains("doctor"));
             if (!string.IsNullOrWhiteSpace(doc))
             {
                 var key = doc.Trim();
@@ -456,7 +467,7 @@ public class KpiConfigService(AppDbContext db)
             DateTime? appt = l.AppointmentScheduledAt;
             if (appt is null)
             {
-                var apptStr = ExtractFieldByName(cf, n => n.Contains("agendamento"));
+                var apptStr = ExtractField(cf, cfgAppt, n => n.Contains("agendamento"));
                 if (!string.IsNullOrWhiteSpace(apptStr) && TryParseDate(apptStr, out var d)) appt = d;
             }
             if (appt is DateTime ap)
@@ -531,14 +542,51 @@ public class KpiConfigService(AppDbContext db)
         return null;
     }
 
-    /// <summary>Idade a partir do campo de nascimento (nome contém "nascimento"/"birth").</summary>
-    private static double? TryComputeAge(string? json, DateTime now)
+    /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>
+    private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
+        => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
+
+    /// <summary>Idade a partir de uma data de nascimento (string).</summary>
+    private static double? TryAge(string? raw, DateTime now)
     {
-        var raw = ExtractFieldByName(json, n => n.Contains("nascimento") || n.Contains("birth"));
         if (string.IsNullOrWhiteSpace(raw) || !TryParseDate(raw, out var birth)) return null;
         var age = now.Year - birth.Year;
         if (now < birth.AddYears(age)) age--;
         return age is < 0 or > 120 ? null : age;
+    }
+
+    /// <summary>Lê os ids de campo escolhidos pra Perfil do Lead (nascimento/agendamento/doutor).</summary>
+    public async Task<(long? Birthdate, long? Appointment, long? Doctor)> GetLeadProfileConfigAsync(
+        int unitId, CancellationToken ct = default)
+    {
+        var rows = await _db.KpiConfigurations.AsNoTracking()
+            .Where(k => k.UnitId == unitId &&
+                (k.KpiKey == ProfileBirthdateKey || k.KpiKey == ProfileAppointmentKey || k.KpiKey == ProfileDoctorKey))
+            .ToListAsync(ct);
+
+        long? FieldOf(string key)
+        {
+            var r = rows.FirstOrDefault(x => x.KpiKey == key);
+            if (r is null || string.IsNullOrWhiteSpace(r.ConfigJson)) return null;
+            try { return ParseConfig(JsonSerializer.Deserialize<JsonElement>(r.ConfigJson)).FieldId; }
+            catch { return null; }
+        }
+
+        return (FieldOf(ProfileBirthdateKey), FieldOf(ProfileAppointmentKey), FieldOf(ProfileDoctorKey));
+    }
+
+    /// <summary>Salva (upsert) os ids de campo do Perfil do Lead. Id nulo = limpa (volta pro nome).</summary>
+    public async Task SaveLeadProfileConfigAsync(
+        int unitId, int clinicId, long? birthdate, long? appointment, long? doctor,
+        string? email, CancellationToken ct = default)
+    {
+        var items = new[]
+        {
+            new KpiSaveItem(ProfileBirthdateKey, KpiSourceTypes.CustomFieldCount, birthdate.HasValue ? $"{{\"fieldId\":{birthdate.Value}}}" : "{}"),
+            new KpiSaveItem(ProfileAppointmentKey, KpiSourceTypes.CustomFieldCount, appointment.HasValue ? $"{{\"fieldId\":{appointment.Value}}}" : "{}"),
+            new KpiSaveItem(ProfileDoctorKey, KpiSourceTypes.CustomFieldCount, doctor.HasValue ? $"{{\"fieldId\":{doctor.Value}}}" : "{}"),
+        };
+        await SaveAsync(unitId, clinicId, items, email, ct);
     }
 
     /// <summary>Parse tolerante de data: yyyy-MM-dd / ISO / pt-BR / unix (segundos ou ms).</summary>

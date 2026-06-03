@@ -113,6 +113,34 @@ public class KpiConfigController(
         return Ok(new { message = "Configurações salvas.", count = prepared.Count });
     }
 
+    /// <summary>Lê o mapeamento de campos do Perfil do Lead (nascimento/agendamento/doutor).</summary>
+    [HttpGet("lead-profile")]
+    public async Task<IActionResult> GetLeadProfileConfig([FromQuery] int unitId, CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        if (await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } guard) return guard;
+
+        var (b, a, d) = await _kpiService.GetLeadProfileConfigAsync(unitId, ct);
+        return Ok(new LeadProfileConfigDto { BirthdateFieldId = b, AppointmentFieldId = a, DoctorFieldId = d });
+    }
+
+    /// <summary>Salva o mapeamento de campos do Perfil do Lead.</summary>
+    [HttpPut("lead-profile")]
+    public async Task<IActionResult> SaveLeadProfileConfig(
+        [FromQuery] int unitId, [FromBody] LeadProfileConfigDto body, CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        if (await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } guard) return guard;
+
+        var unit = await _db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { message = "Unidade não encontrada." });
+
+        await _kpiService.SaveLeadProfileConfigAsync(
+            unitId, unit.ClinicId, body.BirthdateFieldId, body.AppointmentFieldId, body.DoctorFieldId,
+            _currentUser.Email, ct);
+        return Ok(new { message = "Configuração salva." });
+    }
+
     /// <summary>Remove um KPI (custom) de uma unidade.</summary>
     [HttpDelete("{kpiKey}")]
     public async Task<IActionResult> Delete(

@@ -381,6 +381,188 @@ public class KpiConfigService(AppDbContext db)
         return top;
     }
 
+    /// <summary>
+    /// Perfil avançado do lead: idade média por desfecho (contato/agendou/compareceu/fechou/
+    /// faltou), alertas de agendamento próximo, ranking de doutor responsável e contagem por
+    /// desfecho. Reaproveita os predicados de etapa do dashboard (LeadStages).
+    /// </summary>
+    public async Task<DTOs.Dashboard.LeadProfileAnalyticsDto> ComputeLeadProfileAsync(
+        int clinicId, int? unitId, DateTime from, DateTime to, int upcomingDays = 7, CancellationToken ct = default)
+    {
+        const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
+        var now = DateTime.UtcNow;
+        var windowEnd = now.AddDays(Math.Clamp(upcomingDays, 1, 60));
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
+            .Select(l => new
+            {
+                l.Id, l.Name, l.Phone, l.CurrentStage, l.AttendanceStatus,
+                l.AppointmentScheduledAt, l.CustomFieldsJson,
+            })
+            .ToListAsync(ct);
+
+        var ageSum = new Dictionary<string, double>();
+        var ageCount = new Dictionary<string, int>();
+        void AddAge(string seg, double age)
+        {
+            ageSum[seg] = ageSum.GetValueOrDefault(seg) + age;
+            ageCount[seg] = ageCount.GetValueOrDefault(seg) + 1;
+        }
+
+        var outcomes = new Dictionary<string, int>();
+        void Inc(string seg) => outcomes[seg] = outcomes.GetValueOrDefault(seg) + 1;
+
+        var doctors = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var upcoming = new List<DTOs.Dashboard.UpcomingApptDto>();
+
+        foreach (var l in rows)
+        {
+            var stage = l.CurrentStage;
+            var att = l.AttendanceStatus;
+            var isAgendou = LeadStages.HasAppointmentRecord(stage);
+            var isCompareceu = att == LeadStages.AttendedCompareceu;
+            var isFechou = stage == LeadStages.FechouTratamento || stage == LeadStages.EmTratamento;
+            var isFaltou = stage == LeadStages.Faltou || att == LeadStages.AttendedFaltou;
+
+            Inc("contato");
+            if (isAgendou) Inc("agendou");
+            if (isCompareceu) Inc("compareceu");
+            if (isFechou) Inc("fechou");
+            if (isFaltou) Inc("faltou");
+
+            var cf = l.CustomFieldsJson;
+
+            if (TryComputeAge(cf, now) is double age)
+            {
+                AddAge("contato", age);
+                if (isAgendou) AddAge("agendou", age);
+                if (isCompareceu) AddAge("compareceu", age);
+                if (isFechou) AddAge("fechou", age);
+                if (isFaltou) AddAge("faltou", age);
+            }
+
+            var doc = ExtractFieldByName(cf, n => n.Contains("respons") || n.Contains("doutor") || n.Contains("doctor"));
+            if (!string.IsNullOrWhiteSpace(doc))
+            {
+                var key = doc.Trim();
+                doctors[key] = doctors.GetValueOrDefault(key) + 1;
+            }
+
+            DateTime? appt = l.AppointmentScheduledAt;
+            if (appt is null)
+            {
+                var apptStr = ExtractFieldByName(cf, n => n.Contains("agendamento"));
+                if (!string.IsNullOrWhiteSpace(apptStr) && TryParseDate(apptStr, out var d)) appt = d;
+            }
+            if (appt is DateTime ap)
+            {
+                var apUtc = AsUtc(ap);
+                if (apUtc >= now && apUtc <= windowEnd && !isFaltou && !isFechou)
+                    upcoming.Add(new DTOs.Dashboard.UpcomingApptDto
+                    {
+                        LeadId = l.Id,
+                        Name = l.Name ?? "",
+                        Phone = l.Phone,
+                        ScheduledAt = apUtc,
+                        DaysUntil = (int)Math.Max(0, Math.Ceiling((apUtc - now).TotalDays)),
+                    });
+            }
+        }
+
+        DTOs.Dashboard.AgeStatDto Age(string seg) => new()
+        {
+            Avg = ageCount.GetValueOrDefault(seg) > 0 ? Math.Round(ageSum[seg] / ageCount[seg], 1) : 0,
+            Count = ageCount.GetValueOrDefault(seg),
+        };
+
+        return new DTOs.Dashboard.LeadProfileAnalyticsDto
+        {
+            TotalLeads = rows.Count,
+            Age = new()
+            {
+                Overall = Age("contato"),
+                Agendou = Age("agendou"),
+                Compareceu = Age("compareceu"),
+                Fechou = Age("fechou"),
+                Faltou = Age("faltou"),
+            },
+            Upcoming = upcoming.OrderBy(u => u.ScheduledAt).Take(50).ToList(),
+            Doctors = doctors.OrderByDescending(x => x.Value).Take(10)
+                .Select(x => new DTOs.Dashboard.LabelCountDto { Label = x.Key, Count = x.Value }).ToList(),
+            Outcomes = new()
+            {
+                Contato = outcomes.GetValueOrDefault("contato"),
+                Agendou = outcomes.GetValueOrDefault("agendou"),
+                Compareceu = outcomes.GetValueOrDefault("compareceu"),
+                Fechou = outcomes.GetValueOrDefault("fechou"),
+                Faltou = outcomes.GetValueOrDefault("faltou"),
+            },
+        };
+    }
+
+    /// <summary>Valor do primeiro campo cujo nome (lowercase) casa com o predicado.</summary>
+    private static string? ExtractFieldByName(string? json, Func<string, bool> nameMatches)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+                if (!el.TryGetProperty("field_name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+                var name = n.GetString();
+                if (string.IsNullOrWhiteSpace(name) || !nameMatches(name.ToLowerInvariant())) continue;
+                if (el.TryGetProperty("value", out var v))
+                {
+                    if (v.ValueKind == JsonValueKind.String) return v.GetString();
+                    if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
+                }
+                return null;
+            }
+        }
+        catch (JsonException) { /* ignora */ }
+        return null;
+    }
+
+    /// <summary>Idade a partir do campo de nascimento (nome contém "nascimento"/"birth").</summary>
+    private static double? TryComputeAge(string? json, DateTime now)
+    {
+        var raw = ExtractFieldByName(json, n => n.Contains("nascimento") || n.Contains("birth"));
+        if (string.IsNullOrWhiteSpace(raw) || !TryParseDate(raw, out var birth)) return null;
+        var age = now.Year - birth.Year;
+        if (now < birth.AddYears(age)) age--;
+        return age is < 0 or > 120 ? null : age;
+    }
+
+    /// <summary>Parse tolerante de data: yyyy-MM-dd / ISO / pt-BR / unix (segundos ou ms).</summary>
+    private static bool TryParseDate(string raw, out DateTime date)
+    {
+        date = default;
+        raw = raw.Trim();
+        if (raw.Length == 0) return false;
+        if (long.TryParse(raw, out var num) && num > 0)
+        {
+            try
+            {
+                date = num > 99999999999L
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(num).UtcDateTime
+                    : DateTimeOffset.FromUnixTimeSeconds(num).UtcDateTime;
+                return true;
+            }
+            catch { return false; }
+        }
+        const DateTimeStyles styles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, styles, out date)) return true;
+        return DateTime.TryParse(raw, new CultureInfo("pt-BR"), styles, out date);
+    }
+
     private sealed class FieldAgg
     {
         public string Name = "";

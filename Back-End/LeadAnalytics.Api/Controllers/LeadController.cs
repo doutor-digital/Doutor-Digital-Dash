@@ -725,6 +725,32 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Perfil avançado do lead: idade média por desfecho, alertas de agendamento próximo,
+    /// doutor responsável e contagem por desfecho. Consumido pela dashboard principal.
+    /// </summary>
+    [HttpGet("dashboard/lead-profile")]
+    [ProducesResponseType(typeof(DTOs.Dashboard.LeadProfileAnalyticsDto), 200)]
+    public async Task<IActionResult> LeadProfile(
+        [FromQuery] int? unitId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        [FromQuery] int upcomingDays = 7,
+        CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var to = dateTo ?? DateTime.UtcNow;
+        var from = dateFrom ?? to.AddDays(-30);
+
+        var result = await _kpiService.ComputeLeadProfileAsync(
+            tenantId.Value, unitId, from, to, upcomingDays, ct);
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Leads criados nas últimas N horas (notificação + página de recentes).
     /// </summary>
     [HttpGet("recent")]

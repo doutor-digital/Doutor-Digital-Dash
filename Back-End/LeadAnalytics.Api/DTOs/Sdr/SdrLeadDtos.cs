@@ -80,6 +80,24 @@ public class SdrCustomFieldDto
     public string? Value { get; set; }
 }
 
+/// <summary>Corpo do PUT /api/sdr/leads/{leadId}/custom-fields — grava de volta na Kommo.</summary>
+public class SdrUpdateCustomFieldsDto
+{
+    public List<SdrCustomFieldUpdateDto> Fields { get; set; } = new();
+}
+
+public class SdrCustomFieldUpdateDto
+{
+    public long FieldId { get; set; }
+    public string? FieldName { get; set; }
+    public string? FieldCode { get; set; }
+    public string? Type { get; set; }
+    /// <summary>Valor exibível (texto, número, data yyyy-mm-dd, ou rótulo do select).</summary>
+    public string? Value { get; set; }
+    /// <summary>Id do enum (para campos select/multiselect).</summary>
+    public long? EnumId { get; set; }
+}
+
 public class SdrSyncSummaryDto
 {
     public int Created { get; set; }

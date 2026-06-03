@@ -26,17 +26,20 @@ public class SdrLeadsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly TenantUnitGuard _tenantGuard;
     private readonly ICurrentUser _currentUser;
+    private readonly KommoApiClient _kommoApi;
     private readonly ILogger<SdrLeadsController> _logger;
 
     public SdrLeadsController(
         AppDbContext db,
         TenantUnitGuard tenantGuard,
         ICurrentUser currentUser,
+        KommoApiClient kommoApi,
         ILogger<SdrLeadsController> logger)
     {
         _db = db;
         _tenantGuard = tenantGuard;
         _currentUser = currentUser;
+        _kommoApi = kommoApi;
         _logger = logger;
     }
 
@@ -239,6 +242,94 @@ public class SdrLeadsController : ControllerBase
             UpdatedAt = l.UpdatedAt.ToString("o"),
             CustomFields = ParseCustomFields(l.CustomFieldsJson),
         };
+    }
+
+    /// <summary>
+    /// Edita os campos customizados de um lead e GRAVA DE VOLTA NA KOMMO (PATCH), além de
+    /// atualizar o nosso <c>CustomFieldsJson</c>. Restrito ao tenant do lead.
+    /// </summary>
+    [HttpPut("{leadId:int}/custom-fields")]
+    public async Task<IActionResult> UpdateCustomFields(
+        int leadId, [FromBody] SdrUpdateCustomFieldsDto body, CancellationToken ct)
+    {
+        var lead = await _db.Leads.Include(l => l.Unit).FirstOrDefaultAsync(l => l.Id == leadId, ct);
+        if (lead is null) return NotFound(new { message = "Lead não encontrado." });
+        if (!_currentUser.IsSuperAdmin && _currentUser.TenantId is int t && lead.TenantId != t)
+            return StatusCode(403, new { message = "Lead de outro tenant." });
+
+        var unit = lead.Unit;
+        if (unit is null || string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { message = "A unidade do lead não tem Kommo configurado (subdomínio + token)." });
+        if (lead.ExternalId <= 0)
+            return BadRequest(new { message = "Lead sem ID da Kommo — não dá pra gravar lá." });
+
+        var fields = body.Fields ?? new();
+        var patches = fields.Select(f => new KommoCustomFieldPatch(f.FieldId, f.Type, f.Value, f.EnumId));
+        try
+        {
+            await _kommoApi.PatchLeadCustomFieldsAsync(
+                unit.KommoSubdomain!, unit.KommoAccessToken!, lead.ExternalId, patches, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao gravar custom fields na Kommo do lead {Id}", lead.Id);
+            return StatusCode(502, new { message = "Falha ao gravar na Kommo: " + ex.Message });
+        }
+
+        lead.CustomFieldsJson = MergeCustomFields(lead.CustomFieldsJson, fields);
+        lead.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new { message = "Campos atualizados na Kommo.", customFields = ParseCustomFields(lead.CustomFieldsJson) });
+    }
+
+    /// <summary>Atualiza/insere os campos editados no CustomFieldsJson local (mantém os demais).</summary>
+    private static string MergeCustomFields(string? json, List<SdrCustomFieldUpdateDto> updates)
+    {
+        var list = new List<Dictionary<string, object?>>();
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                    {
+                        if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                        var d = new Dictionary<string, object?>();
+                        foreach (var p in el.EnumerateObject())
+                            d[p.Name] = p.Value.ValueKind switch
+                            {
+                                System.Text.Json.JsonValueKind.String => p.Value.GetString(),
+                                System.Text.Json.JsonValueKind.Number => p.Value.TryGetInt64(out var nn) ? nn : p.Value.GetRawText(),
+                                System.Text.Json.JsonValueKind.True => "Sim",
+                                System.Text.Json.JsonValueKind.False => "Não",
+                                _ => null,
+                            };
+                        list.Add(d);
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException) { /* ignora */ }
+        }
+
+        foreach (var u in updates)
+        {
+            var existing = list.FirstOrDefault(d =>
+                d.TryGetValue("field_id", out var fid) && fid is not null && Convert.ToInt64(fid) == u.FieldId);
+            if (existing is null)
+            {
+                existing = new Dictionary<string, object?> { ["field_id"] = u.FieldId };
+                list.Add(existing);
+            }
+            if (!string.IsNullOrWhiteSpace(u.FieldName)) existing["field_name"] = u.FieldName;
+            if (!string.IsNullOrWhiteSpace(u.FieldCode)) existing["field_code"] = u.FieldCode;
+            if (!string.IsNullOrWhiteSpace(u.Type)) existing["type"] = u.Type;
+            existing["value"] = string.IsNullOrWhiteSpace(u.Value) ? null : u.Value;
+        }
+
+        return System.Text.Json.JsonSerializer.Serialize(list);
     }
 
     /// <summary>

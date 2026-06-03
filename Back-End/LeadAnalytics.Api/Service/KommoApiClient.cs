@@ -12,6 +12,8 @@ namespace LeadAnalytics.Api.Service;
 /// Auth: Bearer token de longa duração (Perfil → Integrações → API).
 /// Base URL: https://{subdomain}.kommo.com/api/v4/
 /// </summary>
+public record KommoCustomFieldPatch(long FieldId, string? Type, string? Value, long? EnumId);
+
 public class KommoApiClient
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
@@ -139,6 +141,68 @@ public class KommoApiClient
         }
 
         return sent;
+    }
+
+    /// <summary>
+    /// Atualiza os custom fields de UM lead na Kommo (PATCH /api/v4/leads). Diferente das
+    /// tags, <c>custom_fields_values</c> fica no nível do lead (não em <c>_embedded</c>).
+    /// Select vai por <c>enum_id</c>; data vira timestamp unix; texto/número vão como value;
+    /// valor vazio → <c>values: null</c> (limpa o campo).
+    /// </summary>
+    public async Task PatchLeadCustomFieldsAsync(
+        string subdomainOrHost, string token, long leadId,
+        IEnumerable<KommoCustomFieldPatch> fields, CancellationToken ct)
+    {
+        var cfValues = new List<object>();
+        foreach (var f in fields)
+        {
+            var entry = new Dictionary<string, object?> { ["field_id"] = f.FieldId };
+            if (f.EnumId is long en && en > 0)
+                entry["values"] = new object[] { new { enum_id = en } };
+            else if (string.IsNullOrWhiteSpace(f.Value))
+                entry["values"] = null; // limpa o campo
+            else if (IsDateType(f.Type) && TryToUnixSeconds(f.Value!, out var unix))
+                entry["values"] = new object[] { new { value = unix } };
+            else
+                entry["values"] = new object[] { new { value = f.Value } };
+            cfValues.Add(entry);
+        }
+        if (cfValues.Count == 0) return;
+
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads";
+        var payload = new object[] { new { id = leadId, custom_fields_values = cfValues } };
+
+        using var req = new HttpRequestMessage(HttpMethod.Patch, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Content = new StringContent(
+            JsonSerializer.Serialize(payload, JsonOpts), System.Text.Encoding.UTF8, "application/json");
+
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Kommo PATCH custom_fields {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
+            throw new HttpRequestException($"Kommo PATCH retornou {(int)resp.StatusCode}: {body}");
+        }
+    }
+
+    private static bool IsDateType(string? type) =>
+        type is "date" or "birthday" or "date_time";
+
+    private static bool TryToUnixSeconds(string raw, out long unix)
+    {
+        unix = 0;
+        raw = raw.Trim();
+        if (long.TryParse(raw, out var asNum)) { unix = asNum; return true; } // já é unix
+        if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var dt))
+        {
+            unix = ((DateTimeOffset)DateTime.SpecifyKind(dt, DateTimeKind.Utc)).ToUnixTimeSeconds();
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

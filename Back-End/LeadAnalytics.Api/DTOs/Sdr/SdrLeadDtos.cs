@@ -62,6 +62,22 @@ public class SdrLeadResponseDto
     public int? ImportBatchId { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
     public string UpdatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Todos os campos customizados do lead na Kommo (nome → valor), pra o SDR ver tudo
+    /// preenchido na revisão. Vem do <c>Lead.CustomFieldsJson</c>.
+    /// </summary>
+    public List<SdrCustomFieldDto> CustomFields { get; set; } = new();
+}
+
+/// <summary>Um campo customizado da Kommo já legível (nome + valor).</summary>
+public class SdrCustomFieldDto
+{
+    public long FieldId { get; set; }
+    public string FieldName { get; set; } = string.Empty;
+    public string? FieldCode { get; set; }
+    public string? Type { get; set; }
+    public string? Value { get; set; }
 }
 
 public class SdrSyncSummaryDto

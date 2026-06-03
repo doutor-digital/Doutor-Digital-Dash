@@ -237,6 +237,55 @@ public class SdrLeadsController : ControllerBase
             AttendantId = l.AttendantId,
             CreatedAt = l.CreatedAt.ToString("o"),
             UpdatedAt = l.UpdatedAt.ToString("o"),
+            CustomFields = ParseCustomFields(l.CustomFieldsJson),
         };
+    }
+
+    /// <summary>
+    /// Lê o <c>CustomFieldsJson</c> do lead (array <c>[{field_id,field_name,field_code,type,value}]</c>)
+    /// e devolve a lista legível pra o SDR ver todos os campos da Kommo na revisão.
+    /// </summary>
+    private static List<DTOs.Sdr.SdrCustomFieldDto> ParseCustomFields(string? json)
+    {
+        var list = new List<DTOs.Sdr.SdrCustomFieldDto>();
+        if (string.IsNullOrWhiteSpace(json)) return list;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) return list;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                var name = el.TryGetProperty("field_name", out var n)
+                    && n.ValueKind == System.Text.Json.JsonValueKind.String ? n.GetString() : null;
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                string? value = null;
+                if (el.TryGetProperty("value", out var v))
+                {
+                    value = v.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.String => v.GetString(),
+                        System.Text.Json.JsonValueKind.Number => v.GetRawText(),
+                        System.Text.Json.JsonValueKind.True => "Sim",
+                        System.Text.Json.JsonValueKind.False => "Não",
+                        _ => null,
+                    };
+                }
+
+                list.Add(new DTOs.Sdr.SdrCustomFieldDto
+                {
+                    FieldId = el.TryGetProperty("field_id", out var fid) && fid.TryGetInt64(out var idv) ? idv : 0,
+                    FieldName = name!,
+                    FieldCode = el.TryGetProperty("field_code", out var fc)
+                        && fc.ValueKind == System.Text.Json.JsonValueKind.String ? fc.GetString() : null,
+                    Type = el.TryGetProperty("type", out var t)
+                        && t.ValueKind == System.Text.Json.JsonValueKind.String ? t.GetString() : null,
+                    Value = value,
+                });
+            }
+        }
+        catch (System.Text.Json.JsonException) { /* json malformado — ignora */ }
+        return list;
     }
 }

@@ -3,6 +3,9 @@ namespace LeadAnalytics.Api.Service;
 /// <summary>Tipos de fonte suportados por uma configuração de KPI.</summary>
 public static class KpiSourceTypes
 {
+    /// <summary>Todos os leads criados no período (sem etapa específica). Ex.: "Total de Leads".</summary>
+    public const string CreatedInPeriod = "created";
+
     /// <summary>Conta leads cuja etapa atual (CurrentStageId) está em stageIds.</summary>
     public const string KommoStage = "kommo_stage";
 
@@ -16,7 +19,7 @@ public static class KpiSourceTypes
     public const string StageFieldFilter = "stage_field_filter";
 
     public static readonly string[] All =
-        { KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter };
+        { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter };
 
     public static bool IsValid(string? type) =>
         type is not null && Array.Exists(All, t => t == type);

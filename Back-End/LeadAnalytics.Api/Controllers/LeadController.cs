@@ -1,4 +1,6 @@
-﻿using LeadAnalytics.Api.DTOs.Response;
+﻿using System.Text.Json;
+using LeadAnalytics.Api.DTOs.Kpi;
+using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.DTOs.Timeline;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -597,6 +599,101 @@ public class WebhooksController(
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Drill-down: lista os leads por trás de um KPI do dashboard. Resolve a fonte na
+    /// ordem: inline (body.source_type) → config salva da unidade → "criados no período"
+    /// (só para total_leads). Disponível a qualquer usuário do tenant (não é só do analista).
+    /// </summary>
+    [HttpPost("dashboard/kpi-leads")]
+    [ProducesResponseType(typeof(KpiLeadsResponseDto), 200)]
+    public async Task<IActionResult> KpiLeads(
+        [FromQuery] int? unitId,
+        [FromBody] KpiLeadsRequestDto body,
+        CancellationToken ct)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var to = body.DateTo ?? DateTime.UtcNow;
+        var from = body.DateFrom ?? to.AddDays(-30);
+
+        var sourceType = body.SourceType ?? "";
+        var config = body.Config;
+        var hasInline = !string.IsNullOrWhiteSpace(body.SourceType)
+                        && config.ValueKind == JsonValueKind.Object;
+
+        if (!hasInline)
+        {
+            // tenta a config salva da unidade
+            if (unitId.HasValue && !string.IsNullOrWhiteSpace(body.KpiKey))
+            {
+                var configs = await _kpiService.GetForUnitAsync(unitId.Value, ct);
+                var cfg = configs.FirstOrDefault(c => c.KpiKey == body.KpiKey);
+                if (cfg is not null)
+                {
+                    sourceType = cfg.SourceType;
+                    config = JsonSerializer.Deserialize<JsonElement>(
+                        string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceType))
+            {
+                if (body.KpiKey == "total_leads")
+                {
+                    sourceType = KpiSourceTypes.CreatedInPeriod;
+                    config = JsonSerializer.Deserialize<JsonElement>("{}");
+                }
+                else
+                {
+                    return Ok(new KpiLeadsResponseDto
+                    {
+                        Note = "Este KPI ainda não tem fonte configurada. Configure a etapa no card.",
+                    });
+                }
+            }
+        }
+
+        if (!KpiSourceTypes.IsValid(sourceType))
+            return BadRequest(new { error = $"fonte inválida: {sourceType}" });
+
+        var (items, total, truncated) = await _kpiService.ComputeLeadsAsync(
+            tenantId.Value, unitId, sourceType, config, from, to, 500, ct);
+
+        return Ok(new KpiLeadsResponseDto { Items = items, Total = total, Truncated = truncated });
+    }
+
+    /// <summary>
+    /// Métricas de todos os campos customizados dos leads do período (perfil do lead):
+    /// preenchimento + distribuição dos valores mais comuns por campo.
+    /// </summary>
+    [HttpGet("dashboard/custom-fields-summary")]
+    [ProducesResponseType(typeof(CustomFieldsSummaryResponseDto), 200)]
+    public async Task<IActionResult> CustomFieldsSummary(
+        [FromQuery] int? unitId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        CancellationToken ct)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var to = dateTo ?? DateTime.UtcNow;
+        var from = dateFrom ?? to.AddDays(-30);
+
+        var (total, fields, truncated) = await _kpiService.CustomFieldsSummaryAsync(
+            tenantId.Value, unitId, from, to, 8, ct);
+
+        return Ok(new CustomFieldsSummaryResponseDto
+        {
+            TotalLeads = total,
+            Fields = fields,
+            Truncated = truncated,
+        });
     }
 
     /// <summary>

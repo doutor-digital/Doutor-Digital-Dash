@@ -84,6 +84,10 @@ public class KpiConfigService(AppDbContext db)
 
         switch (sourceType)
         {
+            case KpiSourceTypes.CreatedInPeriod:
+                // Todos os leads criados no período (ex.: "Total de Leads").
+                return (sample, sample, null);
+
             case KpiSourceTypes.KommoStage:
             {
                 if (p.StageIds.Count == 0)
@@ -139,6 +143,182 @@ public class KpiConfigService(AppDbContext db)
             default:
                 return (0, sample, $"Tipo de fonte desconhecido: {sourceType}");
         }
+    }
+
+    /// <summary>
+    /// Drill-down: devolve os leads por trás de um KPI (mesma lógica de filtro do
+    /// ComputeAsync, mas retornando os leads em vez do número). Cap em <paramref name="limit"/>.
+    /// </summary>
+    public async Task<(List<DTOs.Kpi.KpiLeadDto> Items, int Total, bool Truncated)> ComputeLeadsAsync(
+        int clinicId, int? unitId, string sourceType, JsonElement config,
+        DateTime from, DateTime to, int limit = 500, CancellationToken ct = default)
+    {
+        const int MaxScan = 5000; // teto de varredura p/ filtro em memória
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+        if (unitId.HasValue)
+            q = q.Where(l => l.UnitId == unitId.Value);
+
+        var p = ParseConfig(config);
+        var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
+            or KpiSourceTypes.CustomFieldSum or KpiSourceTypes.StageFieldFilter;
+
+        // Filtro por etapa (em SQL).
+        if (sourceType == KpiSourceTypes.KommoStage)
+        {
+            if (p.StageIds.Count == 0) return (new(), 0, false);
+            var ids = p.StageIds;
+            q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+        }
+        else if (sourceType == KpiSourceTypes.StageFieldFilter && p.StageIds.Count > 0)
+        {
+            var ids = p.StageIds;
+            q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+        }
+
+        q = q.OrderByDescending(l => l.CreatedAt);
+
+        var hits = new List<DTOs.Kpi.KpiLeadDto>();
+        var scanned = 0;
+        var truncated = false;
+
+        var rows = await q.Take(MaxScan).Select(l => new
+        {
+            l.Id, l.ExternalId, l.Name, l.Phone, l.Source, l.Channel,
+            l.CurrentStage, l.CurrentStageId, l.LeadType, l.HasAppointment, l.HasPayment,
+            l.CreatedAt, l.CustomFieldsJson,
+        }).ToListAsync(ct);
+
+        truncated = rows.Count >= MaxScan;
+
+        foreach (var l in rows)
+        {
+            scanned++;
+            string? matched = null;
+
+            if (fieldBased)
+            {
+                matched = ExtractFieldValue(l.CustomFieldsJson ?? "[]", p.FieldId, p.FieldCode);
+                if (matched is null) continue; // campo não preenchido
+                if (sourceType != KpiSourceTypes.CustomFieldSum && p.MatchValues.Count > 0 &&
+                    !p.MatchValues.Any(m => string.Equals(m.Trim(), matched.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    continue;
+            }
+
+            hits.Add(new DTOs.Kpi.KpiLeadDto
+            {
+                Id = l.Id,
+                ExternalId = l.ExternalId,
+                Name = l.Name,
+                Phone = l.Phone,
+                Source = l.Source,
+                Channel = l.Channel,
+                CurrentStage = l.CurrentStage,
+                CurrentStageId = l.CurrentStageId,
+                LeadType = l.LeadType,
+                HasAppointment = l.HasAppointment,
+                HasPayment = l.HasPayment,
+                CreatedAt = l.CreatedAt,
+                MatchedValue = matched,
+            });
+
+            if (hits.Count >= limit) { truncated = true; break; }
+        }
+
+        return (hits, hits.Count, truncated);
+    }
+
+    /// <summary>
+    /// Métricas de TODOS os campos customizados dos leads do período: para cada campo,
+    /// quantos leads o preenchem e a distribuição dos valores mais comuns. É o dado do
+    /// dashboard "perfil do lead".
+    /// </summary>
+    public async Task<(int TotalLeads, List<DTOs.Kpi.CustomFieldSummaryDto> Fields, bool Truncated)>
+        CustomFieldsSummaryAsync(int clinicId, int? unitId, DateTime from, DateTime to,
+            int topValues = 8, CancellationToken ct = default)
+    {
+        const int MaxScan = 8000;
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
+                        && l.CustomFieldsJson != null);
+        if (unitId.HasValue)
+            q = q.Where(l => l.UnitId == unitId.Value);
+
+        var total = await q.CountAsync(ct);
+        var jsons = await q.OrderByDescending(l => l.CreatedAt)
+            .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);
+        var truncated = jsons.Count >= MaxScan;
+
+        // field_id -> agregador
+        var agg = new Dictionary<long, FieldAgg>();
+        foreach (var json in jsons)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (el.ValueKind != JsonValueKind.Object) continue;
+                    if (!el.TryGetProperty("field_id", out var fidEl) || !TryGetLong(fidEl, out var fid)) continue;
+
+                    var value = el.TryGetProperty("value", out var v)
+                        ? (v.ValueKind == JsonValueKind.String ? v.GetString()
+                           : v.ValueKind == JsonValueKind.Number ? v.GetRawText() : null)
+                        : null;
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+
+                    if (!agg.TryGetValue(fid, out var a))
+                    {
+                        a = new FieldAgg
+                        {
+                            Name = el.TryGetProperty("field_name", out var fn) && fn.ValueKind == JsonValueKind.String
+                                ? fn.GetString() ?? $"Campo {fid}" : $"Campo {fid}",
+                            Code = el.TryGetProperty("field_code", out var fc) && fc.ValueKind == JsonValueKind.String
+                                ? fc.GetString() : null,
+                            Type = el.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String
+                                ? t.GetString() ?? "text" : "text",
+                        };
+                        agg[fid] = a;
+                    }
+                    a.Filled++;
+                    var key = value.Trim();
+                    a.Values[key] = a.Values.GetValueOrDefault(key, 0) + 1;
+                }
+            }
+            catch (JsonException) { /* ignora json malformado */ }
+        }
+
+        var fields = agg
+            .Select(kv => new DTOs.Kpi.CustomFieldSummaryDto
+            {
+                FieldId = kv.Key,
+                FieldName = kv.Value.Name,
+                FieldCode = kv.Value.Code,
+                Type = kv.Value.Type,
+                Filled = kv.Value.Filled,
+                DistinctValues = kv.Value.Values.Count,
+                TopValues = kv.Value.Values
+                    .OrderByDescending(x => x.Value)
+                    .Take(topValues)
+                    .Select(x => new DTOs.Kpi.CustomFieldValueCountDto { Value = x.Key, Count = x.Value })
+                    .ToList(),
+            })
+            .OrderByDescending(f => f.Filled)
+            .ToList();
+
+        return (total, fields, truncated);
+    }
+
+    private sealed class FieldAgg
+    {
+        public string Name = "";
+        public string? Code;
+        public string Type = "text";
+        public int Filled;
+        public Dictionary<string, int> Values = new();
     }
 
     // ─── Parsing ─────────────────────────────────────────────────────────────

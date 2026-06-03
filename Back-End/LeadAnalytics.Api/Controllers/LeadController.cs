@@ -585,12 +585,28 @@ public class WebhooksController(
                         var (value, _, _) = await _kpiService.ComputeAsync(
                             clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, HttpContext.RequestAborted);
                         result.KpiOverrides[cfg.KpiKey] = value;
+
+                        // KPIs criados do zero viram cards próprios no dashboard.
+                        if (cfg.IsCustom)
+                        {
+                            result.CustomKpis.Add(new DTOs.Response.CustomKpiDto
+                            {
+                                Key = cfg.KpiKey,
+                                Label = cfg.DisplayName ?? cfg.KpiKey,
+                                Color = cfg.AccentColor,
+                                Value = value,
+                                SourceType = cfg.SourceType,
+                                SortOrder = cfg.SortOrder,
+                            });
+                        }
                     }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Falha ao aplicar override do KPI {Kpi}", cfg.KpiKey);
                     }
                 }
+                result.CustomKpis = result.CustomKpis
+                    .OrderBy(k => k.SortOrder).ThenBy(k => k.Label).ToList();
             }
 
             return Ok(result);

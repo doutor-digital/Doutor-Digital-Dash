@@ -49,6 +49,22 @@ public class KpiConfiguration
     /// <summary>E-mail do analista que salvou por último (auditoria leve).</summary>
     public string? UpdatedByEmail { get; set; }
 
+    /// <summary>
+    /// KPI criado pelo analista do zero (não pertence ao <see cref="Service.KpiCatalog"/>).
+    /// Quando true, <see cref="KpiKey"/> é uma chave gerada (ex.: "custom_ab12…") e
+    /// <see cref="DisplayName"/>/<see cref="AccentColor"/> definem o card no dashboard.
+    /// </summary>
+    public bool IsCustom { get; set; }
+
+    /// <summary>Nome exibido no card (só para KPIs custom; catálogo usa o rótulo fixo).</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Cor da borda superior do card (hex, ex.: "#34d399"). Só para custom.</summary>
+    public string? AccentColor { get; set; }
+
+    /// <summary>Ordem de exibição entre os KPIs custom (menor primeiro).</summary>
+    public int SortOrder { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

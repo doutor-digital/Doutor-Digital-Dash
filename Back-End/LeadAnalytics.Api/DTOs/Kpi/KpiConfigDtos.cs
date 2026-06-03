@@ -23,6 +23,18 @@ public class KpiConfigItemDto
     /// <summary>Parâmetros da fonte (stageIds / fieldId / matchValues…), JSON livre.</summary>
     public JsonElement Config { get; set; }
 
+    [JsonPropertyName("is_custom")]
+    public bool IsCustom { get; set; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("accent_color")]
+    public string? AccentColor { get; set; }
+
+    [JsonPropertyName("sort_order")]
+    public int SortOrder { get; set; }
+
     [JsonPropertyName("updated_by_email")]
     public string? UpdatedByEmail { get; set; }
 
@@ -40,6 +52,19 @@ public class KpiConfigUpsertItemDto
     public string SourceType { get; set; } = null!;
 
     public JsonElement Config { get; set; }
+
+    /// <summary>KPI criado do zero (chave arbitrária + nome/cor próprios).</summary>
+    [JsonPropertyName("is_custom")]
+    public bool IsCustom { get; set; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("accent_color")]
+    public string? AccentColor { get; set; }
+
+    [JsonPropertyName("sort_order")]
+    public int SortOrder { get; set; }
 }
 
 /// <summary>Corpo da PUT /api/config/kpis — lista de mapeamentos a salvar.</summary>

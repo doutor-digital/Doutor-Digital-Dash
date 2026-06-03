@@ -64,6 +64,14 @@ public class DashboardOverviewDto
     [JsonPropertyName("kpi_overrides")]
     public Dictionary<string, double> KpiOverrides { get; set; } = new();
 
+    /// <summary>
+    /// KPIs criados pelo analista do zero (nome + cor + fonte próprios), já com o valor
+    /// calculado para o período. O front renderiza um card por item, abaixo dos fixos.
+    /// Só preenchido quando uma unidade específica é selecionada.
+    /// </summary>
+    [JsonPropertyName("custom_kpis")]
+    public List<CustomKpiDto> CustomKpis { get; set; } = new();
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();
@@ -105,6 +113,28 @@ public class DashboardOverviewDto
     /// <summary>Leads por dia da semana (1=Dom .. 7=Sab) — agregado ao longo do período.</summary>
     [JsonPropertyName("leads_por_dia_semana")]
     public List<DiaSemanaQtdDto> LeadsPorDiaSemana { get; set; } = new();
+}
+
+/// <summary>Um KPI custom já resolvido para o dashboard (definição + valor do período).</summary>
+public class CustomKpiDto
+{
+    /// <summary>Chave gerada (ex.: "custom_ab12…") — usada no drill-down por kpi_key.</summary>
+    public string Key { get; set; } = null!;
+
+    /// <summary>Nome exibido no card.</summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>Cor da borda superior (hex).</summary>
+    public string? Color { get; set; }
+
+    /// <summary>Valor calculado no período.</summary>
+    public double Value { get; set; }
+
+    [JsonPropertyName("source_type")]
+    public string SourceType { get; set; } = "";
+
+    [JsonPropertyName("sort_order")]
+    public int SortOrder { get; set; }
 }
 
 public class PeriodoQtdDto

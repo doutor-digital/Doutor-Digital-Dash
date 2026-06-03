@@ -27,7 +27,7 @@ public class KpiConfigService(AppDbContext db)
     /// <summary>Upsert (por KpiKey) de cada mapeamento enviado. Não remove os ausentes.</summary>
     public async Task SaveAsync(
         int unitId, int clinicId,
-        IEnumerable<(string KpiKey, string SourceType, string ConfigJson)> items,
+        IEnumerable<KpiSaveItem> items,
         string? email, CancellationToken ct = default)
     {
         var existing = await _db.KpiConfigurations
@@ -47,6 +47,10 @@ public class KpiConfigService(AppDbContext db)
                     KpiKey = item.KpiKey,
                     SourceType = item.SourceType,
                     ConfigJson = item.ConfigJson,
+                    IsCustom = item.IsCustom,
+                    DisplayName = item.DisplayName,
+                    AccentColor = item.AccentColor,
+                    SortOrder = item.SortOrder,
                     UpdatedByEmail = email,
                     CreatedAt = now,
                     UpdatedAt = now,
@@ -56,12 +60,27 @@ public class KpiConfigService(AppDbContext db)
             {
                 row.SourceType = item.SourceType;
                 row.ConfigJson = item.ConfigJson;
+                row.IsCustom = item.IsCustom;
+                row.DisplayName = item.DisplayName;
+                row.AccentColor = item.AccentColor;
+                row.SortOrder = item.SortOrder;
                 row.UpdatedByEmail = email;
                 row.UpdatedAt = now;
             }
         }
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Remove um KPI (usado para apagar KPIs custom). No-op se não existir.</summary>
+    public async Task<bool> DeleteAsync(int unitId, string kpiKey, CancellationToken ct = default)
+    {
+        var row = await _db.KpiConfigurations
+            .FirstOrDefaultAsync(k => k.UnitId == unitId && k.KpiKey == kpiKey, ct);
+        if (row is null) return false;
+        _db.KpiConfigurations.Remove(row);
+        await _db.SaveChangesAsync(ct);
+        return true;
     }
 
     // ─── Motor de cálculo ────────────────────────────────────────────────────

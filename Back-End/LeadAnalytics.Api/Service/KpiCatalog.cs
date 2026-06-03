@@ -28,6 +28,16 @@ public static class KpiSourceTypes
 /// <summary>Um KPI do dashboard que pode ser mapeado nas Configurações Técnicas.</summary>
 public record KpiCatalogItem(string Key, string Label, string Description);
 
+/// <summary>Item de upsert para <see cref="KpiConfigService.SaveAsync"/>.</summary>
+public record KpiSaveItem(
+    string KpiKey,
+    string SourceType,
+    string ConfigJson,
+    bool IsCustom = false,
+    string? DisplayName = null,
+    string? AccentColor = null,
+    int SortOrder = 0);
+
 /// <summary>
 /// Catálogo dos KPIs do dashboard que o analista pode reconfigurar. A chave (Key) casa
 /// com <see cref="Models.KpiConfiguration.KpiKey"/> e com os cards da DashboardPage.

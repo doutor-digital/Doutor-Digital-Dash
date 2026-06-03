@@ -56,6 +56,10 @@ public class KpiConfigController(
             KpiKey = r.KpiKey,
             SourceType = r.SourceType,
             Config = ParseOrEmpty(r.ConfigJson),
+            IsCustom = r.IsCustom,
+            DisplayName = r.DisplayName,
+            AccentColor = r.AccentColor,
+            SortOrder = r.SortOrder,
             UpdatedByEmail = r.UpdatedByEmail,
             UpdatedAt = r.UpdatedAt,
         }).ToList();
@@ -76,22 +80,45 @@ public class KpiConfigController(
         var unit = await _db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
         if (unit is null) return NotFound(new { message = "Unidade não encontrada." });
 
-        var prepared = new List<(string, string, string)>();
+        var prepared = new List<KpiSaveItem>();
         foreach (var item in body.Items ?? new())
         {
-            if (!KpiCatalog.IsValidKey(item.KpiKey))
+            // KPI custom usa chave gerada (não está no catálogo); o fixo precisa ser válido.
+            if (!item.IsCustom && !KpiCatalog.IsValidKey(item.KpiKey))
                 return BadRequest(new { message = $"KPI inválido: {item.KpiKey}" });
+            if (item.IsCustom && string.IsNullOrWhiteSpace(item.KpiKey))
+                return BadRequest(new { message = "KPI custom precisa de uma chave." });
+            if (item.IsCustom && string.IsNullOrWhiteSpace(item.DisplayName))
+                return BadRequest(new { message = "KPI custom precisa de um nome." });
             if (!KpiSourceTypes.IsValid(item.SourceType))
                 return BadRequest(new { message = $"Tipo de fonte inválido: {item.SourceType}" });
 
             var configJson = item.Config.ValueKind == JsonValueKind.Undefined
                 ? "{}"
                 : item.Config.GetRawText();
-            prepared.Add((item.KpiKey, item.SourceType, configJson));
+            prepared.Add(new KpiSaveItem(
+                item.KpiKey, item.SourceType, configJson,
+                item.IsCustom, item.DisplayName, item.AccentColor, item.SortOrder));
         }
 
         await _kpiService.SaveAsync(unitId, unit.ClinicId, prepared, _currentUser.Email, ct);
         return Ok(new { message = "Configurações salvas.", count = prepared.Count });
+    }
+
+    /// <summary>Remove um KPI (custom) de uma unidade.</summary>
+    [HttpDelete("{kpiKey}")]
+    public async Task<IActionResult> Delete(
+        [FromQuery] int unitId,
+        string kpiKey,
+        CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        if (await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } guard) return guard;
+
+        var removed = await _kpiService.DeleteAsync(unitId, kpiKey, ct);
+        return removed
+            ? Ok(new { message = "KPI removido." })
+            : NotFound(new { message = "KPI não encontrado." });
     }
 
     /// <summary>Calcula o número de um KPI ao vivo, para pré-visualizar antes de salvar.</summary>

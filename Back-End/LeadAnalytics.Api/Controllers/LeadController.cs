@@ -751,6 +751,22 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Leads com agendamento nos próximos N dias — pro sino global de notificação.
+    /// Independe da data de criação (consulta AppointmentScheduledAt direto).
+    /// </summary>
+    [HttpGet("dashboard/upcoming-appointments")]
+    public async Task<IActionResult> UpcomingAppointments(
+        [FromQuery] int? unitId, [FromQuery] int days = 7, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var items = await _kpiService.UpcomingAppointmentsAsync(tenantId.Value, unitId, days, ct);
+        return Ok(new { items, days });
+    }
+
+    /// <summary>
     /// Leads criados nas últimas N horas (notificação + página de recentes).
     /// </summary>
     [HttpGet("recent")]

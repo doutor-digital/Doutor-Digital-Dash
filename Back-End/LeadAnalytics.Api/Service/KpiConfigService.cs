@@ -516,6 +516,39 @@ public class KpiConfigService(AppDbContext db)
         };
     }
 
+    /// <summary>
+    /// Leads com agendamento nos próximos N dias (independente de quando foram criados) — pro
+    /// sino de notificação global. Consulta direta em AppointmentScheduledAt (SQL, rápido).
+    /// </summary>
+    public async Task<List<DTOs.Dashboard.UpcomingApptDto>> UpcomingAppointmentsAsync(
+        int clinicId, int? unitId, int days, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var end = now.AddDays(Math.Clamp(days, 1, 60));
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                && l.AppointmentScheduledAt != null
+                && l.AppointmentScheduledAt >= now
+                && l.AppointmentScheduledAt <= end
+                && (l.CurrentStage == LeadStages.AgendadoSemPagamento
+                    || l.CurrentStage == LeadStages.AgendadoComPagamento));
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        var rows = await q.OrderBy(l => l.AppointmentScheduledAt).Take(50)
+            .Select(l => new { l.Id, l.Name, l.Phone, l.AppointmentScheduledAt })
+            .ToListAsync(ct);
+
+        return rows.Select(l => new DTOs.Dashboard.UpcomingApptDto
+        {
+            LeadId = l.Id,
+            Name = l.Name ?? "",
+            Phone = l.Phone,
+            ScheduledAt = l.AppointmentScheduledAt!.Value,
+            DaysUntil = (int)Math.Max(0, Math.Ceiling((l.AppointmentScheduledAt!.Value - now).TotalDays)),
+        }).ToList();
+    }
+
     /// <summary>Valor do primeiro campo cujo nome (lowercase) casa com o predicado.</summary>
     private static string? ExtractFieldByName(string? json, Func<string, bool> nameMatches)
     {

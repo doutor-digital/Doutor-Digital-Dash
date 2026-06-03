@@ -51,6 +51,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<AgentConversation> AgentConversations { get; set; }
     public DbSet<AgentMessage> AgentMessages { get; set; }
 
+    public DbSet<AdAccount> AdAccounts { get; set; }
+    public DbSet<CampaignDailySpend> CampaignDailySpends { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ─── Lead ────────────────────────────────────────────────
@@ -104,6 +107,34 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(e => e.Unit)
                   .WithMany()
                   .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── AdAccount (Central de Integrações: Meta/Google Ads) ─
+        modelBuilder.Entity<AdAccount>(entity =>
+        {
+            entity.ToTable("ad_accounts");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ClinicId, e.Provider });
+            entity.Property(e => e.Provider).HasMaxLength(16);
+            entity.Property(e => e.Status).HasMaxLength(16);
+        });
+
+        // ─── CampaignDailySpend (gasto por campanha/dia) ─────────
+        modelBuilder.Entity<CampaignDailySpend>(entity =>
+        {
+            entity.ToTable("campaign_daily_spend");
+            entity.HasKey(e => e.Id);
+            // Um registro por (conta, campanha, dia) — o sync faz upsert por esta chave.
+            entity.HasIndex(e => new { e.AdAccountId, e.CampaignId, e.Date }).IsUnique();
+            entity.HasIndex(e => new { e.ClinicId, e.Date });
+            entity.Property(e => e.Provider).HasMaxLength(16);
+            entity.Property(e => e.CampaignId).HasMaxLength(64);
+            entity.Property(e => e.Currency).HasMaxLength(8);
+            entity.Property(e => e.Spend).HasColumnType("numeric(14,2)");
+            entity.HasOne(e => e.AdAccount)
+                  .WithMany()
+                  .HasForeignKey(e => e.AdAccountId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

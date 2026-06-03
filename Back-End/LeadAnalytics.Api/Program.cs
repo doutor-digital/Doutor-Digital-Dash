@@ -208,6 +208,19 @@ builder.Services.AddHttpClient<KommoApiClient>(c =>
 });
 builder.Services.AddSingleton<WebhookExecutionLogger>();
 
+// ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
+builder.Services.AddScoped<ProtectedTokenService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AdsSpendSyncService>();
+builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ads.MetaAdsProvider>(c =>
+    c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ads.GoogleAdsProvider>(c =>
+    c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.IAdsProvider>(
+    sp => sp.GetRequiredService<LeadAnalytics.Api.Service.Ads.MetaAdsProvider>());
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.IAdsProvider>(
+    sp => sp.GetRequiredService<LeadAnalytics.Api.Service.Ads.GoogleAdsProvider>());
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AdsSpendSyncJob>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

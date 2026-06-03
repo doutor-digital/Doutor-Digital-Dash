@@ -16,6 +16,14 @@ public class AdAccountDto
     public bool Live { get; set; }
 }
 
+/// <summary>Corpo do PUT de credenciais. O segredo só é trocado se vier preenchido.</summary>
+public class AdsCredentialsSaveDto
+{
+    [JsonPropertyName("client_id")] public string? ClientId { get; set; }
+    [JsonPropertyName("client_secret")] public string? ClientSecret { get; set; }
+    [JsonPropertyName("developer_token")] public string? DeveloperToken { get; set; }
+}
+
 /// <summary>Gasto agregado de uma campanha no período (consumido pelo /desempenho).</summary>
 public class AdsSpendItemDto
 {

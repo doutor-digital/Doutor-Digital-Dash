@@ -23,6 +23,7 @@ public class IntegrationsController(
     ICurrentUser currentUser,
     ProtectedTokenService tokens,
     AdsSpendSyncService sync,
+    AdsCredentialsService credentials,
     IEnumerable<IAdsProvider> providers,
     IConfiguration config,
     ILogger<IntegrationsController> logger) : ControllerBase
@@ -52,6 +53,10 @@ public class IntegrationsController(
             .OrderBy(a => a.Provider)
             .ToListAsync(ct);
 
+        var liveByProvider = new Dictionary<string, bool>();
+        foreach (var p in providers)
+            liveByProvider[p.Provider] = (await credentials.GetAsync(p.Provider, ct)).IsConfigured;
+
         var items = rows.Select(a => new AdAccountDto
         {
             Id = a.Id,
@@ -61,30 +66,32 @@ public class IntegrationsController(
             Status = a.Status,
             LastSyncAt = a.LastSyncAt,
             LastSyncNote = a.LastSyncNote,
-            Live = Prov(a.Provider)?.IsLive ?? false,
+            Live = liveByProvider.GetValueOrDefault(a.Provider),
         }).ToList();
 
         // Providers disponíveis (mesmo sem conta conectada) — pra UI montar os cards.
-        var available = providers.Select(p => new { provider = p.Provider, live = p.IsLive });
+        var available = providers.Select(p => new { provider = p.Provider, live = liveByProvider.GetValueOrDefault(p.Provider) });
         return Ok(new { items, providers = available });
     }
 
     // ─── OAuth: início ───────────────────────────────────────────────────────
 
     [HttpGet("{provider}/connect")]
-    public IActionResult Connect(string provider, [FromQuery] int? clinicId, [FromQuery] int? unitId)
+    public async Task<IActionResult> Connect(
+        string provider, [FromQuery] int? clinicId, [FromQuery] int? unitId, CancellationToken ct)
     {
         if (RequireAnalyst() is { } denied) return denied;
         if (Prov(provider) is not { } prov) return BadRequest(new { message = $"Provedor inválido: {provider}" });
         var tenant = ResolveClinicId(clinicId);
         if (tenant is null) return BadRequest(new { message = "clinicId não resolvido." });
 
+        var creds = await credentials.GetAsync(provider, ct);
         var statePayload = JsonSerializer.Serialize(new StateData(tenant.Value, unitId, provider));
         var state = tokens.Protect(statePayload)!;
         var redirectUri = $"{Request.Scheme}://{Request.Host}/api/integrations/ads/{provider}/callback";
-        var authUrl = prov.GetAuthUrl(state, redirectUri);
+        var authUrl = prov.GetAuthUrl(creds, state, redirectUri);
 
-        return Ok(new { auth_url = authUrl, live = prov.IsLive });
+        return Ok(new { auth_url = authUrl, live = creds.IsConfigured });
     }
 
     // ─── OAuth: callback (anônimo, validado pelo state assinado) ──────────────
@@ -113,8 +120,9 @@ public class IntegrationsController(
         AdsTokenResult token;
         try
         {
+            var creds = await credentials.GetAsync(provider, ct);
             var redirectUri = $"{Request.Scheme}://{Request.Host}/api/integrations/ads/{provider}/callback";
-            token = await prov.ExchangeCodeAsync(code, redirectUri, ct);
+            token = await prov.ExchangeCodeAsync(creds, code, redirectUri, ct);
         }
         catch (Exception ex)
         {
@@ -215,6 +223,45 @@ public class IntegrationsController(
             .ToListAsync(ct);
 
         return Ok(new { items, date_from = fromD, date_to = toD });
+    }
+
+    // ─── Credenciais do app (configuradas pelo analista) ─────────────────────
+
+    /// <summary>Status das credenciais de cada provedor (sem expor o segredo).</summary>
+    [HttpGet("credentials")]
+    public async Task<IActionResult> GetCredentials(CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        var items = new List<object>();
+        foreach (var p in providers)
+        {
+            var st = await credentials.GetStatusAsync(p.Provider, ct);
+            items.Add(new
+            {
+                provider = st.Provider,
+                client_id = st.ClientId,
+                has_secret = st.HasSecret,
+                developer_token = st.DeveloperToken,
+                live = st.Live,
+                source = st.Source.ToString().ToLowerInvariant(),
+            });
+        }
+        return Ok(new { items });
+    }
+
+    /// <summary>Salva (upsert) as credenciais de um provedor. Segredo só troca se vier preenchido.</summary>
+    [HttpPut("credentials/{provider}")]
+    public async Task<IActionResult> SaveCredentials(
+        string provider, [FromBody] AdsCredentialsSaveDto body, CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        if (Prov(provider) is null) return BadRequest(new { message = $"Provedor inválido: {provider}" });
+
+        await credentials.SaveAsync(
+            provider, body.ClientId, body.ClientSecret, body.DeveloperToken, currentUser.Email, ct);
+
+        var st = await credentials.GetStatusAsync(provider, ct);
+        return Ok(new { message = "Credenciais salvas.", live = st.Live });
     }
 
     /// <summary>Conteúdo do state OAuth (assinado/cifrado via DataProtection).</summary>

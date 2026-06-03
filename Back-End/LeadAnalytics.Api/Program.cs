@@ -210,6 +210,7 @@ builder.Services.AddSingleton<WebhookExecutionLogger>();
 
 // ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
 builder.Services.AddScoped<ProtectedTokenService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AdsCredentialsService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AdsSpendSyncService>();
 builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ads.MetaAdsProvider>(c =>
     c.Timeout = TimeSpan.FromSeconds(30));

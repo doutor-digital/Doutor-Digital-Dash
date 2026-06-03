@@ -53,6 +53,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<AdAccount> AdAccounts { get; set; }
     public DbSet<CampaignDailySpend> CampaignDailySpends { get; set; }
+    public DbSet<AdsSetting> AdsSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -136,6 +137,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                   .WithMany()
                   .HasForeignKey(e => e.AdAccountId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── AdsSetting (credenciais do app por provedor) ────────
+        modelBuilder.Entity<AdsSetting>(entity =>
+        {
+            entity.ToTable("ads_settings");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Provider).IsUnique();
+            entity.Property(e => e.Provider).HasMaxLength(16);
         });
 
         // ─── Attendant ───────────────────────────────────────────

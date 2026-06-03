@@ -11,10 +11,12 @@ namespace LeadAnalytics.Api.Service.Ads;
 public class AdsSpendSyncService(
     AppDbContext db,
     IEnumerable<IAdsProvider> providers,
+    AdsCredentialsService credentials,
     ILogger<AdsSpendSyncService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly IEnumerable<IAdsProvider> _providers = providers;
+    private readonly AdsCredentialsService _credentials = credentials;
     private readonly ILogger<AdsSpendSyncService> _logger = logger;
 
     public async Task<int> SyncAccountAsync(int accountId, DateOnly from, DateOnly to, CancellationToken ct)
@@ -28,11 +30,12 @@ public class AdsSpendSyncService(
     {
         var provider = _providers.FirstOrDefault(p => p.Provider == acct.Provider);
         if (provider is null) return 0;
+        var creds = await _credentials.GetAsync(acct.Provider, ct);
 
         IReadOnlyList<CampaignSpendRow> rows;
         try
         {
-            rows = await provider.FetchDailySpendAsync(acct, from, to, ct);
+            rows = await provider.FetchDailySpendAsync(creds, acct, from, to, ct);
         }
         catch (Exception ex)
         {

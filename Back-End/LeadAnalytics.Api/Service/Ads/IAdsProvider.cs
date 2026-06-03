@@ -28,18 +28,15 @@ public interface IAdsProvider
     /// <summary><c>meta</c> | <c>google</c>.</summary>
     string Provider { get; }
 
-    /// <summary>True quando há credenciais reais configuradas (senão opera em modo stub).</summary>
-    bool IsLive { get; }
-
     /// <summary>URL para onde o usuário é mandado pra autorizar (OAuth). No stub, volta direto pro callback.</summary>
-    string GetAuthUrl(string state, string redirectUri);
+    string GetAuthUrl(AdsCredentials creds, string state, string redirectUri);
 
     /// <summary>Troca o código do callback por tokens + dados da conta.</summary>
-    Task<AdsTokenResult> ExchangeCodeAsync(string code, string redirectUri, CancellationToken ct);
+    Task<AdsTokenResult> ExchangeCodeAsync(AdsCredentials creds, string code, string redirectUri, CancellationToken ct);
 
     /// <summary>Puxa o gasto por campanha/dia no intervalo.</summary>
     Task<IReadOnlyList<CampaignSpendRow>> FetchDailySpendAsync(
-        AdAccount account, DateOnly from, DateOnly to, CancellationToken ct);
+        AdsCredentials creds, AdAccount account, DateOnly from, DateOnly to, CancellationToken ct);
 }
 
 /// <summary>Gerador de gasto MOCK determinístico — usado enquanto não há credenciais reais.</summary>

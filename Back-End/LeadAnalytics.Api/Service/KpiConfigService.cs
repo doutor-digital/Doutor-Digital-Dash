@@ -95,6 +95,7 @@ public class KpiConfigService(AppDbContext db)
         int clinicId, int? unitId, string sourceType, JsonElement config,
         DateTime from, DateTime to, CancellationToken ct = default)
     {
+        from = AsUtc(from); to = AsUtc(to);
         var baseQuery = _db.Leads.AsNoTracking()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
         if (unitId.HasValue)
@@ -175,6 +176,7 @@ public class KpiConfigService(AppDbContext db)
         DateTime from, DateTime to, int limit = 500, CancellationToken ct = default)
     {
         const int MaxScan = 5000; // teto de varredura p/ filtro em memória
+        from = AsUtc(from); to = AsUtc(to);
 
         var q = _db.Leads.AsNoTracking()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
@@ -260,6 +262,7 @@ public class KpiConfigService(AppDbContext db)
             int topValues = 8, CancellationToken ct = default)
     {
         const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
 
         var q = _db.Leads.AsNoTracking()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
@@ -343,6 +346,7 @@ public class KpiConfigService(AppDbContext db)
         int topN = 12, CancellationToken ct = default)
     {
         const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
 
         var p = ParseConfig(config);
         if (p.FieldId is null && string.IsNullOrWhiteSpace(p.FieldCode))
@@ -450,6 +454,16 @@ public class KpiConfigService(AppDbContext db)
         catch (JsonException) { /* json malformado — ignora */ }
         return null;
     }
+
+    /// <summary>
+    /// Normaliza para UTC. O Npgsql (sem legacy timestamp) recusa DateTime com
+    /// Kind=Unspecified ao comparar com colunas timestamptz — as datas vindas da query
+    /// string chegam Unspecified, então precisam ser marcadas como UTC antes do WHERE.
+    /// </summary>
+    private static DateTime AsUtc(DateTime d) =>
+        d.Kind == DateTimeKind.Utc ? d
+        : d.Kind == DateTimeKind.Local ? d.ToUniversalTime()
+        : DateTime.SpecifyKind(d, DateTimeKind.Utc);
 
     private static bool TryGetInt(JsonElement el, out int value)
     {

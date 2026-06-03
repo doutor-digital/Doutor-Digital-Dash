@@ -14,12 +14,14 @@ public class WebhooksController(
     LeadTimelineService timelineService,
     ICurrentUser currentUser,
     TenantUnitGuard tenantGuard,
+    KpiConfigService kpiService,
     ILogger<WebhooksController> logger) : ControllerBase
 {
     private readonly LeadService _leadService = leadService;
     private readonly LeadTimelineService _timelineService = timelineService;
     private readonly ICurrentUser _currentUser = currentUser;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
+    private readonly KpiConfigService _kpiService = kpiService;
     private readonly ILogger<WebhooksController> _logger = logger;
 
     [HttpGet]
@@ -565,6 +567,30 @@ public class WebhooksController(
         {
             var result = await _leadService.GetDashboardOverviewAsync(
                 clinicId, dateFrom, dateTo, unitId, attendantId, source, HttpContext.RequestAborted);
+
+            // Aplica os mapeamentos das Configurações Técnicas (por unidade): para cada
+            // KPI configurado, recalcula o número pela fonte escolhida e expõe em
+            // kpi_overrides — o front prefere esse valor ao cálculo padrão.
+            if (unitId.HasValue)
+            {
+                var configs = await _kpiService.GetForUnitAsync(unitId.Value, HttpContext.RequestAborted);
+                foreach (var cfg in configs)
+                {
+                    try
+                    {
+                        var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+                            string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
+                        var (value, _, _) = await _kpiService.ComputeAsync(
+                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, HttpContext.RequestAborted);
+                        result.KpiOverrides[cfg.KpiKey] = value;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Falha ao aplicar override do KPI {Kpi}", cfg.KpiKey);
+                    }
+                }
+            }
+
             return Ok(result);
         }
         catch (ArgumentException ex)

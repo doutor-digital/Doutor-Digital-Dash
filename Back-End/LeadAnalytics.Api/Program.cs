@@ -162,6 +162,7 @@ builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
+builder.Services.AddScoped<KpiConfigService>();
 builder.Services.AddScoped<DuplicateContactService>();
 
 // ── Insights (CAPI mockado + analytics agregadas) ────────────────────────────

@@ -56,6 +56,14 @@ public class DashboardOverviewDto
     // ─── Estados da conversa (bot/queue/service/concluido) ─────────
     public LeadsCountDto States { get; set; } = new();
 
+    /// <summary>
+    /// Valores de KPI vindos das Configurações Técnicas (mapeamento por unidade).
+    /// Quando uma chave existe aqui (ex.: "resgate"), o front prefere esse número
+    /// ao cálculo padrão. Só é preenchido quando uma unidade específica é selecionada.
+    /// </summary>
+    [JsonPropertyName("kpi_overrides")]
+    public Dictionary<string, double> KpiOverrides { get; set; } = new();
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();

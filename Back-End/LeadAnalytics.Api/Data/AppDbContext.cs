@@ -17,6 +17,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<Unit> Units { get; set; }
+    public DbSet<KpiConfiguration> KpiConfigurations { get; set; }
     public DbSet<Attendant> Attendants { get; set; }
     public DbSet<LeadAssignment> LeadAssignments { get; set; }
     public DbSet<LeadStageHistory> LeadStageHistories { get; set; }
@@ -88,6 +89,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // Slug compõe a URL do webhook (/webhooks/kommo/{slug}); precisa ser único.
             entity.HasIndex(e => e.Slug).IsUnique();
             entity.Property(e => e.KommoStageMapJson).HasColumnType("jsonb");
+        });
+
+        // ─── KpiConfiguration ────────────────────────────────────
+        modelBuilder.Entity<KpiConfiguration>(entity =>
+        {
+            entity.ToTable("kpi_configurations");
+            entity.HasKey(e => e.Id);
+            // Uma config por (unidade, KPI).
+            entity.HasIndex(e => new { e.UnitId, e.KpiKey }).IsUnique();
+            entity.Property(e => e.KpiKey).HasMaxLength(64);
+            entity.Property(e => e.SourceType).HasMaxLength(48);
+            entity.Property(e => e.ConfigJson).HasColumnType("jsonb");
+            entity.HasOne(e => e.Unit)
+                  .WithMany()
+                  .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ─── Attendant ───────────────────────────────────────────

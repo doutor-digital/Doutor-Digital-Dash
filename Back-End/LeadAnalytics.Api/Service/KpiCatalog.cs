@@ -36,6 +36,7 @@ public record KpiSaveItem(
     bool IsCustom = false,
     string? DisplayName = null,
     string? AccentColor = null,
+    string DisplayType = "number",
     int SortOrder = 0);
 
 /// <summary>

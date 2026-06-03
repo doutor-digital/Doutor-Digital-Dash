@@ -589,15 +589,27 @@ public class WebhooksController(
                         // KPIs criados do zero viram cards próprios no dashboard.
                         if (cfg.IsCustom)
                         {
-                            result.CustomKpis.Add(new DTOs.Response.CustomKpiDto
+                            var displayType = string.IsNullOrWhiteSpace(cfg.DisplayType) ? "number" : cfg.DisplayType;
+                            var dto = new DTOs.Response.CustomKpiDto
                             {
                                 Key = cfg.KpiKey,
                                 Label = cfg.DisplayName ?? cfg.KpiKey,
                                 Color = cfg.AccentColor,
                                 Value = value,
                                 SourceType = cfg.SourceType,
+                                DisplayType = displayType,
                                 SortOrder = cfg.SortOrder,
-                            });
+                            };
+
+                            // Gráfico de origens: distribui os valores do campo customizado.
+                            if (displayType == "source_chart")
+                            {
+                                dto.Breakdown = await _kpiService.ComputeBreakdownAsync(
+                                    clinicId, unitId, config, dateFrom, dateTo, 12, HttpContext.RequestAborted);
+                                dto.Value = dto.Breakdown.Sum(b => b.Value);
+                            }
+
+                            result.CustomKpis.Add(dto);
                         }
                     }
                     catch (Exception ex)

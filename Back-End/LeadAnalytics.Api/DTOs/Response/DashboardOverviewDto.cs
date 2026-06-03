@@ -127,14 +127,28 @@ public class CustomKpiDto
     /// <summary>Cor da borda superior (hex).</summary>
     public string? Color { get; set; }
 
-    /// <summary>Valor calculado no período.</summary>
+    /// <summary>Valor calculado no período (para gráfico = soma do breakdown).</summary>
     public double Value { get; set; }
 
     [JsonPropertyName("source_type")]
     public string SourceType { get; set; } = "";
 
+    /// <summary><c>number</c> (um número) ou <c>source_chart</c> (gráfico de origens).</summary>
+    [JsonPropertyName("display_type")]
+    public string DisplayType { get; set; } = "number";
+
+    /// <summary>Distribuição por valor — preenchido só quando display_type = source_chart.</summary>
+    public List<KpiBreakdownItemDto> Breakdown { get; set; } = new();
+
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; set; }
+}
+
+/// <summary>Uma fatia do gráfico de um KPI custom (ex.: "Instagram" → 42).</summary>
+public class KpiBreakdownItemDto
+{
+    public string Label { get; set; } = "";
+    public int Value { get; set; }
 }
 
 public class PeriodoQtdDto

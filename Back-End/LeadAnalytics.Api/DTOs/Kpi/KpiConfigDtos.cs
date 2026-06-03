@@ -32,6 +32,9 @@ public class KpiConfigItemDto
     [JsonPropertyName("accent_color")]
     public string? AccentColor { get; set; }
 
+    [JsonPropertyName("display_type")]
+    public string DisplayType { get; set; } = "number";
+
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; set; }
 
@@ -62,6 +65,9 @@ public class KpiConfigUpsertItemDto
 
     [JsonPropertyName("accent_color")]
     public string? AccentColor { get; set; }
+
+    [JsonPropertyName("display_type")]
+    public string DisplayType { get; set; } = "number";
 
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; set; }

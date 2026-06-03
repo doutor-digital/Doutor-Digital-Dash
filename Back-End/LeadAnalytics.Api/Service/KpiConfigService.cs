@@ -50,6 +50,7 @@ public class KpiConfigService(AppDbContext db)
                     IsCustom = item.IsCustom,
                     DisplayName = item.DisplayName,
                     AccentColor = item.AccentColor,
+                    DisplayType = item.DisplayType,
                     SortOrder = item.SortOrder,
                     UpdatedByEmail = email,
                     CreatedAt = now,
@@ -63,6 +64,7 @@ public class KpiConfigService(AppDbContext db)
                 row.IsCustom = item.IsCustom;
                 row.DisplayName = item.DisplayName;
                 row.AccentColor = item.AccentColor;
+                row.DisplayType = item.DisplayType;
                 row.SortOrder = item.SortOrder;
                 row.UpdatedByEmail = email;
                 row.UpdatedAt = now;
@@ -329,6 +331,50 @@ public class KpiConfigService(AppDbContext db)
             .ToList();
 
         return (total, fields, truncated);
+    }
+
+    /// <summary>
+    /// Distribuição dos valores de UM campo customizado entre os leads do período
+    /// (ex.: campo "Origem" → Instagram 42, Facebook 25, Org 12…). Devolve o top N por
+    /// contagem; o restante vira o bucket "Outros". Base do KPI custom tipo gráfico.
+    /// </summary>
+    public async Task<List<DTOs.Response.KpiBreakdownItemDto>> ComputeBreakdownAsync(
+        int clinicId, int? unitId, JsonElement config, DateTime from, DateTime to,
+        int topN = 12, CancellationToken ct = default)
+    {
+        const int MaxScan = 8000;
+
+        var p = ParseConfig(config);
+        if (p.FieldId is null && string.IsNullOrWhiteSpace(p.FieldCode))
+            return new();
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
+                        && l.CustomFieldsJson != null);
+        if (unitId.HasValue)
+            q = q.Where(l => l.UnitId == unitId.Value);
+
+        var jsons = await q.OrderByDescending(l => l.CreatedAt)
+            .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var json in jsons)
+        {
+            var v = ExtractFieldValue(json, p.FieldId, p.FieldCode);
+            if (string.IsNullOrWhiteSpace(v)) continue;
+            var key = v.Trim();
+            counts[key] = counts.GetValueOrDefault(key, 0) + 1;
+        }
+
+        var ordered = counts.OrderByDescending(x => x.Value).ToList();
+        var top = ordered.Take(topN)
+            .Select(x => new DTOs.Response.KpiBreakdownItemDto { Label = x.Key, Value = x.Value })
+            .ToList();
+        var rest = ordered.Skip(topN).Sum(x => x.Value);
+        if (rest > 0)
+            top.Add(new DTOs.Response.KpiBreakdownItemDto { Label = "Outros", Value = rest });
+
+        return top;
     }
 
     private sealed class FieldAgg

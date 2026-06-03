@@ -59,6 +59,7 @@ public class KpiConfigController(
             IsCustom = r.IsCustom,
             DisplayName = r.DisplayName,
             AccentColor = r.AccentColor,
+            DisplayType = string.IsNullOrWhiteSpace(r.DisplayType) ? "number" : r.DisplayType,
             SortOrder = r.SortOrder,
             UpdatedByEmail = r.UpdatedByEmail,
             UpdatedAt = r.UpdatedAt,
@@ -93,12 +94,19 @@ public class KpiConfigController(
             if (!KpiSourceTypes.IsValid(item.SourceType))
                 return BadRequest(new { message = $"Tipo de fonte inválido: {item.SourceType}" });
 
+            var displayType = string.IsNullOrWhiteSpace(item.DisplayType) ? "number" : item.DisplayType;
+            // O gráfico de origens precisa de um campo customizado pra distribuir os valores.
+            if (displayType == "source_chart"
+                && !(item.Config.ValueKind == JsonValueKind.Object
+                     && item.Config.TryGetProperty("fieldId", out _)))
+                return BadRequest(new { message = "Gráfico de origens precisa de um campo customizado (fieldId)." });
+
             var configJson = item.Config.ValueKind == JsonValueKind.Undefined
                 ? "{}"
                 : item.Config.GetRawText();
             prepared.Add(new KpiSaveItem(
                 item.KpiKey, item.SourceType, configJson,
-                item.IsCustom, item.DisplayName, item.AccentColor, item.SortOrder));
+                item.IsCustom, item.DisplayName, item.AccentColor, displayType, item.SortOrder));
         }
 
         await _kpiService.SaveAsync(unitId, unit.ClinicId, prepared, _currentUser.Email, ct);

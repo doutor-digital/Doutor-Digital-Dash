@@ -62,6 +62,13 @@ public class KpiConfiguration
     /// <summary>Cor da borda superior do card (hex, ex.: "#34d399"). Só para custom.</summary>
     public string? AccentColor { get; set; }
 
+    /// <summary>
+    /// Como o KPI custom é exibido: <c>number</c> (um número, padrão) ou
+    /// <c>source_chart</c> (gráfico de barras com a distribuição dos valores de um campo
+    /// customizado — ex.: origens dos leads). Vazio/null = number.
+    /// </summary>
+    public string DisplayType { get; set; } = "number";
+
     /// <summary>Ordem de exibição entre os KPIs custom (menor primeiro).</summary>
     public int SortOrder { get; set; }
 

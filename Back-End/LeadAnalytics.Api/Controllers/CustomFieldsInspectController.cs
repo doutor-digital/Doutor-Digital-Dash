@@ -53,24 +53,42 @@ public class CustomFieldsInspectController(
 
             var leads = page?.Embedded?.Leads;
 
+            // Distribuição em todos os 250 leads — se ALGUM > 0, deserialização funciona
+            var withCfv = leads?.Count(l => l.CustomFieldsValues is { Count: > 0 }) ?? 0;
+            var emptyArray = leads?.Count(l => l.CustomFieldsValues is { Count: 0 }) ?? 0;
+            var nullCfv = leads?.Count(l => l.CustomFieldsValues is null) ?? 0;
+
+            // Procura o PRIMEIRO lead com custom_fields populados
+            var firstWithFields = leads?.FirstOrDefault(l => l.CustomFieldsValues is { Count: > 0 });
+
             return Ok(new
             {
                 pageLeadCount = leads?.Count ?? 0,
+                distribution = new
+                {
+                    withCustomFields = withCfv,
+                    emptyArray,
+                    nullCustomFields = nullCfv,
+                },
+                firstLeadWithFields = firstWithFields is null ? null : new
+                {
+                    id = firstWithFields.Id,
+                    name = firstWithFields.Name,
+                    custom_fields_values_count = firstWithFields.CustomFieldsValues?.Count ?? 0,
+                    sample = firstWithFields.CustomFieldsValues?.Take(3).Select(f => new
+                    {
+                        field_id = f.FieldId,
+                        field_name = f.FieldName,
+                        first_value_string = f.Values?.FirstOrDefault()?.GetStringValue(),
+                    }),
+                },
                 firstThreeLeads = leads?.Take(3).Select(l => new
                 {
                     id = l.Id,
                     name = l.Name,
-                    custom_fields_values_count = l.CustomFieldsValues?.Count ?? -1,  // -1 = null
-                    custom_fields_summary = l.CustomFieldsValues?.Take(3).Select(f => new
-                    {
-                        field_id = f.FieldId,
-                        field_name = f.FieldName,
-                        values_count = f.Values?.Count ?? -1,
-                        first_value_raw = f.Values?.FirstOrDefault()?.Value?.GetRawText(),
-                        first_value_string = f.Values?.FirstOrDefault()?.GetStringValue(),
-                    }),
+                    custom_fields_values_count = l.CustomFieldsValues?.Count ?? -1,
                 }),
-                note = "Se custom_fields_values_count = -1 ou 0 em todos: deserialização está perdendo os campos. Se for >0: bug está no SerializeCustomFields/IngestionService.",
+                note = "withCustomFields = 0 em 250 leads → deserialização quebrada. >0 → bug fica no SerializeCustomFields/IngestionService.",
             });
         }
         catch (Exception ex)

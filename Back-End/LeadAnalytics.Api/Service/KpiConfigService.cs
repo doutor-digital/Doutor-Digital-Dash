@@ -269,14 +269,17 @@ public class KpiConfigService(AppDbContext db)
         const int MaxScan = 8000;
         from = AsUtc(from); to = AsUtc(to);
 
+        // Filtra por UpdatedAt (não CreatedAt) — o webhook da Kommo atualiza
+        // UpdatedAt + CustomFieldsJson juntos. Usar CreatedAt deixa de fora
+        // leads antigos cujos campos foram preenchidos recentemente.
         var q = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
+            .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt <= to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
         var total = await q.CountAsync(ct);
-        var jsons = await q.OrderByDescending(l => l.CreatedAt)
+        var jsons = await q.OrderByDescending(l => l.UpdatedAt)
             .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);
         var truncated = jsons.Count >= MaxScan;
 
@@ -357,13 +360,15 @@ public class KpiConfigService(AppDbContext db)
         if (p.FieldId is null && string.IsNullOrWhiteSpace(p.FieldCode))
             return new();
 
+        // Mesma correção do CustomFieldsSummaryAsync — usa UpdatedAt pra
+        // captar leads antigos cujos campos foram preenchidos recentemente.
         var q = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
+            .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt <= to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
-        var jsons = await q.OrderByDescending(l => l.CreatedAt)
+        var jsons = await q.OrderByDescending(l => l.UpdatedAt)
             .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);
 
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

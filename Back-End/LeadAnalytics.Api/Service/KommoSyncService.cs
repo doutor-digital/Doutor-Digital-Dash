@@ -168,19 +168,37 @@ public class KommoSyncService
     }
 
     /// <summary>
-    /// Serializa os custom fields da Kommo num array JSON enxuto. Pega só
-    /// o primeiro value (a Kommo permite múltiplos mas raramente são usados).
+    /// Serializa os custom fields da Kommo num array JSON enxuto. Pra multiselect
+    /// junta os valores com ", ". Preserva também <c>enum_id</c> e <c>enum_code</c>
+    /// (quando existem) — futuro: resolver pra label humana via /custom_fields.
     /// </summary>
     private static string? SerializeCustomFields(List<KommoApiCustomField>? fields)
     {
         if (fields is null || fields.Count == 0) return null;
-        var slim = fields.Select(f => new
+        var slim = fields.Select(f =>
         {
-            field_id = f.FieldId,
-            field_name = f.FieldName,
-            field_code = f.FieldCode,
-            type = f.FieldType,
-            value = f.Values?.FirstOrDefault()?.GetStringValue(),
+            // Multi-select: junta cada GetStringValue não-vazio com ", ".
+            var values = f.Values?
+                .Select(v => v.GetStringValue())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            var value = values is { Count: > 0 } ? string.Join(", ", values!) : null;
+
+            // enum_id (primeiro) — útil pra resolver label depois.
+            var enumId = f.Values?.Select(v => v.EnumId).FirstOrDefault(id => id is > 0);
+            var enumCode = f.Values?.Select(v => v.EnumCode).FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
+
+            return new
+            {
+                field_id = f.FieldId,
+                field_name = f.FieldName,
+                field_code = f.FieldCode,
+                type = f.FieldType,
+                value,
+                enum_id = enumId,
+                enum_code = enumCode,
+            };
         }).ToList();
         return JsonSerializer.Serialize(slim);
     }

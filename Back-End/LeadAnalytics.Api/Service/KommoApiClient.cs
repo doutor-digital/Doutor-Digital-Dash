@@ -392,15 +392,28 @@ public class KommoApiCustomFieldValue
 
     public string? GetStringValue()
     {
-        if (Value is not { } v) return null;
-        return v.ValueKind switch
+        // 1) Quando o `value` vem populado, é a fonte canônica (texto do
+        //    campo, número, true/false). Funciona pra text/numeric/checkbox.
+        if (Value is { } v && v.ValueKind != JsonValueKind.Null && v.ValueKind != JsonValueKind.Undefined)
         {
-            JsonValueKind.String => v.GetString(),
-            JsonValueKind.Number => v.ToString(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            _ => v.ToString(),
-        };
+            var s = v.ValueKind switch
+            {
+                JsonValueKind.String => v.GetString(),
+                JsonValueKind.Number => v.ToString(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => v.ToString(),
+            };
+            if (!string.IsNullOrWhiteSpace(s)) return s;
+        }
+
+        // 2) Fallback pra select / multiselect / radio: a Kommo às vezes manda
+        //    só enum_id (ou enum_code) sem o texto. Preserva ALGUMA coisa
+        //    em vez de descartar o campo inteiro.
+        if (!string.IsNullOrWhiteSpace(EnumCode)) return EnumCode;
+        if (EnumId is long id && id > 0) return $"enum_{id}";
+
+        return null;
     }
 }
 

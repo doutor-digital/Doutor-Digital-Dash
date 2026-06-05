@@ -122,6 +122,17 @@ public class AiController(
             logger.LogWarning(ex, "[ai] erro na OpenAI");
             return StatusCode(502, new { error = ex.Message });
         }
+        catch (Exception ex)
+        {
+            // Catch-all pra superficiar a real do erro pro front em vez de 500 cego.
+            logger.LogError(ex, "[ai-analyze] erro inesperado tenant={Tenant} unit={Unit}", tenantId.Value, body.UnitId);
+            return StatusCode(500, new
+            {
+                error = $"{ex.GetType().Name}: {ex.Message}",
+                inner = ex.InnerException?.Message,
+                where = ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim(),
+            });
+        }
     }
 
     // ─── CHAT ───────────────────────────────────────────────────────────────

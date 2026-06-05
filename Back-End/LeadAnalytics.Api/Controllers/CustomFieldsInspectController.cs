@@ -30,6 +30,34 @@ public class CustomFieldsInspectController(
     KommoApiClient kommoApi) : ControllerBase
 {
     /// <summary>
+    /// DEBUG: bate na paginated /api/v4/leads?filter[id][]=… e devolve o JSON CRU.
+    /// Resolve definitivamente se a Kommo manda custom_fields_values no
+    /// paginated (que o sync usa) ou só no single-lead endpoint.
+    /// </summary>
+    [HttpGet("raw-paginated/{externalId:long}")]
+    public async Task<IActionResult> RawPaginated(
+        long externalId,
+        [FromQuery] int unitId,
+        CancellationToken ct = default)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { error = "unit sem Kommo configurado" });
+
+        try
+        {
+            var raw = await kommoApi.DebugGetLeadsPageRawAsync(
+                unit.KommoSubdomain!, unit.KommoAccessToken!, externalId, ct);
+            return Content(raw ?? "(null)", "application/json");
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Compara o JSON salvo no NOSSO banco com o que a Kommo devolve AO VIVO
     /// pra UM lead específico. Resolve a pergunta:
     ///   "A Kommo está mandando os campos preenchidos pelas SDRs ou não?"

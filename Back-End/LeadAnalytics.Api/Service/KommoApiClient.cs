@@ -252,6 +252,22 @@ public class KommoApiClient
     }
 
     /// <summary>
+    /// DEBUG ONLY: devolve o JSON CRU da paginated `/api/v4/leads?filter[id][]=…`
+    /// sem deserialização — pra confirmar se a Kommo manda custom_fields_values
+    /// nesse endpoint ou só no single-lead.
+    /// </summary>
+    public async Task<string?> DebugGetLeadsPageRawAsync(
+        string subdomainOrHost, string token, long leadId, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?filter[id][]={leadId}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var resp = await _http.SendAsync(req, ct);
+        return await resp.Content.ReadAsStringAsync(ct);
+    }
+
+    /// <summary>
     /// Lista usuários da conta Kommo (id, nome, email). Usado pelo importer de
     /// conversas pra trocar "Kommo · user 12345" pelo nome real ("Ana Paula").
     /// Mudam raramente — cacheia no chamador por ~1h.

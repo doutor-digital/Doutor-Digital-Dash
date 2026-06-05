@@ -26,8 +26,88 @@ namespace LeadAnalytics.Api.Controllers;
 [Route("api/admin/custom-fields")]
 public class CustomFieldsInspectController(
     AppDbContext db,
-    TenantUnitGuard tenantGuard) : ControllerBase
+    TenantUnitGuard tenantGuard,
+    KommoApiClient kommoApi) : ControllerBase
 {
+    /// <summary>
+    /// Compara o JSON salvo no NOSSO banco com o que a Kommo devolve AO VIVO
+    /// pra UM lead específico. Resolve a pergunta:
+    ///   "A Kommo está mandando os campos preenchidos pelas SDRs ou não?"
+    /// </summary>
+    [HttpGet("compare/{externalId:long}")]
+    public async Task<IActionResult> CompareWithKommo(
+        long externalId,
+        [FromQuery] int unitId,
+        CancellationToken ct = default)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { error = "unit sem Kommo configurado" });
+
+        // Lê do nosso banco
+        var ourLead = await db.Leads
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => l.TenantId == unit.ClinicId && l.ExternalId == (int)externalId, ct);
+
+        // Bate na Kommo ao vivo
+        object? kommoRaw = null;
+        string? kommoError = null;
+        try
+        {
+            var live = await kommoApi.GetLeadByIdAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, externalId, ct);
+            kommoRaw = live is null
+                ? new { note = "Kommo retornou null/404" }
+                : new
+                {
+                    id = live.Id,
+                    name = live.Name,
+                    updated_at = live.UpdatedAt,
+                    custom_fields_values_count = live.CustomFieldsValues?.Count ?? 0,
+                    custom_fields_values = live.CustomFieldsValues?.Select(f => new
+                    {
+                        field_id = f.FieldId,
+                        field_name = f.FieldName,
+                        field_code = f.FieldCode,
+                        field_type = f.FieldType,
+                        values_count = f.Values?.Count ?? 0,
+                        values = f.Values?.Select(v => new
+                        {
+                            value_raw = v.Value?.GetRawText(),
+                            value_string = v.GetStringValue(),
+                            enum_id = v.EnumId,
+                            enum_code = v.EnumCode,
+                        }),
+                    }),
+                };
+        }
+        catch (Exception ex)
+        {
+            kommoError = ex.Message;
+        }
+
+        return Ok(new
+        {
+            externalId,
+            unit = new { unit.Id, unit.Name, unit.KommoSubdomain },
+            ourDb = ourLead is null
+                ? null
+                : (object)new
+                {
+                    id = ourLead.Id,
+                    externalId = ourLead.ExternalId,
+                    name = ourLead.Name,
+                    updatedAt = ourLead.UpdatedAt,
+                    createdAt = ourLead.CreatedAt,
+                    customFieldsJson = ourLead.CustomFieldsJson,
+                    customFieldsJsonLength = ourLead.CustomFieldsJson?.Length ?? 0,
+                },
+            kommoLive = kommoRaw,
+            kommoError,
+            note = "Se kommoLive.custom_fields_values_count > 1 e ourDb.customFieldsJson tem 1 campo → bug no sync. Se ambos têm 1, é a Kommo mesmo.",
+        });
+    }
+
     [HttpGet("inspect")]
     public async Task<IActionResult> Inspect(
         [FromQuery] int? unitId,

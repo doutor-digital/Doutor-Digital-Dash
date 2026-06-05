@@ -241,6 +241,17 @@ public class KommoApiClient
     }
 
     /// <summary>
+    /// Busca 1 lead específico por ID. Usado pra debug — comparar o que a Kommo
+    /// devolve ao vivo vs. o que está salvo no nosso banco.
+    /// </summary>
+    public async Task<KommoApiLead?> GetLeadByIdAsync(
+        string subdomainOrHost, string token, long leadId, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads/{leadId}?with=contacts";
+        return await GetAsync<KommoApiLead>(url, token, ct);
+    }
+
+    /// <summary>
     /// Lista usuários da conta Kommo (id, nome, email). Usado pelo importer de
     /// conversas pra trocar "Kommo · user 12345" pelo nome real ("Ana Paula").
     /// Mudam raramente — cacheia no chamador por ~1h.

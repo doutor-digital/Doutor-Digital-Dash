@@ -65,6 +65,46 @@ public class OpenAiClient(HttpClient http, ILogger<OpenAiClient> logger)
     }
 
     /// <summary>
+    /// Variante multi-turn de <see cref="ChatAsync"/>: aceita lista completa de
+    /// mensagens (user/assistant intercalados). Usada pelo chat flutuante.
+    /// </summary>
+    public async Task<string> ChatMultiAsync(
+        string apiKey,
+        string systemPrompt,
+        IEnumerable<(string Role, string Content)> history,
+        CancellationToken ct,
+        string model = DefaultModel,
+        double temperature = 0.5,
+        int maxTokens = 1200)
+    {
+        var msgs = new List<object> { new { role = "system", content = systemPrompt } };
+        foreach (var (role, content) in history)
+        {
+            if (string.IsNullOrWhiteSpace(content)) continue;
+            var r = role == "assistant" ? "assistant" : "user";
+            msgs.Add(new { role = r, content });
+        }
+
+        var payload = new { model, temperature, max_tokens = maxTokens, messages = msgs };
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, ChatUrl);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var resp = await http.SendAsync(req, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            logger.LogWarning("OpenAI chat {Status}: {Body}", (int)resp.StatusCode, Truncate(body, 500));
+            throw new HttpRequestException($"OpenAI retornou {(int)resp.StatusCode}: {Truncate(body, 200)}");
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+    }
+
+    /// <summary>
     /// Transcreve áudio (mp3/wav/m4a/webm) via Whisper. Usado pelas SDRs que querem
     /// ditar em vez de digitar. Modelo padrão: whisper-1.
     /// </summary>

@@ -198,6 +198,51 @@ public class AiAnalyticsService(
             l.TenantId == tenantId && l.UnitId == unitId
             && l.CreatedAt >= from && l.CreatedAt <= to, ct);
 
+    /// <summary>
+    /// Fatos rápidos pra alimentar o contexto do CHAT — sem chamar GPT.
+    /// Custa só algumas queries leves; serve pra colar no system prompt do chat
+    /// e a I.A. responder perguntas como "quantos leads esse mês?".
+    /// </summary>
+    public async Task<string> BuildChatFactsAsync(int tenantId, int unitId, DateTime from, DateTime to, CancellationToken ct)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return string.Empty;
+
+        var total = await CountLeadsAsync(tenantId, unitId, from, to, ct);
+        var topStages = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= from && l.CreatedAt <= to)
+            .GroupBy(l => l.CurrentStage)
+            .Select(g => new { stage = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .Take(6)
+            .ToListAsync(ct);
+
+        var topSources = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= from && l.CreatedAt <= to)
+            .GroupBy(l => l.Source)
+            .Select(g => new { src = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .Take(5)
+            .ToListAsync(ct);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"## Números rápidos da unidade {unit.Name}");
+        sb.AppendLine($"- Total de leads no período: {total}");
+        if (topStages.Count > 0)
+        {
+            sb.AppendLine("- Por etapa do funil:");
+            foreach (var s in topStages) sb.AppendLine($"  - {s.stage ?? "(sem etapa)"}: {s.count}");
+        }
+        if (topSources.Count > 0)
+        {
+            sb.AppendLine("- Top origens:");
+            foreach (var s in topSources) sb.AppendLine($"  - {s.src}: {s.count}");
+        }
+        return sb.ToString();
+    }
+
     private static string Variation(int current, int prev)
     {
         if (prev == 0) return current == 0 ? "estável" : "novo (sem comparativo)";

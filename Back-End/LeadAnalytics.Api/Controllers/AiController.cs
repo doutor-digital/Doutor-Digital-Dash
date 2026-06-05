@@ -111,6 +111,107 @@ public class AiController(
         }
     }
 
+    // ─── CHAT ───────────────────────────────────────────────────────────────
+
+    public record ChatMessageDto(string Role, string Content);
+    public record ChatRequest(
+        List<ChatMessageDto> Messages,
+        int? UnitId,
+        DateTime? DateFrom,
+        DateTime? DateTo,
+        string? CurrentPath);
+    public record ChatResponse(string Content);
+
+    private const string ChatSystemPromptBase =
+        "Você é a assistente operacional do painel Doutor Digital, uma rede de clínicas. " +
+        "Ajuda principalmente as SDRs e gestores das unidades a entenderem os números e " +
+        "navegarem o sistema. Responde em pt-BR, direto, sem rodeios. Quando o usuário " +
+        "perguntar sobre dados, use APENAS os números abaixo (ou diga 'não tenho esse dado'); " +
+        "nunca invente. Quando perguntarem 'como faço X no painel', explica o caminho " +
+        "(ex.: 'Sidebar → Leads → Recuperação'). Se a pergunta não tiver nada a ver com " +
+        "o painel ou clínica, redirecione gentilmente.";
+
+    [HttpPost("chat")]
+    public async Task<IActionResult> Chat([FromBody] ChatRequest body, CancellationToken ct)
+    {
+        if (currentUser.TenantId is not int tenantId) return Forbid();
+        var key = await keys.GetAsync(tenantId, ct);
+        if (string.IsNullOrWhiteSpace(key))
+            return BadRequest(new { error = "Chave OpenAI não configurada." });
+
+        if (body.Messages is null || body.Messages.Count == 0)
+            return BadRequest(new { error = "Mensagens vazias." });
+
+        // Contexto enxuto: se tem unidade + período, anexa um resumo curto.
+        var contextFacts = await BuildChatContextAsync(tenantId, body.UnitId, body.DateFrom, body.DateTo, body.CurrentPath, ct);
+        var systemPrompt = ChatSystemPromptBase + "\n\n" + contextFacts;
+
+        try
+        {
+            var content = await openAi.ChatMultiAsync(
+                key,
+                systemPrompt,
+                body.Messages.Select(m => (m.Role, m.Content)),
+                ct);
+            return Ok(new ChatResponse(content));
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogWarning(ex, "[ai] erro no chat");
+            return StatusCode(502, new { error = ex.Message });
+        }
+    }
+
+    private async Task<string> BuildChatContextAsync(
+        int tenantId, int? unitId, DateTime? dateFrom, DateTime? dateTo, string? currentPath, CancellationToken ct)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Contexto atual da sessão");
+        if (!string.IsNullOrWhiteSpace(currentPath))
+            sb.AppendLine($"- Página aberta: `{currentPath}`");
+
+        if (unitId is int uid)
+        {
+            var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+            var from = (dateFrom ?? to.AddDays(-30)).Date;
+            sb.AppendLine($"- Unidade selecionada: id {uid}");
+            sb.AppendLine($"- Período: {from:dd/MM/yyyy} → {to:dd/MM/yyyy}");
+
+            try
+            {
+                var facts = await analytics.BuildChatFactsAsync(tenantId, uid, from, to, ct);
+                if (!string.IsNullOrWhiteSpace(facts))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine(facts);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "[ai-chat] falha ao montar quick facts (unit {Unit})", uid);
+            }
+        }
+        else
+        {
+            sb.AppendLine("- Nenhuma unidade selecionada — peça pro usuário escolher uma se a pergunta depender disso.");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("## Rotas do painel (caso o usuário pergunte como navegar)");
+        sb.AppendLine("- `/` Dashboard principal");
+        sb.AppendLine("- `/campos-customizados` Análise dos campos da Kommo (Sexo×Desfecho, Origem, Tratamento Indicado, Motivo Não Agendamento, Profissão…)");
+        sb.AppendLine("- `/conversas` WhatsApp/atendimento (1ª resposta, sem-resposta, heatmap por hora, por agente)");
+        sb.AppendLine("- `/leads` Lista completa, `/recent-leads` Recentes, `/recuperacao` Leads que precisam ser puxados");
+        sb.AppendLine("- `/funnel` Funil, `/conversao` Conversão, `/sources` Origens");
+        sb.AppendLine("- `/sdr/cadastro-geral` Cadastro de leads pelas SDRs");
+        sb.AppendLine("- `/sdr/agenda` Agenda das consultas, `/sdr/tarefas` Tarefas pendentes");
+        sb.AppendLine("- `/sdr/metas` Metas das secretárias");
+        sb.AppendLine("- `/units` Unidades + sincronização com Kommo");
+        sb.AppendLine("- `/ia-analytics` Análise profunda da unidade gerada por IA");
+
+        return sb.ToString();
+    }
+
     // ─── TRANSCRIBE ─────────────────────────────────────────────────────────
 
     [HttpPost("transcribe")]

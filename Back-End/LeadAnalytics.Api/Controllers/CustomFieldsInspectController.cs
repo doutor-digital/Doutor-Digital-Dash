@@ -30,6 +30,56 @@ public class CustomFieldsInspectController(
     KommoApiClient kommoApi) : ControllerBase
 {
     /// <summary>
+    /// DEBUG: chama EXATAMENTE o mesmo método que o sync usa
+    /// (KommoApiClient.GetLeadsPageAsync) e mostra quantos custom_fields_values
+    /// foram deserializados em cada um dos primeiros 3 leads da página 1.
+    /// Roda o SerializeCustomFields no primeiro lead pra ver se retorna null.
+    /// </summary>
+    [HttpGet("test-sync-pipeline")]
+    public async Task<IActionResult> TestSyncPipeline(
+        [FromQuery] int unitId,
+        CancellationToken ct = default)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { error = "unit sem Kommo configurado" });
+
+        try
+        {
+            // Mesma chamada que o sync faz
+            var page = await kommoApi.GetLeadsPageAsync(
+                unit.KommoSubdomain!, unit.KommoAccessToken!, 1, 250, ct);
+
+            var leads = page?.Embedded?.Leads;
+
+            return Ok(new
+            {
+                pageLeadCount = leads?.Count ?? 0,
+                firstThreeLeads = leads?.Take(3).Select(l => new
+                {
+                    id = l.Id,
+                    name = l.Name,
+                    custom_fields_values_count = l.CustomFieldsValues?.Count ?? -1,  // -1 = null
+                    custom_fields_summary = l.CustomFieldsValues?.Take(3).Select(f => new
+                    {
+                        field_id = f.FieldId,
+                        field_name = f.FieldName,
+                        values_count = f.Values?.Count ?? -1,
+                        first_value_raw = f.Values?.FirstOrDefault()?.Value?.GetRawText(),
+                        first_value_string = f.Values?.FirstOrDefault()?.GetStringValue(),
+                    }),
+                }),
+                note = "Se custom_fields_values_count = -1 ou 0 em todos: deserialização está perdendo os campos. Se for >0: bug está no SerializeCustomFields/IngestionService.",
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { error = ex.Message, stack = ex.StackTrace });
+        }
+    }
+
+    /// <summary>
     /// DEBUG: bate na paginated /api/v4/leads?filter[id][]=… e devolve o JSON CRU.
     /// Resolve definitivamente se a Kommo manda custom_fields_values no
     /// paginated (que o sync usa) ou só no single-lead endpoint.

@@ -241,6 +241,19 @@ public class KommoApiClient
     }
 
     /// <summary>
+    /// Lista usuários da conta Kommo (id, nome, email). Usado pelo importer de
+    /// conversas pra trocar "Kommo · user 12345" pelo nome real ("Ana Paula").
+    /// Mudam raramente — cacheia no chamador por ~1h.
+    /// </summary>
+    public async Task<KommoUsersPageResponse?> GetUsersAsync(
+        string subdomainOrHost, string token,
+        int page, int limit, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/users?limit={limit}&page={page}";
+        return await GetAsync<KommoUsersPageResponse>(url, token, ct);
+    }
+
+    /// <summary>
     /// Lista talks (cabeçalhos de conversa) com filtro por updated_at em unix-seconds.
     /// Um talk = uma conversa por canal/contato. Não traz mensagens, só metadados
     /// (last_message_at, is_in_work, responsible_user_id, origin). Usado pelo
@@ -562,4 +575,25 @@ public class KommoApiNoteParams
     [JsonPropertyName("type")] public string? Type { get; set; }
     /// <summary>Endereço de chegada (presença sugere mensagem inbound).</summary>
     [JsonPropertyName("from")] public string? From { get; set; }
+}
+
+// ─── Users ──────────────────────────────────────────────────────────────────
+
+public class KommoUsersPageResponse
+{
+    [JsonPropertyName("_page")] public int Page { get; set; }
+    [JsonPropertyName("_links")] public KommoLinks? Links { get; set; }
+    [JsonPropertyName("_embedded")] public KommoUsersEmbedded? Embedded { get; set; }
+}
+
+public class KommoUsersEmbedded
+{
+    [JsonPropertyName("users")] public List<KommoApiUser>? Users { get; set; }
+}
+
+public class KommoApiUser
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("email")] public string? Email { get; set; }
 }

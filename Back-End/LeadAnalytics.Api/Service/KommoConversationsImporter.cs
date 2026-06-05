@@ -33,6 +33,7 @@ public class KommoConversationsImporter
 {
     private const int PageLimit = 250;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan UsersCacheTtl = TimeSpan.FromHours(1);
 
     private readonly KommoApiClient _api;
     private readonly AppDbContext _db;
@@ -66,6 +67,8 @@ public class KommoConversationsImporter
         var cacheKey = $"kommo-conv:{unit.Id}:{fromUnix}:{toUnix}";
         if (_cache.TryGetValue(cacheKey, out IReadOnlyList<MessageEventDto>? cached) && cached is not null)
             return cached;
+
+        var userNames = await GetUserNamesAsync(unit, ct);
 
         // Mapa leadId(Kommo) → Campaign — carrega antecipadamente pra anotar eventos.
         // Lead.ExternalId é o id do lead na Kommo (int).
@@ -120,7 +123,7 @@ public class KommoConversationsImporter
                         Direcao = "saida",
                         Timestamp = DateTimeOffset.FromUnixTimeSeconds(updatedAtUnix).UtcDateTime,
                         Tipo = "texto",
-                        Agente = $"Kommo · user {rid}",
+                        Agente = ResolveAgente(userNames, rid),
                         Campanha = campanha,
                     });
                 }
@@ -164,7 +167,9 @@ public class KommoConversationsImporter
                     Direcao = direcao,
                     Timestamp = DateTimeOffset.FromUnixTimeSeconds(createdAt).UtcDateTime,
                     Tipo = note.NoteType == "extended_service_message" ? "documento" : "texto",
-                    Agente = direcao == "saida" && note.CreatedBy is long cb && cb > 0 ? $"Kommo · user {cb}" : null,
+                    Agente = direcao == "saida" && note.CreatedBy is long cb && cb > 0
+                        ? ResolveAgente(userNames, cb)
+                        : null,
                     Campanha = campaignByExternalId.GetValueOrDefault(leadId, "—"),
                 });
             }
@@ -181,4 +186,44 @@ public class KommoConversationsImporter
         _cache.Set(cacheKey, (IReadOnlyList<MessageEventDto>)events, CacheTtl);
         return events;
     }
+
+    /// <summary>
+    /// Mapa <c>userId → name</c> da Kommo da unidade. Cacheado por 1h —
+    /// usuários mudam raramente e ler a cada request seria desperdício de RPS.
+    /// </summary>
+    private async Task<Dictionary<long, string>> GetUserNamesAsync(Unit unit, CancellationToken ct)
+    {
+        var key = $"kommo-users:{unit.Id}";
+        if (_cache.TryGetValue(key, out Dictionary<long, string>? cached) && cached is not null)
+            return cached;
+
+        var map = new Dictionary<long, string>();
+        try
+        {
+            var resp = await _api.GetUsersAsync(
+                unit.KommoSubdomain!, unit.KommoAccessToken!,
+                page: 1, limit: PageLimit, ct);
+
+            foreach (var u in resp?.Embedded?.Users ?? new())
+            {
+                if (!string.IsNullOrWhiteSpace(u.Name))
+                    map[u.Id] = u.Name!;
+            }
+
+            _logger.LogInformation(
+                "[kommo-importer] unit={Unit} users carregados={Count}",
+                unit.Id, map.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[kommo-importer] falha ao listar users (unit={Unit}) — usando fallback por ID", unit.Id);
+        }
+
+        _cache.Set(key, map, UsersCacheTtl);
+        return map;
+    }
+
+    /// <summary>Nome real do usuário Kommo, caindo no ID quando não encontrado.</summary>
+    private static string ResolveAgente(Dictionary<long, string> userNames, long userId)
+        => userNames.TryGetValue(userId, out var name) ? name : $"Kommo · user {userId}";
 }

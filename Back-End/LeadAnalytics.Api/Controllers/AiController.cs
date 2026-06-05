@@ -103,8 +103,10 @@ public class AiController(
         if (err is not null) return err;
         if (tenantId is null) return Forbid();
 
-        var to = (body.DateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-        var from = (body.DateFrom ?? to.AddDays(-30)).Date;
+        // Npgsql exige Kind=Utc pra timestamp with time zone — datas de JSON
+        // chegam como Unspecified e quebram a query.
+        var to = DateTime.SpecifyKind((body.DateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+        var from = DateTime.SpecifyKind((body.DateFrom ?? to.AddDays(-30)).Date, DateTimeKind.Utc);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try

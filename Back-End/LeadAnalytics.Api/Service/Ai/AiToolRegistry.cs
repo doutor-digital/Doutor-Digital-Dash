@@ -80,8 +80,9 @@ public class AiToolRegistry(AppDbContext db, KpiConfigService kpiService, ILogge
             return Json(new { error = "unidade não pertence ao seu tenant" });
 
         var days = GetInt(args, "days") ?? 30;
-        var to = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
-        var from = to.AddDays(-days).Date;
+        // Npgsql exige Kind=Utc pra timestamp with time zone
+        var to = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+        var from = DateTime.SpecifyKind(to.AddDays(-days).Date, DateTimeKind.Utc);
 
         try
         {

@@ -33,6 +33,9 @@ public class AiAnalyticsService(
     public async Task<string> AnalyzeUnitAsync(
         int tenantId, int unitId, DateTime from, DateTime to, CancellationToken ct)
     {
+        // Postgres `timestamp with time zone` exige Kind=Utc. As datas que
+        // chegam do controller (vindas de "2026-06-05" no JSON) são Unspecified.
+        from = AsUtc(from); to = AsUtc(to);
         var apiKey = await keys.GetAsync(tenantId, ct);
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("Chave da OpenAI não configurada para esta clínica.");
@@ -205,6 +208,7 @@ public class AiAnalyticsService(
     /// </summary>
     public async Task<string> BuildChatFactsAsync(int tenantId, int unitId, DateTime from, DateTime to, CancellationToken ct)
     {
+        from = AsUtc(from); to = AsUtc(to);
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
         if (unit is null) return string.Empty;
 
@@ -242,6 +246,10 @@ public class AiAnalyticsService(
         }
         return sb.ToString();
     }
+
+    /// <summary>Garante Kind=Utc — exigência do Npgsql pra timestamp with time zone.</summary>
+    private static DateTime AsUtc(DateTime d) =>
+        d.Kind == DateTimeKind.Utc ? d : DateTime.SpecifyKind(d, DateTimeKind.Utc);
 
     private static string Variation(int current, int prev)
     {

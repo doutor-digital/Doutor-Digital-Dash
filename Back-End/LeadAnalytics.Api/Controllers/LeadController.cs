@@ -710,8 +710,12 @@ public class WebhooksController(
         if (error is not null) return error;
         if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
 
-        var to = dateTo ?? DateTime.UtcNow;
-        var from = dateFrom ?? to.AddDays(-30);
+        // Frontend manda dateTo = "2026-06-05" (date-only) que parseia como
+        // 2026-06-05T00:00:00 — meia-noite no INÍCIO do dia. Isso corta tudo
+        // que foi atualizado DURANTE o último dia do período. Expande pro
+        // último instante do dia pra incluir hoje quando o sync rodar agora.
+        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+        var from = (dateFrom ?? to.AddDays(-30)).Date;
 
         var (total, fields, truncated) = await _kpiService.CustomFieldsSummaryAsync(
             tenantId.Value, unitId, from, to, 8, ct);

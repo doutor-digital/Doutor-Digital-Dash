@@ -22,6 +22,7 @@ public class AiController(
     AiKeyStorage keys,
     OpenAiClient openAi,
     AiAnalyticsService analytics,
+    AiToolRegistry tools,
     TenantUnitGuard tenantGuard,
     ICurrentUser currentUser,
     ILogger<AiController> logger) : ControllerBase
@@ -32,39 +33,51 @@ public class AiController(
     public record SetKeyRequest(string ApiKey);
     public record PingResponse(bool Ok, string? Error);
 
-    [HttpGet("settings")]
-    public async Task<IActionResult> GetSettings(CancellationToken ct)
+    /// <summary>
+    /// Resolve o tenantId pra operações da I.A. Aceita um <paramref name="explicitTenantId"/>
+    /// (query string) quando o caller é super_admin sem tenant_id no JWT — esse é o caso
+    /// típico de quem administra o painel. Senão, exige o tenant do JWT.
+    /// </summary>
+    private int? ResolveAiTenantId(int? explicitTenantId)
     {
-        if (currentUser.TenantId is not int tenantId) return Forbid();
-        var has = await keys.HasKeyAsync(tenantId, ct);
+        if (currentUser.TenantId is int t) return t;
+        if (currentUser.IsSuperAdmin && explicitTenantId is int et && et > 0) return et;
+        return null;
+    }
+
+    [HttpGet("settings")]
+    public async Task<IActionResult> GetSettings([FromQuery] int? tenantId, CancellationToken ct)
+    {
+        if (ResolveAiTenantId(tenantId) is not int t) return Forbid();
+        var has = await keys.HasKeyAsync(t, ct);
         return Ok(new SettingsDto(has));
     }
 
     [HttpPut("settings")]
-    public async Task<IActionResult> SetKey([FromBody] SetKeyRequest body, CancellationToken ct)
+    public async Task<IActionResult> SetKey([FromBody] SetKeyRequest body, [FromQuery] int? tenantId, CancellationToken ct)
     {
-        if (currentUser.TenantId is not int tenantId) return Forbid();
+        if (ResolveAiTenantId(tenantId) is not int t) return Forbid();
         if (string.IsNullOrWhiteSpace(body.ApiKey) || body.ApiKey.Length < 20)
             return BadRequest(new { error = "API key inválida (mínimo 20 chars)." });
 
-        await keys.SetAsync(tenantId, body.ApiKey.Trim(), ct);
-        logger.LogInformation("[ai] tenant={Tenant} key gravada", tenantId);
+        await keys.SetAsync(t, body.ApiKey.Trim(), ct);
+        logger.LogInformation("[ai] tenant={Tenant} key gravada", t);
         return Ok(new SettingsDto(true));
     }
 
     [HttpDelete("settings")]
-    public async Task<IActionResult> DeleteKey(CancellationToken ct)
+    public async Task<IActionResult> DeleteKey([FromQuery] int? tenantId, CancellationToken ct)
     {
-        if (currentUser.TenantId is not int tenantId) return Forbid();
-        await keys.DeleteAsync(tenantId, ct);
+        if (ResolveAiTenantId(tenantId) is not int t) return Forbid();
+        await keys.DeleteAsync(t, ct);
         return Ok(new SettingsDto(false));
     }
 
     [HttpPost("settings/test")]
-    public async Task<IActionResult> Ping(CancellationToken ct)
+    public async Task<IActionResult> Ping([FromQuery] int? tenantId, CancellationToken ct)
     {
-        if (currentUser.TenantId is not int tenantId) return Forbid();
-        var key = await keys.GetAsync(tenantId, ct);
+        if (ResolveAiTenantId(tenantId) is not int t) return Forbid();
+        var key = await keys.GetAsync(t, ct);
         if (string.IsNullOrWhiteSpace(key))
             return Ok(new PingResponse(false, "Chave não configurada."));
         try
@@ -132,9 +145,9 @@ public class AiController(
         "o painel ou clínica, redirecione gentilmente.";
 
     [HttpPost("chat")]
-    public async Task<IActionResult> Chat([FromBody] ChatRequest body, CancellationToken ct)
+    public async Task<IActionResult> Chat([FromBody] ChatRequest body, [FromQuery(Name = "tenantId")] int? explicitTenantId, CancellationToken ct)
     {
-        if (currentUser.TenantId is not int tenantId) return Forbid();
+        if (ResolveAiTenantId(explicitTenantId) is not int tenantId) return Forbid();
         var key = await keys.GetAsync(tenantId, ct);
         if (string.IsNullOrWhiteSpace(key))
             return BadRequest(new { error = "Chave OpenAI não configurada." });
@@ -146,14 +159,24 @@ public class AiController(
         var contextFacts = await BuildChatContextAsync(tenantId, body.UnitId, body.DateFrom, body.DateTo, body.CurrentPath, ct);
         var systemPrompt = ChatSystemPromptBase + "\n\n" + contextFacts;
 
+        var toolsCalled = new List<string>();
+        var toolDefs = tools.All().Select(t => (t.Name, t.Description, t.Schema)).ToList();
+
         try
         {
-            var content = await openAi.ChatMultiAsync(
+            var content = await openAi.ChatWithToolsAsync(
                 key,
                 systemPrompt,
                 body.Messages.Select(m => (m.Role, m.Content)),
+                toolDefs,
+                async (name, args, c) =>
+                {
+                    toolsCalled.Add(name);
+                    logger.LogInformation("[ai-chat] tool={Tool}", name);
+                    return await tools.ExecuteAsync(name, args, tenantId, body.UnitId, c);
+                },
                 ct);
-            return Ok(new ChatResponse(content));
+            return Ok(new { content, toolsCalled });
         }
         catch (HttpRequestException ex)
         {
@@ -215,11 +238,11 @@ public class AiController(
     // ─── TRANSCRIBE ─────────────────────────────────────────────────────────
 
     [HttpPost("transcribe")]
-    [RequestSizeLimit(25 * 1024 * 1024)] // 25MB — limite do Whisper
-    public async Task<IActionResult> Transcribe([FromForm] IFormFile? audio, CancellationToken ct)
+    [RequestSizeLimit(25 * 1024 * 1024)] // 25MB — limite do endpoint
+    public async Task<IActionResult> Transcribe([FromForm] IFormFile? audio, [FromQuery(Name = "tenantId")] int? explicitTenantId, CancellationToken ct)
     {
         if (audio is null || audio.Length == 0) return BadRequest(new { error = "Áudio vazio." });
-        if (currentUser.TenantId is not int tenantId) return Forbid();
+        if (ResolveAiTenantId(explicitTenantId) is not int tenantId) return Forbid();
         var key = await keys.GetAsync(tenantId, ct);
         if (string.IsNullOrWhiteSpace(key))
             return BadRequest(new { error = "Chave da OpenAI não configurada." });

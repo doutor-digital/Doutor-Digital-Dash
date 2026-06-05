@@ -217,6 +217,7 @@ builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ai.OpenAiClient>(c =>
 });
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiKeyStorage>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiAnalyticsService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiToolRegistry>();
 
 // ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
 builder.Services.AddScoped<ProtectedTokenService>();

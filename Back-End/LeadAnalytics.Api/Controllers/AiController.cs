@@ -45,6 +45,24 @@ public class AiController(
         return null;
     }
 
+    /// <summary>
+    /// BRT está fixa em UTC-3 desde 2019 (Brasil aboliu horário de verão). Pra
+    /// contabilizar leads "criados de 00:00 até 23:59 do dia X", o range em UTC
+    /// vai de X 03:00 UTC a (X+1) 02:59:59.999 UTC.
+    /// </summary>
+    private static readonly TimeSpan BrToUtcOffset = TimeSpan.FromHours(3);
+
+    private static (DateTime fromUtc, DateTime toUtc) BrDayRangeToUtc(DateTime? dateFromBr, DateTime? dateToBr)
+    {
+        // "Hoje" sob ótica BR. Subtrai 3h do UtcNow pra cair no dia BR atual.
+        var nowBr = DateTime.UtcNow.Add(-BrToUtcOffset);
+        var dayTo = (dateToBr ?? nowBr).Date;
+        var dayFrom = (dateFromBr ?? dayTo.AddDays(-30)).Date;
+        var fromUtc = DateTime.SpecifyKind(dayFrom + BrToUtcOffset, DateTimeKind.Utc);
+        var toUtc = DateTime.SpecifyKind(dayTo.AddDays(1).AddTicks(-1) + BrToUtcOffset, DateTimeKind.Utc);
+        return (fromUtc, toUtc);
+    }
+
     [HttpGet("settings")]
     public async Task<IActionResult> GetSettings([FromQuery] int? tenantId, CancellationToken ct)
     {
@@ -103,10 +121,9 @@ public class AiController(
         if (err is not null) return err;
         if (tenantId is null) return Forbid();
 
-        // Npgsql exige Kind=Utc pra timestamp with time zone — datas de JSON
-        // chegam como Unspecified e quebram a query.
-        var to = DateTime.SpecifyKind((body.DateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-        var from = DateTime.SpecifyKind((body.DateFrom ?? to.AddDays(-30)).Date, DateTimeKind.Utc);
+        // "Total de leads" = leads CRIADOS de 00:00 a 23:59 do dia (BRT).
+        // Helper converte o range BR → UTC pra query no Postgres.
+        var (from, to) = BrDayRangeToUtc(body.DateFrom, body.DateTo);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
@@ -208,10 +225,12 @@ public class AiController(
 
         if (unitId is int uid)
         {
-            var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-            var from = (dateFrom ?? to.AddDays(-30)).Date;
+            var (from, to) = BrDayRangeToUtc(dateFrom, dateTo);
+            // Pra mostrar pro usuário, formata em horário de Brasília
+            var fromBr = from.Add(-BrToUtcOffset);
+            var toBr = to.Add(-BrToUtcOffset);
             sb.AppendLine($"- Unidade selecionada: id {uid}");
-            sb.AppendLine($"- Período: {from:dd/MM/yyyy} → {to:dd/MM/yyyy}");
+            sb.AppendLine($"- Período (BRT): {fromBr:dd/MM/yyyy} → {toBr:dd/MM/yyyy}");
 
             try
             {

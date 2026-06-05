@@ -115,11 +115,13 @@ public class AiAnalyticsService(
         // Cross analysis dos custom fields
         var cross = await kpiService.CustomFieldsCrossAnalysisAsync(tenantId, unitId, from, to, 8, ct);
 
-        // Monta o "memorando de fatos"
+        // Monta o "memorando de fatos". Datas no relatório aparecem em BRT
+        // (o que o usuário vê no relógio), não em UTC.
+        var brOffset = TimeSpan.FromHours(-3);
         var sb = new StringBuilder();
         sb.AppendLine($"# Dados da unidade {unit.Name}");
-        sb.AppendLine($"Período analisado: {from:dd/MM/yyyy} → {to:dd/MM/yyyy} ({(to - from).Days + 1} dias)");
-        sb.AppendLine($"Período anterior (comparativo): {prevFrom:dd/MM/yyyy} → {prevTo:dd/MM/yyyy}");
+        sb.AppendLine($"Período analisado (BRT): {from.Add(brOffset):dd/MM/yyyy} → {to.Add(brOffset):dd/MM/yyyy} ({(to - from).Days + 1} dias)");
+        sb.AppendLine($"Período anterior (comparativo, BRT): {prevFrom.Add(brOffset):dd/MM/yyyy} → {prevTo.Add(brOffset):dd/MM/yyyy}");
         sb.AppendLine();
         sb.AppendLine($"## Volume");
         sb.AppendLine($"- Leads no período: **{currentTotal}**");

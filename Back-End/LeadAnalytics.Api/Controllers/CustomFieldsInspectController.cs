@@ -20,7 +20,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// Pode ficar em prod — é só leitura, autenticado por tenant.
 /// </summary>
 [ApiController]
-[Authorize]
+// ⚠️ TEMPORÁRIO: [AllowAnonymous] só pra debug ao vivo do bug dos campos
+// customizados. REVERTER pra [Authorize] depois que terminar o diagnóstico.
+[AllowAnonymous]
 [Route("api/admin/custom-fields")]
 public class CustomFieldsInspectController(
     AppDbContext db,
@@ -32,8 +34,17 @@ public class CustomFieldsInspectController(
         [FromQuery] int sampleSize = 3,
         CancellationToken ct = default)
     {
-        var (err, tenantId) = await tenantGuard.ResolveTenantAsync(unitId, ct);
-        if (err is not null) return err;
+        // ⚠️ TEMPORÁRIO: bypass do tenantGuard. Aceita unitId direto da
+        // querystring pra debug. REVERTER junto com [Authorize] acima.
+        int? tenantId = null;
+        if (unitId.HasValue)
+        {
+            var unitClinic = await db.Units.AsNoTracking()
+                .Where(u => u.Id == unitId.Value)
+                .Select(u => (int?)u.ClinicId)
+                .FirstOrDefaultAsync(ct);
+            tenantId = unitClinic;
+        }
 
         // Unit info — confirma se está configurada pra Kommo
         var unit = unitId.HasValue

@@ -394,18 +394,8 @@ public class KommoApiCustomFieldValue
     {
         // 1) Quando o `value` vem populado, é a fonte canônica (texto do
         //    campo, número, true/false). Funciona pra text/numeric/checkbox.
-        if (Value is { } v && v.ValueKind != JsonValueKind.Null && v.ValueKind != JsonValueKind.Undefined)
-        {
-            var s = v.ValueKind switch
-            {
-                JsonValueKind.String => v.GetString(),
-                JsonValueKind.Number => v.ToString(),
-                JsonValueKind.True => "true",
-                JsonValueKind.False => "false",
-                _ => v.ToString(),
-            };
-            if (!string.IsNullOrWhiteSpace(s)) return s;
-        }
+        var raw = GetStringValueRawOnly();
+        if (!string.IsNullOrWhiteSpace(raw)) return raw;
 
         // 2) Fallback pra select / multiselect / radio: a Kommo às vezes manda
         //    só enum_id (ou enum_code) sem o texto. Preserva ALGUMA coisa
@@ -414,6 +404,26 @@ public class KommoApiCustomFieldValue
         if (EnumId is long id && id > 0) return $"enum_{id}";
 
         return null;
+    }
+
+    /// <summary>
+    /// Lê apenas o campo <c>value</c> cru (sem cair em enum_id/enum_code).
+    /// Usado quando o chamador tem o schema da conta em mãos pra fazer a
+    /// resolução de enum_id → label num passo separado e ordenado.
+    /// </summary>
+    public string? GetStringValueRawOnly()
+    {
+        if (Value is not { } v || v.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+        var s = v.ValueKind switch
+        {
+            JsonValueKind.String => v.GetString(),
+            JsonValueKind.Number => v.ToString(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => v.ToString(),
+        };
+        return string.IsNullOrWhiteSpace(s) ? null : s;
     }
 }
 

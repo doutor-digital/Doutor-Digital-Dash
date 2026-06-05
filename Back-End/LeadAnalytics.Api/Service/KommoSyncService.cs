@@ -87,6 +87,32 @@ public class KommoSyncService
             return result;
         }
 
+        // 1.5) Busca o SCHEMA de custom fields da conta (uma chamada só).
+        //      Monta o mapa enumLabelByFieldEnum[fieldId][enumId] = "Instagram"
+        //      pra resolver enum_id → texto humano nos selects/multiselects.
+        var enumLabelByFieldEnum = new Dictionary<long, Dictionary<long, string>>();
+        try
+        {
+            var schemaResp = await _api.GetCustomFieldsAsync(unit.KommoSubdomain, accessToken, ct);
+            foreach (var def in schemaResp?.Embedded?.CustomFields ?? new())
+            {
+                if (def.Enums is null || def.Enums.Count == 0) continue;
+                var map = new Dictionary<long, string>(def.Enums.Count);
+                foreach (var en in def.Enums)
+                    if (!string.IsNullOrWhiteSpace(en.Value)) map[en.Id] = en.Value!;
+                if (map.Count > 0) enumLabelByFieldEnum[def.Id] = map;
+            }
+            _logger.LogInformation(
+                "Sync Kommo unit {Unit}: schema carregado, {N} campos com enums",
+                unit.Id, enumLabelByFieldEnum.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Sync Kommo unit {Unit}: falha ao buscar schema de custom_fields — selects vão cair em 'enum_<id>'",
+                unit.Id);
+        }
+
         // 2) Busca os contatos em lotes (até 250 por chamada) pra pegar phone/email
         var contactById = new Dictionary<long, KommoApiContact>();
         foreach (var chunk in Chunk(contactIds, 250))
@@ -127,7 +153,7 @@ public class KommoSyncService
                 AccountId = lead.AccountId?.ToString(),
                 Phone = phone,
                 Email = email,
-                CustomFieldsJson = SerializeCustomFields(lead.CustomFieldsValues),
+                CustomFieldsJson = SerializeCustomFields(lead.CustomFieldsValues, enumLabelByFieldEnum),
                 TagsJson = SerializeTags(lead.Embedded?.Tags),
             });
         }
@@ -168,24 +194,29 @@ public class KommoSyncService
     }
 
     /// <summary>
-    /// Serializa os custom fields da Kommo num array JSON enxuto. Pra multiselect
-    /// junta os valores com ", ". Preserva também <c>enum_id</c> e <c>enum_code</c>
-    /// (quando existem) — futuro: resolver pra label humana via /custom_fields.
+    /// Serializa os custom fields da Kommo num array JSON enxuto. Pra cada
+    /// <c>KommoApiCustomFieldValue</c> resolve o label na ordem:
+    /// <c>value</c> → schema (enumLabelByFieldEnum[field][enumId]) → enum_code → "enum_<id>".
+    /// Multiselect junta os labels resolvidos com ", ".
     /// </summary>
-    private static string? SerializeCustomFields(List<KommoApiCustomField>? fields)
+    private static string? SerializeCustomFields(
+        List<KommoApiCustomField>? fields,
+        Dictionary<long, Dictionary<long, string>> enumLabelByFieldEnum)
     {
         if (fields is null || fields.Count == 0) return null;
+
         var slim = fields.Select(f =>
         {
-            // Multi-select: junta cada GetStringValue não-vazio com ", ".
-            var values = f.Values?
-                .Select(v => v.GetStringValue())
+            enumLabelByFieldEnum.TryGetValue(f.FieldId, out var enumMap);
+
+            // Resolve cada item da lista values (multiselect pode ter vários).
+            var labels = f.Values?
+                .Select(v => ResolveValueLabel(v, enumMap))
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
 
-            var value = values is { Count: > 0 } ? string.Join(", ", values!) : null;
+            var value = labels is { Count: > 0 } ? string.Join(", ", labels!) : null;
 
-            // enum_id (primeiro) — útil pra resolver label depois.
             var enumId = f.Values?.Select(v => v.EnumId).FirstOrDefault(id => id is > 0);
             var enumCode = f.Values?.Select(v => v.EnumCode).FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
 
@@ -201,6 +232,27 @@ public class KommoSyncService
             };
         }).ToList();
         return JsonSerializer.Serialize(slim);
+    }
+
+    /// <summary>
+    /// Resolve o label de UM <see cref="KommoApiCustomFieldValue"/> usando, em ordem:
+    /// (1) o próprio Value quando preenchido; (2) o schema da conta
+    /// (enumMap[enum_id] = label); (3) enum_code; (4) "enum_{id}" como último recurso.
+    /// </summary>
+    private static string? ResolveValueLabel(KommoApiCustomFieldValue v, Dictionary<long, string>? enumMap)
+    {
+        var raw = v.GetStringValueRawOnly();
+        if (!string.IsNullOrWhiteSpace(raw)) return raw;
+
+        if (v.EnumId is long id && id > 0)
+        {
+            if (enumMap is not null && enumMap.TryGetValue(id, out var label) && !string.IsNullOrWhiteSpace(label))
+                return label;
+            if (!string.IsNullOrWhiteSpace(v.EnumCode)) return v.EnumCode;
+            return $"enum_{id}";
+        }
+        if (!string.IsNullOrWhiteSpace(v.EnumCode)) return v.EnumCode;
+        return null;
     }
 
     private static string? SerializeTags(List<KommoApiTag>? tags)

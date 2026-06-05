@@ -45,7 +45,10 @@ public class KommoApiClient
         bool withContacts = false)
     {
         var with = withContacts ? "&with=contacts" : string.Empty;
-        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}{with}";
+        // order[updated_at]=desc — leads recentemente modificados primeiro. Casa com a
+        // estratégia do dashboard (filtros por janela de UpdatedAt) e garante que leads
+        // novos/ativos sejam sincronizados antes dos antigos quando há cap (maxLeads).
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}&order[updated_at]=desc{with}";
         return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
     }
 

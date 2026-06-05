@@ -210,6 +210,14 @@ builder.Services.AddHttpClient<KommoApiClient>(c =>
 });
 builder.Services.AddSingleton<WebhookExecutionLogger>();
 
+// ── I.A. (OpenAI GPT-4o-mini + Whisper) ──────────────────────────────────────
+builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ai.OpenAiClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiKeyStorage>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiAnalyticsService>();
+
 // ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
 builder.Services.AddScoped<ProtectedTokenService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AdsCredentialsService>();

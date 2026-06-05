@@ -73,6 +73,11 @@ public class KommoIngestionService(
                 continue;
             }
 
+            // Data REAL da criação na Kommo, se o adaptador/sync souber. Senão, agora.
+            var realCreatedAt = ev.KommoCreatedAtUtc.HasValue
+                ? DateTime.SpecifyKind(ev.KommoCreatedAtUtc.Value, DateTimeKind.Utc)
+                : now;
+
             if (lead is null)
             {
                 lead = new Lead
@@ -85,7 +90,7 @@ public class KommoIngestionService(
                     Email = ev.Email,
                     Source = "Kommo",
                     Status = "new",
-                    CreatedAt = now,
+                    CreatedAt = realCreatedAt,
                     UpdatedAt = now,
                     LastUpdatedAt = now,
                 };
@@ -99,6 +104,13 @@ public class KommoIngestionService(
                 if (!string.IsNullOrWhiteSpace(ev.Email)) lead.Email = ev.Email;
                 lead.UnitId ??= unit.Id;
                 lead.UpdatedAt = now;
+                // BACKFILL: leads antigos foram gravados com CreatedAt='data do 1º sync'.
+                // Quando o sync trouxer a data real da Kommo, corrigir aqui.
+                if (ev.KommoCreatedAtUtc.HasValue
+                    && Math.Abs((lead.CreatedAt - realCreatedAt).TotalMinutes) > 5)
+                {
+                    lead.CreatedAt = realCreatedAt;
+                }
             }
 
             // Snapshot dos custom_fields + tags da Kommo (vem do sync REST; webhook

@@ -32,4 +32,11 @@ public class LeadEvent
 
     /// <summary>JSON com as tags do lead (array de strings).</summary>
     public string? TagsJson { get; set; }
+
+    /// <summary>
+    /// Data de criação REAL do lead na Kommo (UTC). Quando preenchida, sobrescreve
+    /// o <c>Lead.CreatedAt</c> do nosso banco (que originalmente era gravado como
+    /// "data do primeiro sync" e bagunçava a contagem de leads do dia).
+    /// </summary>
+    public DateTime? KommoCreatedAtUtc { get; set; }
 }

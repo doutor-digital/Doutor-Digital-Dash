@@ -198,6 +198,11 @@ public class KommoSyncService
                 Email = email,
                 CustomFieldsJson = SerializeCustomFields(lead.CustomFieldsValues, enumLabelByFieldEnum),
                 TagsJson = SerializeTags(lead.Embedded?.Tags),
+                // Data REAL da criação na Kommo (unix → UTC). Sobrescreve o
+                // CreatedAt do nosso banco que estava virando 'data do 1º sync'.
+                KommoCreatedAtUtc = lead.CreatedAt.HasValue
+                    ? DateTimeOffset.FromUnixTimeSeconds(lead.CreatedAt.Value).UtcDateTime
+                    : null,
             });
         }
 

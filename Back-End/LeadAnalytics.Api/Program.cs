@@ -195,6 +195,7 @@ builder.Services.AddHostedService<ContactsBulkDeleteJobWorker>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPreenchimentoPendenteJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasadoJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoSyncPeriodicJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<KommoAdapter>();

@@ -729,6 +729,32 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Análises cruzadas em cima dos campos customizados:
+    /// Sexo × desfecho, Tratamento indicado, Motivo do não agendamento, Profissão,
+    /// Origem, Responsável agendamento, Qualificação do lead.
+    /// </summary>
+    [HttpGet("dashboard/custom-fields-cross-analysis")]
+    [ProducesResponseType(typeof(LeadAnalytics.Api.DTOs.Dashboard.CustomFieldsCrossAnalysisDto), 200)]
+    public async Task<IActionResult> CustomFieldsCrossAnalysis(
+        [FromQuery] int? unitId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        CancellationToken ct)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+        var from = (dateFrom ?? to.AddDays(-30)).Date;
+
+        var result = await _kpiService.CustomFieldsCrossAnalysisAsync(
+            tenantId.Value, unitId, from, to, 12, ct);
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Perfil avançado do lead: idade média por desfecho, alertas de agendamento próximo,
     /// doutor responsável e contagem por desfecho. Consumido pela dashboard principal.
     /// </summary>

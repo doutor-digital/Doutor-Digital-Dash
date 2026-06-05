@@ -769,4 +769,135 @@ public class KpiConfigService(AppDbContext db)
 
         return double.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CROSS-ANALYSIS — Sexo × desfecho, Tratamento indicado, Motivos, etc.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Análises cruzadas dos campos customizados — Sexo × desfecho (agendou/
+    /// compareceu/fechou/faltou) + distribuições de Tratamento indicado,
+    /// Tratamento fechado, Motivo do não agendamento, Profissão, Origem,
+    /// Responsável agendamento, Qualificação. Tudo numa varredura só.
+    /// </summary>
+    public async Task<DTOs.Dashboard.CustomFieldsCrossAnalysisDto>
+        CustomFieldsCrossAnalysisAsync(int clinicId, int? unitId, DateTime from, DateTime to,
+            int topPerField = 12, CancellationToken ct = default)
+    {
+        const int MaxScan = 10_000;
+        from = AsUtc(from); to = AsUtc(to);
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                        && l.UpdatedAt >= from && l.UpdatedAt <= to
+                        && l.CustomFieldsJson != null);
+        if (unitId.HasValue)
+            q = q.Where(l => l.UnitId == unitId.Value);
+
+        var rows = await q
+            .OrderByDescending(l => l.UpdatedAt)
+            .Take(MaxScan)
+            .Select(l => new { l.CurrentStage, l.AttendanceStatus, l.CustomFieldsJson })
+            .ToListAsync(ct);
+
+        // Agregadores
+        var sexoBucket = new Dictionary<string, DTOs.Dashboard.SexoOutcomeRowDto>(StringComparer.OrdinalIgnoreCase);
+        var tratamentoIndicado = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tratamentoFechado = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var motivoNaoAgendamento = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var profissao = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var origem = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var responsavel = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var qualificacao = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var l in rows)
+        {
+            var stage = l.CurrentStage ?? "";
+            var att = l.AttendanceStatus;
+            var agendou = LeadStages.HasAppointmentRecord(stage);
+            var compareceu = att == LeadStages.AttendedCompareceu;
+            var fechou = stage == LeadStages.FechouTratamento || stage == LeadStages.EmTratamento;
+            var faltou = stage == LeadStages.Faltou || att == LeadStages.AttendedFaltou;
+
+            var cf = l.CustomFieldsJson;
+
+            // Sexo (radiobutton normalmente — Feminino/Masculino/Outro)
+            var sexo = ExtractFieldByName(cf, n => n == "sexo");
+            if (!string.IsNullOrWhiteSpace(sexo))
+            {
+                var key = sexo.Trim();
+                if (!sexoBucket.TryGetValue(key, out var row))
+                {
+                    row = new DTOs.Dashboard.SexoOutcomeRowDto { Sexo = key };
+                    sexoBucket[key] = row;
+                }
+                row.Total++;
+                if (agendou) row.Agendou++;
+                if (compareceu) row.Compareceu++;
+                if (fechou) row.Fechou++;
+                if (faltou) row.Faltou++;
+            }
+
+            // Tratamento indicado (multiselect — pode ter "A, B, C")
+            var trIndic = ExtractFieldByName(cf, n => n.Contains("tratamento") && n.Contains("indicad"));
+            CountMultiselect(tratamentoIndicado, trIndic);
+
+            // Tratamento fechado
+            var trFech = ExtractFieldByName(cf, n => n.Contains("tratamento") && n.Contains("fechad"));
+            CountMultiselect(tratamentoFechado, trFech);
+
+            // Motivo do não agendamento
+            var motivo = ExtractFieldByName(cf, n => n.Contains("motivo") && n.Contains("agendamento"));
+            if (!string.IsNullOrWhiteSpace(motivo))
+                motivoNaoAgendamento[motivo.Trim()] = motivoNaoAgendamento.GetValueOrDefault(motivo.Trim()) + 1;
+
+            // Profissão
+            var prof = ExtractFieldByName(cf, n => n == "profissão" || n == "profissao");
+            if (!string.IsNullOrWhiteSpace(prof))
+                profissao[prof.Trim()] = profissao.GetValueOrDefault(prof.Trim()) + 1;
+
+            // Origem
+            var orig = ExtractFieldByName(cf, n => n == "origem");
+            if (!string.IsNullOrWhiteSpace(orig))
+                origem[orig.Trim()] = origem.GetValueOrDefault(orig.Trim()) + 1;
+
+            // Responsável agendamento
+            var resp = ExtractFieldByName(cf, n => n.Contains("responsável") && n.Contains("agendamento")
+                                                    || n.Contains("responsavel") && n.Contains("agendamento"));
+            if (!string.IsNullOrWhiteSpace(resp))
+                responsavel[resp.Trim()] = responsavel.GetValueOrDefault(resp.Trim()) + 1;
+
+            // Qualificação do lead
+            var qual = ExtractFieldByName(cf, n => n.Contains("qualifica"));
+            if (!string.IsNullOrWhiteSpace(qual))
+                qualificacao[qual.Trim()] = qualificacao.GetValueOrDefault(qual.Trim()) + 1;
+        }
+
+        return new DTOs.Dashboard.CustomFieldsCrossAnalysisDto
+        {
+            TotalLeads = rows.Count,
+            SexoByOutcome = sexoBucket.Values.OrderByDescending(r => r.Total).ToList(),
+            TratamentoIndicado = TopN(tratamentoIndicado, topPerField),
+            TratamentoFechado = TopN(tratamentoFechado, topPerField),
+            MotivoNaoAgendamento = TopN(motivoNaoAgendamento, topPerField),
+            Profissao = TopN(profissao, topPerField),
+            Origem = TopN(origem, topPerField),
+            ResponsavelAgendamento = TopN(responsavel, topPerField),
+            Qualificacao = TopN(qualificacao, topPerField),
+        };
+    }
+
+    private static void CountMultiselect(Dictionary<string, int> bucket, string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return;
+        // multiselect vem salvo como "A, B, C" pelo SerializeCustomFields
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            bucket[part] = bucket.GetValueOrDefault(part) + 1;
+    }
+
+    private static List<DTOs.Dashboard.ValueCountDto> TopN(Dictionary<string, int> bucket, int n) =>
+        bucket.OrderByDescending(kv => kv.Value)
+              .Take(n)
+              .Select(kv => new DTOs.Dashboard.ValueCountDto { Value = kv.Key, Count = kv.Value })
+              .ToList();
 }

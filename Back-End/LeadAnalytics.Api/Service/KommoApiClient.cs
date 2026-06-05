@@ -240,6 +240,58 @@ public class KommoApiClient
         return result;
     }
 
+    /// <summary>
+    /// Lista talks (cabeçalhos de conversa) com filtro por updated_at em unix-seconds.
+    /// Um talk = uma conversa por canal/contato. Não traz mensagens, só metadados
+    /// (last_message_at, is_in_work, responsible_user_id, origin). Usado pelo
+    /// dashboard de Conversas pra contar conversas que ocorreram em humanos puros.
+    /// </summary>
+    public async Task<KommoTalksPageResponse?> GetTalksAsync(
+        string subdomainOrHost, string token,
+        long? updatedAtFromUnix, long? updatedAtToUnix,
+        int page, int limit, CancellationToken ct)
+    {
+        var qs = new List<string> { $"limit={limit}", $"page={page}" };
+        if (updatedAtFromUnix is long f) qs.Add($"filter[updated_at][from]={f}");
+        if (updatedAtToUnix is long t) qs.Add($"filter[updated_at][to]={t}");
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/talks?{string.Join("&", qs)}";
+        return await GetAsync<KommoTalksPageResponse>(url, token, ct);
+    }
+
+    /// <summary>
+    /// Lista notas de leads filtradas por tipo (default = tipos relacionados a
+    /// mensagens de chat) e janela de updated_at. Usado pra reconstruir o
+    /// histórico textual de WhatsApp/Telegram que a Kommo armazena como nota.
+    /// </summary>
+    public async Task<KommoNotesPageResponse?> GetLeadNotesAsync(
+        string subdomainOrHost, string token,
+        long? updatedAtFromUnix, long? updatedAtToUnix,
+        IEnumerable<string>? noteTypes,
+        int page, int limit, CancellationToken ct)
+    {
+        var qs = new List<string> { $"limit={limit}", $"page={page}" };
+        if (updatedAtFromUnix is long f) qs.Add($"filter[updated_at][from]={f}");
+        if (updatedAtToUnix is long t) qs.Add($"filter[updated_at][to]={t}");
+        foreach (var nt in noteTypes ?? DefaultChatNoteTypes)
+            qs.Add($"filter[note_type][]={Uri.EscapeDataString(nt)}");
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads/notes?{string.Join("&", qs)}";
+        return await GetAsync<KommoNotesPageResponse>(url, token, ct);
+    }
+
+    /// <summary>
+    /// Tipos de nota que correspondem a mensagens de chat (WhatsApp, Telegram, etc).
+    /// Lista vem da doc da Kommo — qualquer um desses tipos contém texto em
+    /// <c>params.text</c> e marca de direção em <c>params.service</c>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DefaultChatNoteTypes =
+        new[]
+        {
+            "service_message",          // mensagem de chat inbound
+            "extended_service_message", // mensagem de chat com anexo
+            "amomail_message",          // email integrado
+            "message_cashier",          // mensagem do balcão (raro)
+        };
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -444,4 +496,70 @@ public class KommoLinks
 public class KommoLinkHref
 {
     [JsonPropertyName("href")] public string? Href { get; set; }
+}
+
+// ─── Talks ──────────────────────────────────────────────────────────────────
+
+public class KommoTalksPageResponse
+{
+    [JsonPropertyName("_page")] public int Page { get; set; }
+    [JsonPropertyName("_links")] public KommoLinks? Links { get; set; }
+    [JsonPropertyName("_embedded")] public KommoTalksEmbedded? Embedded { get; set; }
+}
+
+public class KommoTalksEmbedded
+{
+    [JsonPropertyName("talks")] public List<KommoApiTalk>? Talks { get; set; }
+}
+
+public class KommoApiTalk
+{
+    [JsonPropertyName("talk_id")] public long TalkId { get; set; }
+    /// <summary>Lead/contact id atrelado à conversa.</summary>
+    [JsonPropertyName("entity_id")] public long EntityId { get; set; }
+    [JsonPropertyName("entity_type")] public string? EntityType { get; set; }
+    [JsonPropertyName("chat_id")] public string? ChatId { get; set; }
+    [JsonPropertyName("origin")] public string? Origin { get; set; } // whatsapp, telegram, instagram
+    [JsonPropertyName("created_at")] public long? CreatedAt { get; set; }
+    [JsonPropertyName("updated_at")] public long? UpdatedAt { get; set; }
+    [JsonPropertyName("is_in_work")] public bool IsInWork { get; set; }
+    [JsonPropertyName("is_read")] public bool IsRead { get; set; }
+    [JsonPropertyName("responsible_user_id")] public long? ResponsibleUserId { get; set; }
+}
+
+// ─── Notes ──────────────────────────────────────────────────────────────────
+
+public class KommoNotesPageResponse
+{
+    [JsonPropertyName("_page")] public int Page { get; set; }
+    [JsonPropertyName("_links")] public KommoLinks? Links { get; set; }
+    [JsonPropertyName("_embedded")] public KommoNotesEmbedded? Embedded { get; set; }
+}
+
+public class KommoNotesEmbedded
+{
+    [JsonPropertyName("notes")] public List<KommoApiNote>? Notes { get; set; }
+}
+
+public class KommoApiNote
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("entity_id")] public long EntityId { get; set; }
+    [JsonPropertyName("created_by")] public long? CreatedBy { get; set; }
+    [JsonPropertyName("created_at")] public long? CreatedAt { get; set; }
+    [JsonPropertyName("updated_at")] public long? UpdatedAt { get; set; }
+    [JsonPropertyName("note_type")] public string? NoteType { get; set; }
+    [JsonPropertyName("account_id")] public long? AccountId { get; set; }
+    [JsonPropertyName("params")] public KommoApiNoteParams? Params { get; set; }
+}
+
+public class KommoApiNoteParams
+{
+    [JsonPropertyName("text")] public string? Text { get; set; }
+    /// <summary>Nome do serviço/canal (ex.: "WhatsApp", "Telegram") quando aplicável.</summary>
+    [JsonPropertyName("service")] public string? Service { get; set; }
+    /// <summary>Em alguns tipos a Kommo manda "in" ou "out" pra direção.</summary>
+    [JsonPropertyName("type")] public string? Type { get; set; }
+    /// <summary>Endereço de chegada (presença sugere mensagem inbound).</summary>
+    [JsonPropertyName("from")] public string? From { get; set; }
 }

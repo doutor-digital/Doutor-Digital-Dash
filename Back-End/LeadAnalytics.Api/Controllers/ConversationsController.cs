@@ -8,13 +8,18 @@ using Microsoft.EntityFrameworkCore;
 namespace LeadAnalytics.Api.Controllers;
 
 /// <summary>
-/// Endpoints que alimentam o dashboard "Conversas & Atendimento" do front
-/// (rota <c>/conversas</c>). Fonte: tabela <c>agent_messages</c> — webhook próprio
-/// do agente-Dt. <b>Não passa por n8n.</b>
+/// Endpoints que alimentam o dashboard "Conversas &amp; Atendimento" (front /conversas).
 ///
-/// Limitação conhecida: cobre só conversas em que a I.A. (agente-Dt) atuou;
-/// atendimento 100% humano feito direto no Kommo não aparece aqui — exigiria
-/// integração com a Chats API (Amojo) da Kommo, ainda não implementada.
+/// <para><b>Fontes unidas (sem n8n)</b></para>
+/// <list type="bullet">
+/// <item><c>agent_messages</c> — conversas conduzidas pelo agente-Dt via webhook próprio.</item>
+/// <item><b>Kommo Talks</b> (REST v4) — metadados de TODA conversa da Kommo, mesmo 100% humana.</item>
+/// <item><b>Kommo Notes</b> (REST v4) — texto das mensagens de chat (service_message / extended).</item>
+/// </list>
+///
+/// Kommo só é consultada quando <c>unitId</c> é informado E a unit tem
+/// <c>KommoAccessToken</c>. Falhas no Kommo são silenciadas (log warning) pra
+/// não derrubar o painel — agent_messages continua respondendo.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -22,6 +27,7 @@ namespace LeadAnalytics.Api.Controllers;
 public class ConversationsController(
     AppDbContext db,
     TenantUnitGuard tenantGuard,
+    KommoConversationsImporter kommoImporter,
     ILogger<ConversationsController> logger) : ControllerBase
 {
     private const int MaxLimit = 10_000;
@@ -99,8 +105,42 @@ public class ConversationsController(
             Campanha = string.IsNullOrWhiteSpace(r.Campaign) ? "—" : r.Campaign!,
         }).ToList();
 
+        // ─── Union com Kommo (Talks + Notes) quando unit explicitamente fornecida ──
+        if (unitId.HasValue)
+        {
+            var unit = await db.Units
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == unitId.Value, ct);
+
+            if (unit is not null
+                && !string.IsNullOrWhiteSpace(unit.KommoSubdomain)
+                && !string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            {
+                var kommoEvents = await kommoImporter.ImportAsync(unit, from, to, ct);
+
+                // Filtros (campanha/agente) aplicados também aos dados Kommo
+                var kommoFiltered = kommoEvents.Where(e =>
+                {
+                    if (!string.IsNullOrWhiteSpace(campanha)
+                        && !campanha.Equals("todas", StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(e.Campanha, campanha, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    if (!string.IsNullOrWhiteSpace(agente)
+                        && !agente.Equals("todos", StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(e.Agente, agente, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    return true;
+                });
+
+                items.AddRange(kommoFiltered);
+            }
+        }
+
+        // Ordena por timestamp pra UI agregar corretamente
+        items = items.OrderBy(e => e.Timestamp).Take(limit).ToList();
+
         logger.LogInformation(
-            "[conversations] tenant={Tenant} unit={Unit} from={From} to={To} → {Count} eventos",
+            "[conversations] tenant={Tenant} unit={Unit} from={From} to={To} → {Count} eventos (union)",
             tenantId, unitId, from, to, items.Count);
 
         return Ok(new MessagesListResponse { Items = items, NextCursor = null });

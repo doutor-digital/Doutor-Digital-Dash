@@ -201,6 +201,7 @@ builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
 builder.Services.AddScoped<KommoIngestionService>();
 builder.Services.AddScoped<KommoSyncService>();
+builder.Services.AddScoped<KommoConversationsImporter>();
 builder.Services.AddScoped<AgentIngestionService>();
 builder.Services.AddHttpClient<KommoApiClient>(c =>
 {

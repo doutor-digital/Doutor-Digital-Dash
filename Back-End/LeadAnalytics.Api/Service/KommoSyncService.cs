@@ -87,6 +87,49 @@ public class KommoSyncService
             return result;
         }
 
+        // 1.25) WORKAROUND DE BUG DA KOMMO:
+        //       A paginated /api/v4/leads?limit=250 retorna `custom_fields_values: null`
+        //       pra ~30% dos leads quando a resposta é grande, mesmo que o lead tenha
+        //       campos preenchidos. Comprovado com /api/admin/custom-fields/test-sync-pipeline
+        //       que retornou 176 com dados + 74 nulls num único page=1.
+        //
+        //       Solução: re-buscar individualmente cada lead com null via
+        //       GET /api/v4/leads/{id} (confiável). Custo: ~150ms cada × N nulls.
+        //       Pra unit típica isso é alguns minutos a mais — aceitável dado que
+        //       é a única forma de não perder os dados das SDRs.
+        var leadsWithNullCustomFields = leads.Where(l => l.CustomFieldsValues is null).ToList();
+        if (leadsWithNullCustomFields.Count > 0)
+        {
+            _logger.LogInformation(
+                "Sync Kommo unit {Unit}: {N} leads com custom_fields_values=null — re-buscando individualmente",
+                unit.Id, leadsWithNullCustomFields.Count);
+
+            var refetched = 0;
+            foreach (var lead in leadsWithNullCustomFields)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    var full = await _api.GetLeadByIdAsync(unit.KommoSubdomain, accessToken, lead.Id, ct);
+                    if (full?.CustomFieldsValues is { Count: > 0 })
+                    {
+                        lead.CustomFieldsValues = full.CustomFieldsValues;
+                        refetched++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Falha ao re-buscar lead {LeadId} (unit {Unit})", lead.Id, unit.Id);
+                }
+                // Respeita o rate-limit da Kommo (7 RPS = ~143ms entre requests)
+                try { await Task.Delay(150, ct); }
+                catch (OperationCanceledException) { break; }
+            }
+            _logger.LogInformation(
+                "Sync Kommo unit {Unit}: re-buscou {N}/{Total} leads, {Recovered} recuperaram custom_fields",
+                unit.Id, leadsWithNullCustomFields.Count, leadsWithNullCustomFields.Count, refetched);
+        }
+
         // 1.5) Busca o SCHEMA de custom fields da conta (uma chamada só).
         //      Monta o mapa enumLabelByFieldEnum[fieldId][enumId] = "Instagram"
         //      pra resolver enum_id → texto humano nos selects/multiselects.

@@ -24,6 +24,7 @@ public class LeadSearchService(
     OpenAiClient openAi,
     AiKeyStorage keys,
     KommoApiClient kommoApi,
+    KommoStagesResolver stagesResolver,
     IMemoryCache cache,
     ILogger<LeadSearchService> logger)
 {
@@ -261,6 +262,14 @@ public class LeadSearchService(
                 TagsJson = l.TagsJson,
             })
             .ToListAsync(ct);
+
+        // Resolve stage_id → nome humano via Kommo pipelines (cacheado 1h)
+        var stageMap = await stagesResolver.GetStageMapAsync(unitId, ct);
+        foreach (var lead in leads)
+        {
+            if (lead.CurrentStageId is int sid && stageMap.TryGetValue(sid, out var stageName))
+                lead.CurrentStageName = stageName;
+        }
 
         return (leads, total, applied, ignored);
     }
@@ -542,6 +551,8 @@ public class LeadSearchService(
         public string? Email { get; set; }
         public string? CurrentStage { get; set; }
         public int? CurrentStageId { get; set; }
+        /// <summary>Nome humano da etapa (ex.: "Lead de entrada") resolvido via Kommo pipelines.</summary>
+        public string? CurrentStageName { get; set; }
         public string? Source { get; set; }
         public string? Campaign { get; set; }
         public decimal? Price { get; set; }

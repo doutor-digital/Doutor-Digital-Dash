@@ -216,6 +216,7 @@ builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ai.OpenAiClient>(c =>
     c.Timeout = TimeSpan.FromSeconds(60);
 });
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiKeyStorage>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.UnitEntryStageConfig>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiAnalyticsService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiToolRegistry>();
 

@@ -16,6 +16,7 @@ public class AiAnalyticsService(
     KpiConfigService kpiService,
     OpenAiClient openAi,
     AiKeyStorage keys,
+    UnitEntryStageConfig entryStageConfig,
     ILogger<AiAnalyticsService> logger)
 {
     private const string SystemPrompt =
@@ -56,8 +57,12 @@ public class AiAnalyticsService(
         var prevFrom = from.AddDays(-(to - from).Days - 1);
         var prevTo = from.AddDays(-1);
 
-        var currentTotal = await CountLeadsAsync(tenantId, unitId, from, to, ct);
-        var prevTotal = await CountLeadsAsync(tenantId, unitId, prevFrom, prevTo, ct);
+        // Se a unidade tem etapa de entrada configurada, contamos APENAS leads
+        // que entraram nessa etapa no período (usando LeadStageHistory).
+        // Senão, fallback no count por CreatedAt.
+        var entryStageId = await entryStageConfig.GetAsync(unitId, ct);
+        var currentTotal = await CountLeadsAsync(tenantId, unitId, from, to, entryStageId, ct);
+        var prevTotal = await CountLeadsAsync(tenantId, unitId, prevFrom, prevTo, entryStageId, ct);
 
         var byStage = await db.Leads.AsNoTracking()
             .Where(l => l.TenantId == tenantId && l.UnitId == unitId
@@ -207,10 +212,29 @@ public class AiAnalyticsService(
             model: OpenAiClient.DefaultModel, temperature: 0.4, maxTokens: 1800);
     }
 
-    private async Task<int> CountLeadsAsync(int tenantId, int unitId, DateTime from, DateTime to, CancellationToken ct) =>
-        await db.Leads.AsNoTracking().CountAsync(l =>
+    /// <summary>
+    /// Conta leads do período. Se <paramref name="entryStageId"/> está definido,
+    /// conta APENAS leads que entraram nessa etapa (via LeadStageHistory) —
+    /// é o número que bate com o widget "leads de entrada" da Kommo. Senão,
+    /// fallback no CreatedAt (qualquer lead criado no período).
+    /// </summary>
+    private async Task<int> CountLeadsAsync(int tenantId, int unitId, DateTime from, DateTime to, int? entryStageId, CancellationToken ct)
+    {
+        if (entryStageId is int stageId)
+        {
+            return await db.LeadStageHistories.AsNoTracking()
+                .Where(h => h.StageId == stageId
+                            && h.ChangedAt >= from && h.ChangedAt <= to
+                            && h.Lead.TenantId == tenantId
+                            && h.Lead.UnitId == unitId)
+                .Select(h => h.LeadId)
+                .Distinct()
+                .CountAsync(ct);
+        }
+        return await db.Leads.AsNoTracking().CountAsync(l =>
             l.TenantId == tenantId && l.UnitId == unitId
             && l.CreatedAt >= from && l.CreatedAt <= to, ct);
+    }
 
     /// <summary>
     /// Fatos rápidos pra alimentar o contexto do CHAT — sem chamar GPT.
@@ -223,7 +247,8 @@ public class AiAnalyticsService(
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
         if (unit is null) return string.Empty;
 
-        var total = await CountLeadsAsync(tenantId, unitId, from, to, ct);
+        var entryStageId = await entryStageConfig.GetAsync(unitId, ct);
+        var total = await CountLeadsAsync(tenantId, unitId, from, to, entryStageId, ct);
         var topStages = await db.Leads.AsNoTracking()
             .Where(l => l.TenantId == tenantId && l.UnitId == unitId
                         && l.CreatedAt >= from && l.CreatedAt <= to)

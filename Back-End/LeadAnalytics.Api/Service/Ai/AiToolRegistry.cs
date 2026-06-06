@@ -14,7 +14,11 @@ namespace LeadAnalytics.Api.Service.Ai;
 /// confirmação do usuário antes de aplicar — a confirmação é feita por
 /// endpoint separado /api/ai/confirm-action/{id} (não nesta classe).
 /// </summary>
-public class AiToolRegistry(AppDbContext db, KpiConfigService kpiService, ILogger<AiToolRegistry> logger)
+public class AiToolRegistry(
+    AppDbContext db,
+    KpiConfigService kpiService,
+    UnitEntryStageConfig entryStageConfig,
+    ILogger<AiToolRegistry> logger)
 {
     public record ToolDefinition(string Name, string Description, JsonElement Schema, bool IsWrite);
 
@@ -128,7 +132,16 @@ public class AiToolRegistry(AppDbContext db, KpiConfigService kpiService, ILogge
             .Where(l => l.TenantId == tenantId && l.UnitId == unitId
                         && l.CreatedAt >= from && l.CreatedAt <= to);
 
-        var total = await q.CountAsync(ct);
+        // Etapa de entrada configurada → conta só quem entrou nela.
+        var entryStageId = await entryStageConfig.GetAsync(unitId, ct);
+        var total = entryStageId is int sid
+            ? await db.LeadStageHistories.AsNoTracking()
+                .Where(h => h.StageId == sid
+                            && h.ChangedAt >= from && h.ChangedAt <= to
+                            && h.Lead.TenantId == tenantId
+                            && h.Lead.UnitId == unitId)
+                .Select(h => h.LeadId).Distinct().CountAsync(ct)
+            : await q.CountAsync(ct);
         var byStage = await q.GroupBy(l => l.CurrentStage)
             .Select(g => new { stage = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count).Take(8).ToListAsync(ct);

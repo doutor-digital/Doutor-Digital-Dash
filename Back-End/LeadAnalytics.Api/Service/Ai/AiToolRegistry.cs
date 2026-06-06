@@ -18,6 +18,7 @@ public class AiToolRegistry(
     AppDbContext db,
     KpiConfigService kpiService,
     UnitEntryStageConfig entryStageConfig,
+    KommoStagesResolver stagesResolver,
     ILogger<AiToolRegistry> logger)
 {
     public record ToolDefinition(string Name, string Description, JsonElement Schema, bool IsWrite);
@@ -142,9 +143,16 @@ public class AiToolRegistry(
                             && h.Lead.UnitId == unitId)
                 .Select(h => h.LeadId).Distinct().CountAsync(ct)
             : await q.CountAsync(ct);
-        var byStage = await q.GroupBy(l => l.CurrentStage)
-            .Select(g => new { stage = g.Key, count = g.Count() })
+        var byStageRaw = await q.GroupBy(l => new { l.CurrentStage, l.CurrentStageId })
+            .Select(g => new { stage = g.Key.CurrentStage, stage_id = g.Key.CurrentStageId, count = g.Count() })
             .OrderByDescending(x => x.count).Take(8).ToListAsync(ct);
+
+        var stageMapKpi = await stagesResolver.GetStageMapAsync(unitId, ct);
+        var byStage = byStageRaw.Select(b => new
+        {
+            stage = b.stage_id.HasValue && stageMapKpi.TryGetValue(b.stage_id.Value, out var n) ? n : b.stage,
+            b.count,
+        });
         var topAtt = await q.Where(l => l.AttendantId != null)
             .GroupBy(l => l.AttendantId)
             .Select(g => new { att = g.Key, count = g.Count() })
@@ -170,12 +178,22 @@ public class AiToolRegistry(
                 name = l.Name,
                 phone = l.Phone,
                 stage = l.CurrentStage,
+                stage_id = l.CurrentStageId,
                 source = l.Source,
                 campaign = l.Campaign,
                 updated_at = l.UpdatedAt,
             })
             .ToListAsync(ct);
-        return Json(new { count = leads.Count, leads });
+
+        // Resolve stage_id → nome humano (Kommo pipelines)
+        var stageMap = await stagesResolver.GetStageMapAsync(unitId, ct);
+        var withNames = leads.Select(l => new
+        {
+            l.id, l.name, l.phone,
+            stage = l.stage_id.HasValue && stageMap.TryGetValue(l.stage_id.Value, out var sn) ? sn : l.stage,
+            l.source, l.campaign, l.updated_at,
+        });
+        return Json(new { count = leads.Count, leads = withNames });
     }
 
     private async Task<string> GetCustomFieldTopAsync(int tenantId, int unitId, string fieldName, DateTime from, DateTime to, int limit, CancellationToken ct)
@@ -223,10 +241,19 @@ public class AiToolRegistry(
                 name = l.Name,
                 phone = l.Phone,
                 stage = l.CurrentStage,
+                stage_id = l.CurrentStageId,
                 source = l.Source,
             })
             .ToListAsync(ct);
-        return Json(new { query, count = leads.Count, leads });
+
+        var stageMap = await stagesResolver.GetStageMapAsync(unitId, ct);
+        var withNames = leads.Select(l => new
+        {
+            l.id, l.name, l.phone,
+            stage = l.stage_id.HasValue && stageMap.TryGetValue(l.stage_id.Value, out var sn) ? sn : l.stage,
+            l.source,
+        });
+        return Json(new { query, count = leads.Count, leads = withNames });
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────

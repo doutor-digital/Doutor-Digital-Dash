@@ -197,15 +197,22 @@ public class LeadAnalyticsService(AppDbContext context, ILogger<LeadAnalyticsSer
         // 1. DEFINIR PERÍODO (PADRÃO: ÚLTIMOS 30 DIAS)
         // ─────────────────────────────────────────────────────────
 
-        // Garante que DateTimes estão em UTC (PostgreSQL exige isso)
+        // Datas vindas do front como YYYY-MM-DD chegam com Kind=Unspecified e
+        // representam um DIA NO HORÁRIO DE BRASÍLIA (UTC-3). Convertendo:
+        //   startDate=2026-05-31 unspec → 2026-05-31 03:00 UTC (00:00 BRT)
+        //   endDate=2026-06-06 unspec   → 2026-06-07 02:59:59.999 UTC (23:59 BRT)
+        // Dates já com Kind=Utc/Local passam direto. Brasil sem DST desde 2019.
+        var brToUtc = TimeSpan.FromHours(3);
+
         if (startDate.HasValue && startDate.Value.Kind == DateTimeKind.Unspecified)
-            startDate = DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc);
+            startDate = DateTime.SpecifyKind(startDate.Value.Date + brToUtc, DateTimeKind.Utc);
 
         if (endDate.HasValue && endDate.Value.Kind == DateTimeKind.Unspecified)
-            endDate = DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc);
+            endDate = DateTime.SpecifyKind(endDate.Value.Date.AddDays(1).AddTicks(-1) + brToUtc, DateTimeKind.Utc);
 
-        var start = startDate ?? DateTime.UtcNow.Date.AddDays(-30);
-        var end = endDate ?? DateTime.UtcNow;
+        var nowBr = DateTime.UtcNow.Add(-brToUtc);
+        var start = startDate ?? DateTime.SpecifyKind(nowBr.Date.AddDays(-30) + brToUtc, DateTimeKind.Utc);
+        var end = endDate ?? DateTime.SpecifyKind(nowBr.Date.AddDays(1).AddTicks(-1) + brToUtc, DateTimeKind.Utc);
 
         // ─────────────────────────────────────────────────────────
         // 2. BUSCAR UNIDADE (OPCIONAL - USA NOME GENÉRICO SE NÃO EXISTIR)

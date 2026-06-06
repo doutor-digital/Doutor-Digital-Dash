@@ -208,6 +208,79 @@ public class CustomFieldsInspectController(
         });
     }
 
+    /// <summary>
+    /// DEBUG: leads por dia (BRT) nos últimos N dias. Pra ver se a contagem
+    /// de "hoje" está fora do padrão ou se vários dias estão inflados pelo
+    /// CreatedAt errado.
+    /// </summary>
+    [HttpGet("leads-per-day")]
+    public async Task<IActionResult> LeadsPerDay(
+        [FromQuery] int unitId,
+        [FromQuery] int days = 14,
+        CancellationToken ct = default)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        var tenantId = unit.ClinicId;
+
+        var brOffset = TimeSpan.FromHours(3);
+        var nowBr = DateTime.UtcNow.Add(-brOffset);
+        var oldestBrDate = nowBr.Date.AddDays(-(days - 1));
+        var fromUtc = DateTime.SpecifyKind(oldestBrDate + brOffset, DateTimeKind.Utc);
+        var toUtc = DateTime.SpecifyKind(nowBr.Date.AddDays(1).AddTicks(-1) + brOffset, DateTimeKind.Utc);
+
+        var rawCreatedAts = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= fromUtc && l.CreatedAt <= toUtc)
+            .Select(l => l.CreatedAt)
+            .ToListAsync(ct);
+
+        // Agrupa por dia BRT (subtrai 3h de cada UTC pra obter o dia em BR)
+        var perDay = rawCreatedAts
+            .GroupBy(utc => utc.Add(-brOffset).Date)
+            .Select(g => new
+            {
+                day = g.Key.ToString("yyyy-MM-dd"),
+                weekday = g.Key.ToString("ddd"),
+                count = g.Count(),
+            })
+            .OrderBy(x => x.day)
+            .ToList();
+
+        // Sample dos leads mais recentes pra inspeção rápida (id, name, createdAt)
+        var sample = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= fromUtc && l.CreatedAt <= toUtc)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(15)
+            .Select(l => new
+            {
+                id = l.Id,
+                externalId = l.ExternalId,
+                name = l.Name,
+                createdAt = l.CreatedAt,
+                createdAtBr = l.CreatedAt.Add(-brOffset).ToString("yyyy-MM-dd HH:mm:ss"),
+                currentStage = l.CurrentStage,
+                currentStageId = l.CurrentStageId,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            unit = new { unit.Id, unit.Name },
+            window = new
+            {
+                fromUtc, toUtc,
+                fromBr = oldestBrDate.ToString("yyyy-MM-dd"),
+                toBr = nowBr.Date.ToString("yyyy-MM-dd"),
+            },
+            totalInWindow = rawCreatedAts.Count,
+            perDay,
+            recentSample = sample,
+            note = "Se 'hoje' está muito acima da média dos outros dias, CreatedAt de muitos leads ainda está com a data do sync e não a real da Kommo.",
+        });
+    }
+
     [HttpGet("inspect")]
     public async Task<IActionResult> Inspect(
         [FromQuery] int? unitId,

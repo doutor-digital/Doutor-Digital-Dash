@@ -158,6 +158,10 @@ public class CustomFieldsInspectController(
                 {
                     id = live.Id,
                     name = live.Name,
+                    created_at_unix = live.CreatedAt,
+                    created_at_utc = live.CreatedAt.HasValue
+                        ? DateTimeOffset.FromUnixTimeSeconds(live.CreatedAt.Value).UtcDateTime.ToString("o")
+                        : null,
                     updated_at = live.UpdatedAt,
                     custom_fields_values_count = live.CustomFieldsValues?.Count ?? 0,
                     custom_fields_values = live.CustomFieldsValues?.Select(f => new

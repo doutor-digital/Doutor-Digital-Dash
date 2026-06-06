@@ -23,7 +23,8 @@ public class UnitController(
     IWebHostEnvironment env,
     AppDbContext db,
     KommoSyncService kommoSync,
-    KommoApiClient kommoApi) : ControllerBase
+    KommoApiClient kommoApi,
+    ILogger<UnitController> logger) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
     private readonly IConfiguration _configuration = configuration;
@@ -31,6 +32,7 @@ public class UnitController(
     private readonly AppDbContext _db = db;
     private readonly KommoSyncService _kommoSync = kommoSync;
     private readonly KommoApiClient _kommoApi = kommoApi;
+    private readonly ILogger<UnitController> _logger = logger;
 
     private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private const long MaxPhotoBytes = 5 * 1024 * 1024; // 5 MB
@@ -156,7 +158,9 @@ public class UnitController(
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> SyncFromKommo(
-        int id, [FromBody] KommoSyncRequestDto body, CancellationToken ct)
+        int id, [FromBody] KommoSyncRequestDto body,
+        [FromQuery] bool fast,
+        CancellationToken ct)
     {
         var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
         if (unit is null) return NotFound();
@@ -190,7 +194,7 @@ public class UnitController(
 
         try
         {
-            var result = await _kommoSync.SyncAsync(unit, token, max, syncCt);
+            var result = await _kommoSync.SyncAsync(unit, token, max, syncCt, skipRefetch: fast);
             return Ok(new KommoSyncResponseDto
             {
                 Success = string.IsNullOrEmpty(result.Error),
@@ -209,6 +213,18 @@ public class UnitController(
         catch (HttpRequestException ex)
         {
             return BadRequest(new KommoSyncResponseDto { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            // Catch-all — surface the real error pro front em vez de 500 cego.
+            _logger.LogError(ex, "[unit-sync] erro inesperado unit={Unit}", id);
+            return StatusCode(500, new
+            {
+                error = $"{ex.GetType().Name}: {ex.Message}",
+                inner = ex.InnerException?.Message,
+                innerType = ex.InnerException?.GetType().Name,
+                where = ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim(),
+            });
         }
     }
 

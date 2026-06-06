@@ -36,7 +36,8 @@ public class KommoSyncService
         Unit unit,
         string accessToken,
         int maxLeads,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool skipRefetch = false)
     {
         if (string.IsNullOrWhiteSpace(unit.KommoSubdomain))
             throw new InvalidOperationException("A unidade precisa ter um KommoSubdomain configurado.");
@@ -98,7 +99,7 @@ public class KommoSyncService
         //       Pra unit típica isso é alguns minutos a mais — aceitável dado que
         //       é a única forma de não perder os dados das SDRs.
         var leadsWithNullCustomFields = leads.Where(l => l.CustomFieldsValues is null).ToList();
-        if (leadsWithNullCustomFields.Count > 0)
+        if (leadsWithNullCustomFields.Count > 0 && !skipRefetch)
         {
             _logger.LogInformation(
                 "Sync Kommo unit {Unit}: {N} leads com custom_fields_values=null — re-buscando individualmente",

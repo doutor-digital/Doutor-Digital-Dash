@@ -219,6 +219,7 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiKeyStorage>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.UnitEntryStageConfig>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiAnalyticsService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiToolRegistry>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.LeadSearchService>();
 
 // ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
 builder.Services.AddScoped<ProtectedTokenService>();

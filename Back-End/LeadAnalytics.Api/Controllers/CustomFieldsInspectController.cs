@@ -209,6 +209,81 @@ public class CustomFieldsInspectController(
     }
 
     /// <summary>
+    /// BACKFILL: paginar TODOS os leads da Kommo (sem cap) e corrigir só
+    /// o <c>Lead.CreatedAt</c> usando o <c>created_at</c> real da Kommo.
+    /// Pula a re-busca pesada de custom_fields — é focado e rápido.
+    /// </summary>
+    [HttpPost("backfill-created-at/{unitId:int}")]
+    public async Task<IActionResult> BackfillCreatedAt(int unitId, CancellationToken ct)
+    {
+        var unit = await db.Units.FirstOrDefaultAsync(u => u.Id == unitId, ct);
+        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
+            return BadRequest(new { error = "unit sem Kommo configurado" });
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var page = 1;
+        const int pageSize = 250;
+        var processed = 0;
+        var fixedCount = 0;
+        var alreadyOk = 0;
+        var skippedNoCreatedAt = 0;
+        var notInDb = 0;
+
+        // Carrega todos os leads da unit no DB indexados por ExternalId — uma query só
+        var dbLeadsByExt = await db.Leads
+            .Where(l => l.TenantId == unit.ClinicId && l.UnitId == unitId)
+            .ToDictionaryAsync(l => l.ExternalId, l => l, ct);
+
+        while (true)
+        {
+            if (ct.IsCancellationRequested) break;
+            var resp = await kommoApi.GetLeadsPageAsync(
+                unit.KommoSubdomain!, unit.KommoAccessToken!, page, pageSize, ct);
+
+            var batch = resp?.Embedded?.Leads;
+            if (batch is null || batch.Count == 0) break;
+
+            foreach (var kommoLead in batch)
+            {
+                processed++;
+                if (!kommoLead.CreatedAt.HasValue) { skippedNoCreatedAt++; continue; }
+
+                if (!dbLeadsByExt.TryGetValue((int)kommoLead.Id, out var dbLead)) { notInDb++; continue; }
+
+                var realCreatedAt = DateTimeOffset.FromUnixTimeSeconds(kommoLead.CreatedAt.Value).UtcDateTime;
+                var current = DateTime.SpecifyKind(dbLead.CreatedAt, DateTimeKind.Utc);
+                var diff = Math.Abs((current - realCreatedAt).TotalMinutes);
+
+                if (diff <= 5) { alreadyOk++; continue; }
+
+                dbLead.CreatedAt = DateTime.SpecifyKind(realCreatedAt, DateTimeKind.Utc);
+                fixedCount++;
+            }
+
+            // Salva em lotes pra não estourar memória
+            await db.SaveChangesAsync(ct);
+
+            if (resp?.Links?.Next is null) break;
+            page++;
+        }
+
+        sw.Stop();
+        return Ok(new
+        {
+            unit = new { unit.Id, unit.Name },
+            processed,
+            fixedCount,
+            alreadyOk,
+            skippedNoCreatedAt,
+            notInDb,
+            pagesScanned = page,
+            durationSec = sw.Elapsed.TotalSeconds,
+            note = "Apenas Lead.CreatedAt foi atualizado. Custom fields e outras colunas permanecem como estavam.",
+        });
+    }
+
+    /// <summary>
     /// DEBUG: leads por dia (BRT) nos últimos N dias. Pra ver se a contagem
     /// de "hoje" está fora do padrão ou se vários dias estão inflados pelo
     /// CreatedAt errado.

@@ -272,6 +272,175 @@ public class KpiConfigService(AppDbContext db)
     }
 
     /// <summary>
+    /// Breakdowns por KPI do dashboard principal: cadastro/resgate/agendados/tratamentos/consultas.
+    /// Uma única varredura de leads do período + extração de campos customizados (origem, motivo,
+    /// fisio, valor tratamento). Renderiza inline em cada KPI card.
+    /// </summary>
+    public async Task<DTOs.Dashboard.KpiBreakdownsDto> KpiBreakdownsAsync(
+        int clinicId, int? unitId, DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
+
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+        if (unitId.HasValue)
+            q = q.Where(l => l.UnitId == unitId.Value);
+
+        var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
+            .Select(l => new
+            {
+                l.Name, l.Source, l.LeadType, l.CurrentStage, l.HasPayment,
+                l.AppointmentScheduledAt, l.ConsultationValue, l.CustomFieldsJson,
+            }).ToListAsync(ct);
+
+        // Aggregators
+        var cad = new DTOs.Dashboard.CadastroBreakdownDto();
+        var cadByOrigem = new Dictionary<string, (int Count, Dictionary<string, int> Motivos)>(StringComparer.OrdinalIgnoreCase);
+
+        var resgateTipos = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var resgateOrigens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var resgateTotal = 0;
+
+        var ag = new DTOs.Dashboard.AgendadosBreakdownDto();
+        var agOrigens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        var trat = new DTOs.Dashboard.TratamentosBreakdownDto();
+        var tratOrigens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tratFisios = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        var cons = new DTOs.Dashboard.ConsultasBreakdownDto();
+        var consUpcoming = new List<DTOs.Dashboard.AgendamentoItemDto>();
+
+        static bool IsResgate(string? t) => !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
+        static bool IsCadastro(string? t) => string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var l in rows)
+        {
+            var cf = l.CustomFieldsJson;
+            var origemCustom = ExtractFieldByName(cf, n => n == "origem");
+            var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
+                       : !string.IsNullOrWhiteSpace(l.Source) ? l.Source.Trim()
+                       : "—";
+
+            var motivo = ExtractFieldByName(cf, n => n.Contains("motivo") && n.Contains("agendamento"))?.Trim();
+            var fisio = ExtractFieldByName(cf, n =>
+                ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
+                || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
+            var valorTratStr = ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"));
+            var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
+
+            var stage = l.CurrentStage ?? "";
+            var isAgendado = stage == LeadStages.AgendadoSemPagamento || stage == LeadStages.AgendadoComPagamento;
+            var isConsulta = stage == LeadStages.EmTratamento || stage == LeadStages.FechouTratamento || stage == LeadStages.NaoFechouTratamento;
+            var isTratamento = stage == LeadStages.FechouTratamento;
+
+            // ── Cadastro
+            if (IsCadastro(l.LeadType))
+            {
+                cad.Total++;
+                if (!cadByOrigem.TryGetValue(origem, out var row))
+                {
+                    row = (0, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+                    cadByOrigem[origem] = row;
+                }
+                row.Count++;
+                if (!string.IsNullOrWhiteSpace(motivo))
+                    row.Motivos[motivo] = row.Motivos.GetValueOrDefault(motivo) + 1;
+                cadByOrigem[origem] = row;
+            }
+
+            // ── Resgate
+            if (IsResgate(l.LeadType))
+            {
+                resgateTotal++;
+                var tipo = l.LeadType!.Trim();
+                resgateTipos[tipo] = resgateTipos.GetValueOrDefault(tipo) + 1;
+                resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
+            }
+
+            // ── Agendados
+            if (isAgendado)
+            {
+                ag.Total++;
+                if (IsResgate(l.LeadType)) ag.Resgate++; else if (IsCadastro(l.LeadType)) ag.Cadastro++;
+                if (l.HasPayment) ag.ComPagamento++; else ag.SemPagamento++;
+                agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
+            }
+
+            // ── Tratamentos
+            if (isTratamento)
+            {
+                trat.Total++;
+                tratOrigens[origem] = tratOrigens.GetValueOrDefault(origem) + 1;
+                if (!string.IsNullOrWhiteSpace(fisio))
+                    tratFisios[fisio] = tratFisios.GetValueOrDefault(fisio) + 1;
+                if (l.ConsultationValue.HasValue) trat.ValorConsultaTotal += l.ConsultationValue.Value;
+                if (valorTrat > 0) trat.ValorTratamentoTotal += valorTrat;
+            }
+
+            // ── Consultas
+            if (isConsulta)
+            {
+                cons.Total++;
+                if (IsResgate(l.LeadType)) cons.Resgate++; else if (IsCadastro(l.LeadType)) cons.Cadastro++;
+                if (l.ConsultationValue.HasValue) cons.ValorTotal += l.ConsultationValue.Value;
+                if (l.AppointmentScheduledAt.HasValue)
+                {
+                    consUpcoming.Add(new DTOs.Dashboard.AgendamentoItemDto
+                    {
+                        Name = l.Name,
+                        When = l.AppointmentScheduledAt,
+                        Tipo = IsResgate(l.LeadType) ? "resgate" : "cadastro",
+                    });
+                }
+            }
+        }
+
+        // ── Finaliza CadastroOrigens
+        cad.Origens = cadByOrigem
+            .Select(kv =>
+            {
+                var top = kv.Value.Motivos.OrderByDescending(m => m.Value).FirstOrDefault();
+                return new DTOs.Dashboard.OrigemMotivoDto
+                {
+                    Origem = kv.Key,
+                    Count = kv.Value.Count,
+                    TopMotivo = string.IsNullOrEmpty(top.Key) ? null : top.Key,
+                    TopMotivoCount = top.Value,
+                };
+            })
+            .OrderByDescending(o => o.Count)
+            .Take(8)
+            .ToList();
+
+        static List<DTOs.Dashboard.ValueCountDto> Top(Dictionary<string, int> d, int n = 6) =>
+            d.OrderByDescending(kv => kv.Value).Take(n)
+             .Select(kv => new DTOs.Dashboard.ValueCountDto { Value = kv.Key, Count = kv.Value })
+             .ToList();
+
+        var resgate = new DTOs.Dashboard.TipoOrigemBreakdownDto
+        {
+            Total = resgateTotal,
+            Tipos = Top(resgateTipos, 4),
+            Origens = Top(resgateOrigens),
+        };
+        ag.Origens = Top(agOrigens);
+        trat.Origens = Top(tratOrigens);
+        trat.Fisios = Top(tratFisios);
+        cons.Agendamentos = consUpcoming.OrderBy(x => x.When).Take(8).ToList();
+
+        return new DTOs.Dashboard.KpiBreakdownsDto
+        {
+            Cadastro = cad,
+            Resgate = resgate,
+            Agendados = ag,
+            Tratamentos = trat,
+            Consultas = cons,
+        };
+    }
+
+    /// <summary>
     /// Métricas de TODOS os campos customizados dos leads do período: para cada campo,
     /// quantos leads o preenchem e a distribuição dos valores mais comuns. É o dado do
     /// dashboard "perfil do lead".

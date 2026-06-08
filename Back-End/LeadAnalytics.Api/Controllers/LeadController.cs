@@ -696,6 +696,29 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Breakdowns por KPI do dashboard principal: cadastro/resgate/agendados/tratamentos/consultas.
+    /// Renderizado inline em cada KPI card (sem clique).
+    /// </summary>
+    [HttpGet("dashboard/kpi-breakdowns")]
+    [ProducesResponseType(typeof(LeadAnalytics.Api.DTOs.Dashboard.KpiBreakdownsDto), 200)]
+    public async Task<IActionResult> KpiBreakdowns(
+        [FromQuery] int? unitId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        CancellationToken ct)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+        var from = (dateFrom ?? to.AddDays(-30)).Date;
+
+        var result = await _kpiService.KpiBreakdownsAsync(tenantId.Value, unitId, from, to, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Métricas de todos os campos customizados dos leads do período (perfil do lead):
     /// preenchimento + distribuição dos valores mais comuns por campo.
     /// </summary>

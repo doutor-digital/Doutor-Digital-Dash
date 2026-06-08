@@ -360,15 +360,18 @@ public class KpiConfigService(AppDbContext db)
         if (p.FieldId is null && string.IsNullOrWhiteSpace(p.FieldCode))
             return new();
 
-        // Mesma correção do CustomFieldsSummaryAsync — usa UpdatedAt pra
-        // captar leads antigos cujos campos foram preenchidos recentemente.
+        // Filtra por CreatedAt (não UpdatedAt): origem é um atributo de CRIAÇÃO do lead
+        // (vem do anúncio/formulário), não preenchido depois. Usar UpdatedAt quebrava o
+        // filtro "por dia" porque sync/webhook bumpam UpdatedAt em todos os leads — um
+        // re-sync jogava todo mundo para "hoje". Com o CreatedAt já corrigido (vem da
+        // data real da Kommo), a quebra por período fica correta.
         var q = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt <= to
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
-        var jsons = await q.OrderByDescending(l => l.UpdatedAt)
+        var jsons = await q.OrderByDescending(l => l.CreatedAt)
             .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);
 
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

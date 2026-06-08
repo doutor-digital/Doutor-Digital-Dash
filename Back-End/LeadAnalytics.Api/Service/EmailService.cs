@@ -17,8 +17,10 @@ namespace LeadAnalytics.Api.Service;
 /// </summary>
 public class EmailService
 {
+    // Logo servida pelo front (Vercel) — URL pública estável. A antiga (wp-content)
+    // estava 404 e a logo não aparecia no e-mail.
     private const string LogoUrl =
-        "https://doutordigitalconsultoria.com/wp-content/uploads/2026/04/Copia-de-logo-cor-original.png";
+        "https://dashboard.doutordigitalconsultoria.com/logo-official.png";
     private const string BrandPrimary = "#0077CC";
     private const string BrandPrimaryDark = "#005EA6";
     private const string BrandText = "#0F172A";

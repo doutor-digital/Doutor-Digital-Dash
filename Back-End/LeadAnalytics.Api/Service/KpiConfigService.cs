@@ -20,6 +20,26 @@ public class KpiConfigService(AppDbContext db)
     public const string ProfileBirthdateKey = "profile_birthdate";
     public const string ProfileAppointmentKey = "profile_appointment_date";
     public const string ProfileDoctorKey = "profile_doctor";
+    public const string ProfileOrigemKey = "profile_origem";
+    public const string ProfileMotivoKey = "profile_motivo_nao_agendamento";
+    public const string ProfileFisioKey = "profile_fisioterapeuta";
+    public const string ProfileValorTratKey = "profile_valor_tratamento";
+    public const string ProfileTratFechadoKey = "profile_tratamento_fechado";
+    public const string ProfileQualificacaoKey = "profile_qualificacao";
+
+    /// <summary>Mapeamento dos custom fields da Kommo p/ os breakdowns do dashboard.</summary>
+    public class LeadProfileFields
+    {
+        public long? BirthdateFieldId { get; set; }
+        public long? AppointmentFieldId { get; set; }
+        public long? DoctorFieldId { get; set; }
+        public long? OrigemFieldId { get; set; }
+        public long? MotivoNaoAgendamentoFieldId { get; set; }
+        public long? FisioterapeutaFieldId { get; set; }
+        public long? ValorTratamentoFieldId { get; set; }
+        public long? TratamentoFechadoFieldId { get; set; }
+        public long? QualificacaoFieldId { get; set; }
+    }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
 
@@ -287,6 +307,11 @@ public class KpiConfigService(AppDbContext db)
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
+        // Mapeamento de campos da Kommo escolhido pelo analista (Configurações → Perfil do Lead).
+        var profile = unitId.HasValue
+            ? await GetLeadProfileConfigAsync(unitId.Value, ct)
+            : new LeadProfileFields();
+
         var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
             .Select(l => new
             {
@@ -318,17 +343,20 @@ public class KpiConfigService(AppDbContext db)
         foreach (var l in rows)
         {
             var cf = l.CustomFieldsJson;
-            // Origem: aceita "Origem", "Origem do lead", "Origem (UTM)" etc.
-            var origemCustom = ExtractFieldByName(cf, n => n.Contains("origem"));
+            // Prefere o fieldId mapeado pelo analista (Configurações → Perfil do Lead).
+            // Se não houver, cai pra match por nome.
+            var origemCustom = ExtractField(cf, profile.OrigemFieldId, n => n.Contains("origem"));
             var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
                        : !string.IsNullOrWhiteSpace(l.Source) ? l.Source.Trim()
                        : "—";
 
-            var motivo = ExtractFieldByName(cf, n => n.Contains("motivo") && n.Contains("agendamento"))?.Trim();
-            var fisio = ExtractFieldByName(cf, n =>
-                ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
-                || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
-            var valorTratStr = ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"));
+            var motivo = ExtractField(cf, profile.MotivoNaoAgendamentoFieldId,
+                n => n.Contains("motivo") && n.Contains("agendamento"))?.Trim();
+            var fisio = ExtractField(cf, profile.FisioterapeutaFieldId ?? profile.DoctorFieldId,
+                n => ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
+                  || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
+            var valorTratStr = ExtractField(cf, profile.ValorTratamentoFieldId,
+                n => n.Contains("valor") && n.Contains("tratamento"));
             var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
 
             var stage = l.CurrentStage ?? "";
@@ -605,9 +633,12 @@ public class KpiConfigService(AppDbContext db)
             .ToListAsync(ct);
 
         // Mapeamento de campos escolhido pelo analista (id do campo); se não houver, casa por nome.
-        var (cfgBirth, cfgAppt, cfgDoctor) = unitId.HasValue
+        var profileCfg = unitId.HasValue
             ? await GetLeadProfileConfigAsync(unitId.Value, ct)
-            : ((long?)null, (long?)null, (long?)null);
+            : new LeadProfileFields();
+        var cfgBirth = profileCfg.BirthdateFieldId;
+        var cfgAppt = profileCfg.AppointmentFieldId;
+        var cfgDoctor = profileCfg.DoctorFieldId;
 
         var ageSum = new Dictionary<string, double>();
         var ageCount = new Dictionary<string, int>();
@@ -792,12 +823,16 @@ public class KpiConfigService(AppDbContext db)
     }
 
     /// <summary>Lê os ids de campo escolhidos pra Perfil do Lead (nascimento/agendamento/doutor).</summary>
-    public async Task<(long? Birthdate, long? Appointment, long? Doctor)> GetLeadProfileConfigAsync(
+    public async Task<LeadProfileFields> GetLeadProfileConfigAsync(
         int unitId, CancellationToken ct = default)
     {
+        var keys = new[] {
+            ProfileBirthdateKey, ProfileAppointmentKey, ProfileDoctorKey,
+            ProfileOrigemKey, ProfileMotivoKey, ProfileFisioKey,
+            ProfileValorTratKey, ProfileTratFechadoKey, ProfileQualificacaoKey,
+        };
         var rows = await _db.KpiConfigurations.AsNoTracking()
-            .Where(k => k.UnitId == unitId &&
-                (k.KpiKey == ProfileBirthdateKey || k.KpiKey == ProfileAppointmentKey || k.KpiKey == ProfileDoctorKey))
+            .Where(k => k.UnitId == unitId && keys.Contains(k.KpiKey))
             .ToListAsync(ct);
 
         long? FieldOf(string key)
@@ -808,19 +843,37 @@ public class KpiConfigService(AppDbContext db)
             catch { return null; }
         }
 
-        return (FieldOf(ProfileBirthdateKey), FieldOf(ProfileAppointmentKey), FieldOf(ProfileDoctorKey));
+        return new LeadProfileFields
+        {
+            BirthdateFieldId = FieldOf(ProfileBirthdateKey),
+            AppointmentFieldId = FieldOf(ProfileAppointmentKey),
+            DoctorFieldId = FieldOf(ProfileDoctorKey),
+            OrigemFieldId = FieldOf(ProfileOrigemKey),
+            MotivoNaoAgendamentoFieldId = FieldOf(ProfileMotivoKey),
+            FisioterapeutaFieldId = FieldOf(ProfileFisioKey),
+            ValorTratamentoFieldId = FieldOf(ProfileValorTratKey),
+            TratamentoFechadoFieldId = FieldOf(ProfileTratFechadoKey),
+            QualificacaoFieldId = FieldOf(ProfileQualificacaoKey),
+        };
     }
 
     /// <summary>Salva (upsert) os ids de campo do Perfil do Lead. Id nulo = limpa (volta pro nome).</summary>
     public async Task SaveLeadProfileConfigAsync(
-        int unitId, int clinicId, long? birthdate, long? appointment, long? doctor,
+        int unitId, int clinicId, LeadProfileFields f,
         string? email, CancellationToken ct = default)
     {
+        static string Cfg(long? id) => id.HasValue ? $"{{\"fieldId\":{id.Value}}}" : "{}";
         var items = new[]
         {
-            new KpiSaveItem(ProfileBirthdateKey, KpiSourceTypes.CustomFieldCount, birthdate.HasValue ? $"{{\"fieldId\":{birthdate.Value}}}" : "{}"),
-            new KpiSaveItem(ProfileAppointmentKey, KpiSourceTypes.CustomFieldCount, appointment.HasValue ? $"{{\"fieldId\":{appointment.Value}}}" : "{}"),
-            new KpiSaveItem(ProfileDoctorKey, KpiSourceTypes.CustomFieldCount, doctor.HasValue ? $"{{\"fieldId\":{doctor.Value}}}" : "{}"),
+            new KpiSaveItem(ProfileBirthdateKey, KpiSourceTypes.CustomFieldCount, Cfg(f.BirthdateFieldId)),
+            new KpiSaveItem(ProfileAppointmentKey, KpiSourceTypes.CustomFieldCount, Cfg(f.AppointmentFieldId)),
+            new KpiSaveItem(ProfileDoctorKey, KpiSourceTypes.CustomFieldCount, Cfg(f.DoctorFieldId)),
+            new KpiSaveItem(ProfileOrigemKey, KpiSourceTypes.CustomFieldCount, Cfg(f.OrigemFieldId)),
+            new KpiSaveItem(ProfileMotivoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.MotivoNaoAgendamentoFieldId)),
+            new KpiSaveItem(ProfileFisioKey, KpiSourceTypes.CustomFieldCount, Cfg(f.FisioterapeutaFieldId)),
+            new KpiSaveItem(ProfileValorTratKey, KpiSourceTypes.CustomFieldCount, Cfg(f.ValorTratamentoFieldId)),
+            new KpiSaveItem(ProfileTratFechadoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TratamentoFechadoFieldId)),
+            new KpiSaveItem(ProfileQualificacaoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.QualificacaoFieldId)),
         };
         await SaveAsync(unitId, clinicId, items, email, ct);
     }

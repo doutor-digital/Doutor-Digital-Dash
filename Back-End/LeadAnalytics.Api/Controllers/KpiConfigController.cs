@@ -113,15 +113,26 @@ public class KpiConfigController(
         return Ok(new { message = "Configurações salvas.", count = prepared.Count });
     }
 
-    /// <summary>Lê o mapeamento de campos do Perfil do Lead (nascimento/agendamento/doutor).</summary>
+    /// <summary>Lê o mapeamento de campos do Perfil do Lead (nascimento/agendamento/doutor + breakdowns).</summary>
     [HttpGet("lead-profile")]
     public async Task<IActionResult> GetLeadProfileConfig([FromQuery] int unitId, CancellationToken ct)
     {
         if (RequireAnalyst() is { } denied) return denied;
         if (await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } guard) return guard;
 
-        var (b, a, d) = await _kpiService.GetLeadProfileConfigAsync(unitId, ct);
-        return Ok(new LeadProfileConfigDto { BirthdateFieldId = b, AppointmentFieldId = a, DoctorFieldId = d });
+        var f = await _kpiService.GetLeadProfileConfigAsync(unitId, ct);
+        return Ok(new LeadProfileConfigDto
+        {
+            BirthdateFieldId = f.BirthdateFieldId,
+            AppointmentFieldId = f.AppointmentFieldId,
+            DoctorFieldId = f.DoctorFieldId,
+            OrigemFieldId = f.OrigemFieldId,
+            MotivoNaoAgendamentoFieldId = f.MotivoNaoAgendamentoFieldId,
+            FisioterapeutaFieldId = f.FisioterapeutaFieldId,
+            ValorTratamentoFieldId = f.ValorTratamentoFieldId,
+            TratamentoFechadoFieldId = f.TratamentoFechadoFieldId,
+            QualificacaoFieldId = f.QualificacaoFieldId,
+        });
     }
 
     /// <summary>Salva o mapeamento de campos do Perfil do Lead.</summary>
@@ -136,7 +147,19 @@ public class KpiConfigController(
         if (unit is null) return NotFound(new { message = "Unidade não encontrada." });
 
         await _kpiService.SaveLeadProfileConfigAsync(
-            unitId, unit.ClinicId, body.BirthdateFieldId, body.AppointmentFieldId, body.DoctorFieldId,
+            unitId, unit.ClinicId,
+            new KpiConfigService.LeadProfileFields
+            {
+                BirthdateFieldId = body.BirthdateFieldId,
+                AppointmentFieldId = body.AppointmentFieldId,
+                DoctorFieldId = body.DoctorFieldId,
+                OrigemFieldId = body.OrigemFieldId,
+                MotivoNaoAgendamentoFieldId = body.MotivoNaoAgendamentoFieldId,
+                FisioterapeutaFieldId = body.FisioterapeutaFieldId,
+                ValorTratamentoFieldId = body.ValorTratamentoFieldId,
+                TratamentoFechadoFieldId = body.TratamentoFechadoFieldId,
+                QualificacaoFieldId = body.QualificacaoFieldId,
+            },
             _currentUser.Email, ct);
         return Ok(new { message = "Configuração salva." });
     }

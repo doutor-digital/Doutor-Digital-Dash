@@ -193,6 +193,13 @@ public class LeadProfileConfigDto
     [JsonPropertyName("birthdate_field_id")] public long? BirthdateFieldId { get; set; }
     [JsonPropertyName("appointment_field_id")] public long? AppointmentFieldId { get; set; }
     [JsonPropertyName("doctor_field_id")] public long? DoctorFieldId { get; set; }
+    // ── Mapeamentos p/ os breakdowns dos KPI cards ─────────────────────────
+    [JsonPropertyName("origem_field_id")] public long? OrigemFieldId { get; set; }
+    [JsonPropertyName("motivo_nao_agendamento_field_id")] public long? MotivoNaoAgendamentoFieldId { get; set; }
+    [JsonPropertyName("fisioterapeuta_field_id")] public long? FisioterapeutaFieldId { get; set; }
+    [JsonPropertyName("valor_tratamento_field_id")] public long? ValorTratamentoFieldId { get; set; }
+    [JsonPropertyName("tratamento_fechado_field_id")] public long? TratamentoFechadoFieldId { get; set; }
+    [JsonPropertyName("qualificacao_field_id")] public long? QualificacaoFieldId { get; set; }
 }
 
 /// <summary>Resultado do preview.</summary>

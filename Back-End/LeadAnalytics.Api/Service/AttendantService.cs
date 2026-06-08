@@ -36,9 +36,14 @@ public class AttendantService(AppDbContext db, ILogger<AttendantService> logger)
         return attendant;
     }
 
-    public async Task<List<Attendant>> GetAllAsync()
+    public async Task<List<Attendant>> GetAllAsync(int? unitId = null)
     {
-        return await _db.Attendants
+        var query = _db.Attendants.AsQueryable();
+
+        if (unitId.HasValue && unitId.Value > 0)
+            query = query.Where(a => a.UnitId == unitId.Value);
+
+        return await query
             .OrderBy(a => a.Name)
             .ToListAsync();
     }

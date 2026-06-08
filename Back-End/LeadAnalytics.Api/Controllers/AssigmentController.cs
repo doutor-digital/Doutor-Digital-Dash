@@ -13,9 +13,9 @@ public class AssignmentController(
     private readonly ILogger<AssignmentController> _logger = logger;
 
     [HttpGet("attendants")]
-    public async Task<IActionResult> GetAllAttendants()
+    public async Task<IActionResult> GetAllAttendants([FromQuery] int? unitId = null)
     {
-        var attendants = await _attendantService.GetAllAsync();
+        var attendants = await _attendantService.GetAllAsync(unitId);
         return Ok(attendants);
     }
 

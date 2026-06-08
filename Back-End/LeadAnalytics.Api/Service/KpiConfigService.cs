@@ -262,6 +262,7 @@ public class KpiConfigService(AppDbContext db)
                     || n.Contains("fisio") || n.Contains("doutor")),
                 Qualificacao = ExtractFieldByName(cf, n => n.Contains("qualifica")),
                 OrigemCustom = ExtractFieldByName(cf, n => n == "origem"),
+                TreatmentValue = TryParseDecimal(ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"))),
             });
 
             if (hits.Count >= limit) { truncated = true; break; }
@@ -600,6 +601,16 @@ public class KpiConfigService(AppDbContext db)
     /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
         => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
+
+    /// <summary>Tenta converter um valor de campo customizado em decimal (aceita "1.500,00" e "1500.00").</summary>
+    private static decimal? TryParseDecimal(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim();
+        if (decimal.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v1)) return v1;
+        if (decimal.TryParse(s, System.Globalization.NumberStyles.Any, new System.Globalization.CultureInfo("pt-BR"), out var v2)) return v2;
+        return null;
+    }
 
     /// <summary>Idade a partir de uma data de nascimento (string).</summary>
     private static double? TryAge(string? raw, DateTime now)

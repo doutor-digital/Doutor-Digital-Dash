@@ -147,6 +147,8 @@ public class KpiLeadDto
     [JsonPropertyName("qualificacao")] public string? Qualificacao { get; set; }
     /// <summary>Origem custom-field (separada de Source/Channel do Kommo).</summary>
     [JsonPropertyName("origem_custom")] public string? OrigemCustom { get; set; }
+    /// <summary>Valor do tratamento (custom field "valor tratamento").</summary>
+    [JsonPropertyName("treatment_value")] public decimal? TreatmentValue { get; set; }
 }
 
 public class KpiLeadsResponseDto

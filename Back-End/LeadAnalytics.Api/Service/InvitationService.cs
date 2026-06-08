@@ -68,7 +68,9 @@ public class InvitationService
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email, ct);
 
-        if (existingUser != null)
+        // Em convite "todas as unidades" não bloqueia por já ter UMA unidade — a intenção
+        // é justamente ampliar o acesso (o aceite seta o flag all_units).
+        if (existingUser != null && !dto.AllUnits)
         {
             var alreadyOnUnit = await _db.UserUnits
                 .AnyAsync(uu => uu.UserId == existingUser.Id && uu.UnitId == dto.UnitId, ct);
@@ -93,6 +95,7 @@ public class InvitationService
             pending.TokenHash = tokenHash;
             pending.ExpiresAt = DateTime.UtcNow.AddHours(InvitationValidHours);
             pending.Role = role;
+            pending.AllUnits = dto.AllUnits;
             pending.CreatedByUserId = caller.Id;
             await _db.SaveChangesAsync(ct);
         }
@@ -103,6 +106,7 @@ public class InvitationService
                 Email = email,
                 TenantId = unit.ClinicId,
                 UnitId = dto.UnitId,
+                AllUnits = dto.AllUnits,
                 Role = role,
                 TokenHash = tokenHash,
                 ExpiresAt = DateTime.UtcNow.AddHours(InvitationValidHours),

@@ -159,6 +159,7 @@ public class AuthService
                 Name = info.Name,
                 Role = inv.Role,
                 TenantId = inv.TenantId,
+                AllUnits = inv.AllUnits,
                 PasswordHash = string.Empty,
                 GoogleSub = info.Sub,
                 AuthMethod = "google",
@@ -187,6 +188,8 @@ public class AuthService
             {
                 user.TenantId = inv.TenantId;
             }
+            // Convite "todas as unidades" amplia o acesso (não rebaixa quem já tinha).
+            if (inv.AllUnits) user.AllUnits = true;
             user.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -331,6 +334,20 @@ public class AuthService
         }
         else
         {
+            // Acesso "todas as unidades" (ex.: trafego_pago convidado p/ todas) → tenant-wide,
+            // mesmo tendo UserUnit de uma unidade só. Inclui unidades futuras automaticamente.
+            if (user.AllUnits && user.TenantId.HasValue)
+            {
+                query = _db.Units.AsNoTracking().Where(u => u.ClinicId == user.TenantId.Value);
+                _logger.LogInformation("🔓 AllUnits: todas as unidades do tenant {TenantId}", user.TenantId.Value);
+
+                var allUnits = await query
+                    .Select(u => new UnitSelectorOptionDto { Id = u.Id, ClinicId = u.ClinicId, Name = u.Name, IsDefault = false })
+                    .ToListAsync();
+                if (allUnits.Count > 0) allUnits[0].IsDefault = true;
+                return allUnits;
+            }
+
             // Usuário ligado a unidades específicas via UserUnit?
             var hasUserUnits = await _db.UserUnits
                 .AsNoTracking()

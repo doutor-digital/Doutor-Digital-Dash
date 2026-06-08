@@ -23,6 +23,10 @@ public class User
     [Column("role")]
     public string Role { get; set; } = "user";
 
+    /// <summary>Vê TODAS as unidades do seu tenant (concedido em convite "todas as unidades").</summary>
+    [Column("all_units")]
+    public bool AllUnits { get; set; } = false;
+
     [Column("phone")]
     public string? Phone { get; set; }
 

@@ -5,6 +5,9 @@ public class InvitationCreateDto
     public string Email { get; set; } = string.Empty;
     public int UnitId { get; set; }
     public string Role { get; set; } = "unit_user";
+
+    /// <summary>Conceder acesso a todas as unidades do tenant (em vez de só a UnitId).</summary>
+    public bool AllUnits { get; set; } = false;
 }
 
 public class InvitationListItemDto

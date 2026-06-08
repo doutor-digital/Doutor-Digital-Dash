@@ -17,6 +17,10 @@ public class Invitation
     [Column("unit_id")]
     public int UnitId { get; set; }
 
+    /// <summary>Convite dá acesso a TODAS as unidades do tenant (ex.: trafego_pago).</summary>
+    [Column("all_units")]
+    public bool AllUnits { get; set; } = false;
+
     [Column("role")]
     public string Role { get; set; } = "unit_user";
 

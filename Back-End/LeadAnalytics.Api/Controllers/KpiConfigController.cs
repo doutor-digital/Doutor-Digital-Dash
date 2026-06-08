@@ -132,6 +132,7 @@ public class KpiConfigController(
             ValorTratamentoFieldId = f.ValorTratamentoFieldId,
             TratamentoFechadoFieldId = f.TratamentoFechadoFieldId,
             QualificacaoFieldId = f.QualificacaoFieldId,
+            TipoFieldId = f.TipoFieldId,
         });
     }
 
@@ -159,6 +160,7 @@ public class KpiConfigController(
                 ValorTratamentoFieldId = body.ValorTratamentoFieldId,
                 TratamentoFechadoFieldId = body.TratamentoFechadoFieldId,
                 QualificacaoFieldId = body.QualificacaoFieldId,
+                TipoFieldId = body.TipoFieldId,
             },
             _currentUser.Email, ct);
         return Ok(new { message = "Configuração salva." });

@@ -26,6 +26,7 @@ public class KpiConfigService(AppDbContext db)
     public const string ProfileValorTratKey = "profile_valor_tratamento";
     public const string ProfileTratFechadoKey = "profile_tratamento_fechado";
     public const string ProfileQualificacaoKey = "profile_qualificacao";
+    public const string ProfileTipoKey = "profile_tipo";
 
     /// <summary>Mapeamento dos custom fields da Kommo p/ os breakdowns do dashboard.</summary>
     public class LeadProfileFields
@@ -39,6 +40,8 @@ public class KpiConfigService(AppDbContext db)
         public long? ValorTratamentoFieldId { get; set; }
         public long? TratamentoFechadoFieldId { get; set; }
         public long? QualificacaoFieldId { get; set; }
+        /// <summary>Campo "Tipo" da Kommo (resgate/ligação/mensagem) — alimenta o breakdown do card Resgate.</summary>
+        public long? TipoFieldId { get; set; }
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -359,13 +362,22 @@ public class KpiConfigService(AppDbContext db)
                 n => n.Contains("valor") && n.Contains("tratamento"));
             var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
 
+            // Campo "Tipo" da Kommo (resgate/ligação/mensagem). Define o card Resgate:
+            // a coluna LeadType vem vazia nessas unidades, então a classificação real
+            // mora nesse custom field. Se não estiver mapeado, casa pelo nome "tipo".
+            var tipo = ExtractField(cf, profile.TipoFieldId, n => n == "tipo" || n.Contains("tipo"))?.Trim();
+            var hasTipo = !string.IsNullOrWhiteSpace(tipo);
+            // Resgate = tem o campo Tipo preenchido (qualquer canal) OU LeadType="resgate" (legado).
+            var leadIsResgate = hasTipo || IsResgate(l.LeadType);
+            var leadIsCadastro = !leadIsResgate && IsCadastro(l.LeadType);
+
             var stage = l.CurrentStage ?? "";
             var isAgendado = stage == LeadStages.AgendadoSemPagamento || stage == LeadStages.AgendadoComPagamento;
             var isConsulta = stage == LeadStages.EmTratamento || stage == LeadStages.FechouTratamento || stage == LeadStages.NaoFechouTratamento;
             var isTratamento = stage == LeadStages.FechouTratamento;
 
             // ── Cadastro
-            if (IsCadastro(l.LeadType))
+            if (leadIsCadastro)
             {
                 cad.Total++;
                 if (!cadByOrigem.TryGetValue(origem, out var row))
@@ -380,11 +392,13 @@ public class KpiConfigService(AppDbContext db)
             }
 
             // ── Resgate
-            if (IsResgate(l.LeadType))
+            if (leadIsResgate)
             {
                 resgateTotal++;
-                var tipo = l.LeadType!.Trim();
-                resgateTipos[tipo] = resgateTipos.GetValueOrDefault(tipo) + 1;
+                // Quebra por valor do campo "Tipo" (resgate/ligação/mensagem); cai pro
+                // LeadType só quando o custom field não existe/está vazio.
+                var tipoLabel = hasTipo ? tipo! : (l.LeadType?.Trim() ?? "—");
+                resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
                 resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
             }
 
@@ -392,7 +406,7 @@ public class KpiConfigService(AppDbContext db)
             if (isAgendado)
             {
                 ag.Total++;
-                if (IsResgate(l.LeadType)) ag.Resgate++; else if (IsCadastro(l.LeadType)) ag.Cadastro++;
+                if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;
                 if (l.HasPayment) ag.ComPagamento++; else ag.SemPagamento++;
                 agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
             }
@@ -412,7 +426,7 @@ public class KpiConfigService(AppDbContext db)
             if (isConsulta)
             {
                 cons.Total++;
-                if (IsResgate(l.LeadType)) cons.Resgate++; else if (IsCadastro(l.LeadType)) cons.Cadastro++;
+                if (leadIsResgate) cons.Resgate++; else if (leadIsCadastro) cons.Cadastro++;
                 if (l.ConsultationValue.HasValue) cons.ValorTotal += l.ConsultationValue.Value;
                 if (l.AppointmentScheduledAt.HasValue)
                 {
@@ -420,7 +434,7 @@ public class KpiConfigService(AppDbContext db)
                     {
                         Name = l.Name,
                         When = l.AppointmentScheduledAt,
-                        Tipo = IsResgate(l.LeadType) ? "resgate" : "cadastro",
+                        Tipo = leadIsResgate ? "resgate" : "cadastro",
                     });
                 }
             }
@@ -830,6 +844,7 @@ public class KpiConfigService(AppDbContext db)
             ProfileBirthdateKey, ProfileAppointmentKey, ProfileDoctorKey,
             ProfileOrigemKey, ProfileMotivoKey, ProfileFisioKey,
             ProfileValorTratKey, ProfileTratFechadoKey, ProfileQualificacaoKey,
+            ProfileTipoKey,
         };
         var rows = await _db.KpiConfigurations.AsNoTracking()
             .Where(k => k.UnitId == unitId && keys.Contains(k.KpiKey))
@@ -854,6 +869,7 @@ public class KpiConfigService(AppDbContext db)
             ValorTratamentoFieldId = FieldOf(ProfileValorTratKey),
             TratamentoFechadoFieldId = FieldOf(ProfileTratFechadoKey),
             QualificacaoFieldId = FieldOf(ProfileQualificacaoKey),
+            TipoFieldId = FieldOf(ProfileTipoKey),
         };
     }
 
@@ -874,6 +890,7 @@ public class KpiConfigService(AppDbContext db)
             new KpiSaveItem(ProfileValorTratKey, KpiSourceTypes.CustomFieldCount, Cfg(f.ValorTratamentoFieldId)),
             new KpiSaveItem(ProfileTratFechadoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TratamentoFechadoFieldId)),
             new KpiSaveItem(ProfileQualificacaoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.QualificacaoFieldId)),
+            new KpiSaveItem(ProfileTipoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TipoFieldId)),
         };
         await SaveAsync(unitId, clinicId, items, email, ct);
     }

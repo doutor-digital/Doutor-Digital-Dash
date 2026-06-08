@@ -200,6 +200,8 @@ public class LeadProfileConfigDto
     [JsonPropertyName("valor_tratamento_field_id")] public long? ValorTratamentoFieldId { get; set; }
     [JsonPropertyName("tratamento_fechado_field_id")] public long? TratamentoFechadoFieldId { get; set; }
     [JsonPropertyName("qualificacao_field_id")] public long? QualificacaoFieldId { get; set; }
+    /// <summary>Campo "Tipo" (resgate/ligação/mensagem) — breakdown do card Resgate.</summary>
+    [JsonPropertyName("tipo_field_id")] public long? TipoFieldId { get; set; }
 }
 
 /// <summary>Resultado do preview.</summary>

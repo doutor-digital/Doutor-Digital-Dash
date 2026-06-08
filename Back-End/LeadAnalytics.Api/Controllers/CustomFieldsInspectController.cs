@@ -562,6 +562,44 @@ public class CustomFieldsInspectController(
     }
 
     /// <summary>
+    /// DEBUG TEMPORÁRIO: muda o papel de um usuário por e-mail e reconcilia o tenant
+    /// com o ClinicId da unidade. Usado pra converter usuário existente em trafego_pago
+    /// (o convite não troca papel de quem já tem acesso). Protegido por ?secret=.
+    /// REMOVER depois.
+    /// </summary>
+    [HttpPost("set-role")]
+    public async Task<IActionResult> SetRole(
+        [FromQuery] string email,
+        [FromQuery] string role,
+        [FromQuery] string secret,
+        CancellationToken ct = default)
+    {
+        if (secret != "dd-fix-2026") return Unauthorized();
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(role))
+            return BadRequest(new { error = "email e role são obrigatórios" });
+
+        var canonical = Roles.Canonical(role);
+        if (string.IsNullOrEmpty(canonical) || !Roles.IsValidInviteRole(canonical))
+            return BadRequest(new { error = "role inválido" });
+
+        var needle = email.Trim().ToLower();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == needle, ct);
+        if (user is null) return NotFound(new { error = "usuário não encontrado" });
+
+        var before = new { user.Role, user.TenantId };
+        user.Role = canonical;
+
+        var derived = await db.UserUnits
+            .Where(uu => uu.UserId == user.Id)
+            .Join(db.Units, uu => uu.UnitId, un => un.Id, (uu, un) => (int?)un.ClinicId)
+            .FirstOrDefaultAsync(ct);
+        if (derived is not null) user.TenantId = derived;
+
+        await db.SaveChangesAsync(ct);
+        return Ok(new { email = user.Email, before, after = new { user.Role, user.TenantId } });
+    }
+
+    /// <summary>
     /// DEBUG TEMPORÁRIO: lista usuários (role, tenant_id, units→clinicId) pra diagnosticar
     /// os 403 do dashboard (tenant do JWT ≠ clinicId). Filtra por ?email= (substring).
     /// REMOVER depois.

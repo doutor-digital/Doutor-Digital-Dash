@@ -113,9 +113,12 @@ public class KommoIngestionService(
                 }
             }
 
-            // Snapshot dos custom_fields + tags da Kommo (vem do sync REST; webhook
-            // ainda não preenche porque o payload é parcial — solução = sync periódico).
-            if (ev.CustomFieldsJson != null) lead.CustomFieldsJson = ev.CustomFieldsJson;
+            // Snapshot dos custom_fields da Kommo. Tanto o sync REST quanto o webhook
+            // ao vivo preenchem agora. Mesclamos por field_id (em vez de sobrescrever)
+            // porque o webhook manda payload PARCIAL — um evento de mudança de etapa não
+            // pode apagar campos já capturados (ex.: "Usuário responsável").
+            if (ev.CustomFieldsJson != null)
+                lead.CustomFieldsJson = MergeCustomFieldsJson(lead.CustomFieldsJson, ev.CustomFieldsJson);
             if (ev.TagsJson != null) lead.TagsJson = ev.TagsJson;
 
             // Valor do negócio (price da Kommo) — string crua → decimal (invariant).
@@ -186,5 +189,67 @@ public class KommoIngestionService(
             _logger.LogWarning(ex, "KommoStageMapJson inválido — ignorando mapa de etapas");
             return new();
         }
+    }
+
+    /// <summary>
+    /// Mescla dois arrays de custom fields (shape <c>[{field_id, field_name, …, value}]</c>)
+    /// indexando por <c>field_id</c>: os campos de <paramref name="incoming"/> sobrescrevem/
+    /// adicionam, e os de <paramref name="existing"/> ausentes no incoming são preservados.
+    /// Necessário porque o webhook manda payload parcial. Fallback: se algum lado não for
+    /// um array válido, retorna o incoming cru.
+    /// </summary>
+    private static string MergeCustomFieldsJson(string? existing, string incoming)
+    {
+        static List<Dictionary<string, JsonElement>> Parse(string? json)
+        {
+            var list = new List<Dictionary<string, JsonElement>>();
+            if (string.IsNullOrWhiteSpace(json)) return list;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (el.ValueKind != JsonValueKind.Object) continue;
+                    var d = new Dictionary<string, JsonElement>();
+                    foreach (var p in el.EnumerateObject()) d[p.Name] = p.Value.Clone();
+                    list.Add(d);
+                }
+            }
+            catch (JsonException) { /* json malformado — ignora */ }
+            return list;
+        }
+
+        static string? KeyOf(Dictionary<string, JsonElement> d)
+            => d.TryGetValue("field_id", out var fid) && fid.ValueKind == JsonValueKind.Number
+                ? fid.GetRawText()
+                : (d.TryGetValue("field_name", out var fn) && fn.ValueKind == JsonValueKind.String
+                    ? "name:" + fn.GetString()
+                    : null);
+
+        var merged = Parse(existing);
+        var incomingList = Parse(incoming);
+        if (incomingList.Count == 0) return existing ?? incoming;
+
+        var indexByKey = new Dictionary<string, int>();
+        for (var i = 0; i < merged.Count; i++)
+        {
+            var k = KeyOf(merged[i]);
+            if (k != null) indexByKey[k] = i;
+        }
+
+        foreach (var item in incomingList)
+        {
+            var k = KeyOf(item);
+            if (k != null && indexByKey.TryGetValue(k, out var idx))
+                merged[idx] = item;       // sobrescreve o campo existente
+            else
+            {
+                if (k != null) indexByKey[k] = merged.Count;
+                merged.Add(item);          // campo novo
+            }
+        }
+
+        return JsonSerializer.Serialize(merged);
     }
 }

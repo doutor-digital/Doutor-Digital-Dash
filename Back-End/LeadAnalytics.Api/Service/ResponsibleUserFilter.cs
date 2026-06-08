@@ -8,15 +8,20 @@ namespace LeadAnalytics.Api.Service;
 
 /// <summary>
 /// Resolve e filtra leads pelo SDR responsável guardado no campo customizado
-/// "Usuário responsável" da Kommo. A conta tem um único login Kommo para todas as
-/// SDRs, então o <c>responsible_user_id</c> é sempre o mesmo — quem realmente
-/// atendeu vem desse custom field. O match do JSON é feito em memória (o EF não
-/// consulta dentro do CustomFieldsJson).
+/// "Responsável agendamento" da Kommo (valores = nomes das SDRs, ex.: "GRAZIELLE").
+/// A conta tem um único login Kommo para todas as SDRs, então o
+/// <c>responsible_user_id</c> é sempre o mesmo — quem realmente atendeu vem desse
+/// custom field. O match do JSON é feito em memória (o EF não consulta dentro do
+/// CustomFieldsJson).
 /// </summary>
 public static class ResponsibleUserFilter
 {
-    /// <summary>Nome do campo (normalizado: sem acento, minúsculo) que guarda o responsável.</summary>
-    public const string FieldNameNormalized = "usuario responsavel";
+    /// <summary>
+    /// Nome do campo (normalizado: sem acento, minúsculo) que guarda o SDR responsável.
+    /// Confirmado nos dados de prod: a Kommo não tem "Usuário responsável"; o campo com
+    /// os nomes das SDRs é "Responsável agendamento".
+    /// </summary>
+    public const string FieldNameNormalized = "responsavel agendamento";
 
     /// <summary>Minúsculo + sem acentos, para comparar nomes de campo/valor de forma robusta.</summary>
     public static string? Normalize(string? s)

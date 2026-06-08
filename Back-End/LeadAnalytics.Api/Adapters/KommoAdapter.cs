@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LeadAnalytics.Api.DTOs.Kommo;
 using LeadAnalytics.Api.Models;
 
@@ -64,6 +65,7 @@ public class KommoAdapter
                 AccountId = lead.AccountId ?? accountId,
                 Phone = FindCustomField(lead.CustomFields, PhoneCode) ?? string.Empty,
                 Email = FindCustomField(lead.CustomFields, EmailCode),
+                CustomFieldsJson = SerializeCustomFields(lead.CustomFields),
             });
         }
     }
@@ -210,6 +212,7 @@ public class KommoAdapter
                     AccountId = u.AccountId ?? accountId,
                     Phone = FindCustomField(draft?.CustomFields, PhoneCode) ?? string.Empty,
                     Email = FindCustomField(draft?.CustomFields, EmailCode),
+                    CustomFieldsJson = SerializeCustomFields(draft?.CustomFields),
                 });
                 continue;
             }
@@ -251,4 +254,32 @@ public class KommoAdapter
 
     private static string? FindCustomField(List<KommoCustomField>? fields, string code)
         => fields?.FirstOrDefault(f => string.Equals(f.Code, code, StringComparison.OrdinalIgnoreCase))?.FirstValue();
+
+    /// <summary>
+    /// Serializa os custom fields do webhook no MESMO shape do sync REST
+    /// (<c>[{field_id, field_name, field_code, value}]</c>), pra que os filtros do
+    /// dashboard (ex.: "Usuário responsável") funcionem com leads que entram ao vivo
+    /// — e não só com os do sync periódico. Retorna null quando não há campo com valor.
+    /// </summary>
+    private static string? SerializeCustomFields(List<KommoCustomField>? fields)
+    {
+        if (fields is null || fields.Count == 0) return null;
+
+        var slim = new List<Dictionary<string, object?>>();
+        foreach (var f in fields)
+        {
+            var value = f.FirstValue();
+            if (string.IsNullOrWhiteSpace(value)) continue; // só campos preenchidos
+
+            slim.Add(new Dictionary<string, object?>
+            {
+                ["field_id"] = long.TryParse(f.Id, out var id) ? id : null,
+                ["field_name"] = f.Name,
+                ["field_code"] = f.Code,
+                ["value"] = value.Trim(),
+            });
+        }
+
+        return slim.Count == 0 ? null : JsonSerializer.Serialize(slim);
+    }
 }

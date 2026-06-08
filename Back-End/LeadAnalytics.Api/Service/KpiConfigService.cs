@@ -98,13 +98,14 @@ public class KpiConfigService(AppDbContext db)
     /// </summary>
     public async Task<(double Value, int Sample, string? Note)> ComputeAsync(
         int clinicId, int? unitId, string sourceType, JsonElement config,
-        DateTime from, DateTime to, CancellationToken ct = default)
+        DateTime from, DateTime to, string? responsibleUser = null, CancellationToken ct = default)
     {
         from = AsUtc(from); to = AsUtc(to);
         var baseQuery = _db.Leads.AsNoTracking()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
         if (unitId.HasValue)
             baseQuery = baseQuery.Where(l => l.UnitId == unitId.Value);
+        baseQuery = await ResponsibleUserFilter.ApplyAsync(baseQuery, responsibleUser, ct);
 
         var sample = await baseQuery.CountAsync(ct);
         var p = ParseConfig(config);
@@ -351,7 +352,7 @@ public class KpiConfigService(AppDbContext db)
     /// </summary>
     public async Task<List<DTOs.Response.KpiBreakdownItemDto>> ComputeBreakdownAsync(
         int clinicId, int? unitId, JsonElement config, DateTime from, DateTime to,
-        int topN = 12, CancellationToken ct = default)
+        int topN = 12, string? responsibleUser = null, CancellationToken ct = default)
     {
         const int MaxScan = 8000;
         from = AsUtc(from); to = AsUtc(to);
@@ -370,6 +371,7 @@ public class KpiConfigService(AppDbContext db)
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
+        q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);
 
         var jsons = await q.OrderByDescending(l => l.CreatedAt)
             .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);

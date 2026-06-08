@@ -178,7 +178,7 @@ public class KpiConfigController(
         if (to < from) return BadRequest(new { error = "date_to deve ser >= date_from" });
 
         var (value, sample, note) = await _kpiService.ComputeAsync(
-            unit.ClinicId, unitId, body.SourceType, body.Config, from, to, ct);
+            unit.ClinicId, unitId, body.SourceType, body.Config, from, to, ct: ct);
 
         return Ok(new KpiPreviewResponseDto { Value = value, SampleSize = sample, Note = note });
     }

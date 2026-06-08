@@ -555,7 +555,8 @@ public class WebhooksController(
         [FromQuery] DateTime dateTo,
         [FromQuery] int? unitId = null,
         [FromQuery] int? attendantId = null,
-        [FromQuery] string? source = null)
+        [FromQuery] string? source = null,
+        [FromQuery] string? responsibleUser = null)
     {
         if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
         if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
@@ -568,7 +569,7 @@ public class WebhooksController(
         try
         {
             var result = await _leadService.GetDashboardOverviewAsync(
-                clinicId, dateFrom, dateTo, unitId, attendantId, source, HttpContext.RequestAborted);
+                clinicId, dateFrom, dateTo, unitId, attendantId, source, responsibleUser, HttpContext.RequestAborted);
 
             // Aplica os mapeamentos das Configurações Técnicas (por unidade): para cada
             // KPI configurado, recalcula o número pela fonte escolhida e expõe em
@@ -583,7 +584,7 @@ public class WebhooksController(
                         var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
                             string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
                         var (value, _, _) = await _kpiService.ComputeAsync(
-                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, HttpContext.RequestAborted);
+                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, HttpContext.RequestAborted);
                         result.KpiOverrides[cfg.KpiKey] = value;
 
                         // KPIs criados do zero viram cards próprios no dashboard.
@@ -605,7 +606,7 @@ public class WebhooksController(
                             if (displayType == "source_chart")
                             {
                                 dto.Breakdown = await _kpiService.ComputeBreakdownAsync(
-                                    clinicId, unitId, config, dateFrom, dateTo, 12, HttpContext.RequestAborted);
+                                    clinicId, unitId, config, dateFrom, dateTo, 12, responsibleUser, HttpContext.RequestAborted);
                                 dto.Value = dto.Breakdown.Sum(b => b.Value);
                             }
 
@@ -874,6 +875,25 @@ public class WebhooksController(
 
         var sources = await _leadService.GetDistinctSourcesAsync(clinicId, unitId, HttpContext.RequestAborted);
         return Ok(sources);
+    }
+
+    /// <summary>
+    /// Lista os SDRs responsáveis distintos (valores do custom field "Usuário responsável")
+    /// para o tenant/unidade. Popula o seletor de usuário do dashboard — como há um único
+    /// login Kommo para todas as SDRs, o responsável real vem desse campo.
+    /// </summary>
+    [HttpGet("responsible-users")]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), 200)]
+    public async Task<IActionResult> GetResponsibleUsers(
+        [FromQuery] int clinicId,
+        [FromQuery] int? unitId = null)
+    {
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } denied) return denied;
+        if (unitId.HasValue && await _tenantGuard.EnsureUnitBelongsToTenantAsync(unitId.Value, HttpContext.RequestAborted) is { } guard)
+            return guard;
+
+        var users = await _leadService.GetDistinctResponsibleUsersAsync(clinicId, unitId, HttpContext.RequestAborted);
+        return Ok(users);
     }
 
     private static bool TryParseGranularity(string raw, out LeadService.Granularity g)

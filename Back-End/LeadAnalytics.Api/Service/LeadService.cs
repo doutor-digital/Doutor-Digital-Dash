@@ -1687,6 +1687,7 @@ public class LeadService(
         int? unitId,
         int? attendantId,
         string? source,
+        string? responsibleUser = null,
         CancellationToken ct = default)
     {
         if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
@@ -1703,6 +1704,10 @@ public class LeadService(
         if (unitId.HasValue) baseQ = baseQ.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) baseQ = baseQ.Where(l => l.AttendantId == attendantId.Value);
         if (!string.IsNullOrWhiteSpace(source)) baseQ = baseQ.Where(l => l.Source == source);
+
+        // Filtro por SDR responsável (custom field "Usuário responsável"). Aplicado por
+        // último para que todos os KPIs/agregações abaixo já considerem só os leads dele.
+        baseQ = await ResponsibleUserFilter.ApplyAsync(baseQ, responsibleUser, ct);
 
         var totalLeads = await baseQ.CountAsync(ct);
 
@@ -2125,6 +2130,30 @@ public class LeadService(
             .Distinct()
             .OrderBy(s => s)
             .ToListAsync(ct);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  SDRs responsáveis distintos (custom field "Usuário responsável")
+    //  para popular o seletor de usuário do dashboard.
+    // ════════════════════════════════════════════════════════════════
+    public async Task<List<string>> GetDistinctResponsibleUsersAsync(
+        int clinicId,
+        int? unitId,
+        CancellationToken ct = default)
+    {
+        var q = _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId && l.CustomFieldsJson != null);
+        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+
+        var jsons = await q.Select(l => l.CustomFieldsJson!).ToListAsync(ct);
+
+        return jsons
+            .Select(ResponsibleUserFilter.Extract)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static DateTime BucketStart(DateTime dt, Granularity g) => g switch

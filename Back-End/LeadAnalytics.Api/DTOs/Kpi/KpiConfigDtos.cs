@@ -130,6 +130,23 @@ public class KpiLeadDto
     [JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
     /// <summary>Valor do campo customizado que casou (quando a fonte é por campo).</summary>
     [JsonPropertyName("matched_value")] public string? MatchedValue { get; set; }
+
+    /// <summary>Data/hora marcada do agendamento (Lead.AppointmentScheduledAt).</summary>
+    [JsonPropertyName("appointment_at")] public DateTime? AppointmentAt { get; set; }
+
+    /// <summary>Valor da consulta (Lead.ConsultationValue).</summary>
+    [JsonPropertyName("consultation_value")] public decimal? ConsultationValue { get; set; }
+
+    /// <summary>Lead fechou tratamento (Lead.ClosedTreatment).</summary>
+    [JsonPropertyName("closed_treatment")] public bool? ClosedTreatment { get; set; }
+
+    // ── Campos extraídos do CustomFieldsJson ────────────────────────────────
+    [JsonPropertyName("motivo_nao_agendamento")] public string? MotivoNaoAgendamento { get; set; }
+    [JsonPropertyName("tratamento_fechado")] public string? TratamentoFechado { get; set; }
+    [JsonPropertyName("responsavel_agendamento")] public string? ResponsavelAgendamento { get; set; }
+    [JsonPropertyName("qualificacao")] public string? Qualificacao { get; set; }
+    /// <summary>Origem custom-field (separada de Source/Channel do Kommo).</summary>
+    [JsonPropertyName("origem_custom")] public string? OrigemCustom { get; set; }
 }
 
 public class KpiLeadsResponseDto

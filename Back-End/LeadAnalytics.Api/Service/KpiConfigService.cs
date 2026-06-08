@@ -217,6 +217,7 @@ public class KpiConfigService(AppDbContext db)
             l.Id, l.ExternalId, l.Name, l.Phone, l.Source, l.Channel,
             l.CurrentStage, l.CurrentStageId, l.LeadType, l.HasAppointment, l.HasPayment,
             l.CreatedAt, l.CustomFieldsJson,
+            l.AppointmentScheduledAt, l.ConsultationValue, l.ClosedTreatment,
         }).ToListAsync(ct);
 
         truncated = rows.Count >= MaxScan;
@@ -235,6 +236,7 @@ public class KpiConfigService(AppDbContext db)
                     continue;
             }
 
+            var cf = l.CustomFieldsJson;
             hits.Add(new DTOs.Kpi.KpiLeadDto
             {
                 Id = l.Id,
@@ -250,6 +252,16 @@ public class KpiConfigService(AppDbContext db)
                 HasPayment = l.HasPayment,
                 CreatedAt = l.CreatedAt,
                 MatchedValue = matched,
+                AppointmentAt = l.AppointmentScheduledAt,
+                ConsultationValue = l.ConsultationValue,
+                ClosedTreatment = l.ClosedTreatment,
+                MotivoNaoAgendamento = ExtractFieldByName(cf, n => n.Contains("motivo") && n.Contains("agendamento")),
+                TratamentoFechado = ExtractFieldByName(cf, n => n.Contains("tratamento") && n.Contains("fechad")),
+                ResponsavelAgendamento = ExtractFieldByName(cf, n =>
+                    (n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento")
+                    || n.Contains("fisio") || n.Contains("doutor")),
+                Qualificacao = ExtractFieldByName(cf, n => n.Contains("qualifica")),
+                OrigemCustom = ExtractFieldByName(cf, n => n == "origem"),
             });
 
             if (hits.Count >= limit) { truncated = true; break; }

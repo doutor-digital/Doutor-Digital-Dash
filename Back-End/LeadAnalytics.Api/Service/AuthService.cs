@@ -243,21 +243,22 @@ public class AuthService
         }
 
         // Self-heal do tenant: usuários convidados (ex.: trafego_pago) podem ter ficado
-        // com TenantId null em fluxos antigos de aceite. Sem tenant no JWT, o
-        // TenantUnitGuard barra TODAS as leituras do dashboard com 403. Deriva o tenant
-        // do ClinicId da unidade do usuário e persiste — conserta no próximo login.
-        if (user.TenantId is null)
+        // com TenantId null OU errado em fluxos antigos de aceite. Sem o tenant certo no
+        // JWT, o TenantUnitGuard barra TODAS as leituras do dashboard com 403. Reconcilia
+        // o tenant com o ClinicId da unidade do usuário (fonte da verdade) e persiste.
+        // super_admin é exceção (pode ter tenant null de propósito p/ visão global).
+        if (!Roles.IsSuperAdmin(user.Role))
         {
             var derivedTenant = await _db.UserUnits
                 .Where(uu => uu.UserId == user.Id)
                 .Join(_db.Units, uu => uu.UnitId, u => u.Id, (uu, u) => (int?)u.ClinicId)
                 .FirstOrDefaultAsync();
 
-            if (derivedTenant is not null)
+            if (derivedTenant is not null && derivedTenant != user.TenantId)
             {
-                user.TenantId = derivedTenant;
                 _logger.LogInformation(
-                    "🔧 TenantId derivado da unidade p/ {Email}: {Tenant}", user.Email, derivedTenant);
+                    "🔧 TenantId reconciliado p/ {Email}: {Old} → {New}", user.Email, user.TenantId, derivedTenant);
+                user.TenantId = derivedTenant;
             }
         }
 

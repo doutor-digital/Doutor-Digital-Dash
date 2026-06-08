@@ -560,4 +560,37 @@ public class CustomFieldsInspectController(
         public long? EnumId { get; set; }
         public string? EnumCode { get; set; }
     }
+
+    /// <summary>
+    /// DEBUG TEMPORÁRIO: lista usuários (role, tenant_id, units→clinicId) pra diagnosticar
+    /// os 403 do dashboard (tenant do JWT ≠ clinicId). Filtra por ?email= (substring).
+    /// REMOVER depois.
+    /// </summary>
+    [HttpGet("users-debug")]
+    public async Task<IActionResult> UsersDebug([FromQuery] string? email = null, CancellationToken ct = default)
+    {
+        var q = db.Users.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var needle = email.Trim().ToLower();
+            q = q.Where(u => u.Email.ToLower().Contains(needle));
+        }
+
+        var users = await q.OrderByDescending(u => u.Id).Take(50)
+            .Select(u => new { u.Id, u.Email, u.Role, u.TenantId, u.IsActive })
+            .ToListAsync(ct);
+
+        var result = new List<object>();
+        foreach (var u in users)
+        {
+            var units = await db.UserUnits.AsNoTracking()
+                .Where(uu => uu.UserId == u.Id)
+                .Join(db.Units, uu => uu.UnitId, un => un.Id,
+                    (uu, un) => new { un.Id, un.ClinicId, un.Name })
+                .ToListAsync(ct);
+            result.Add(new { u.Id, u.Email, u.Role, u.TenantId, u.IsActive, units });
+        }
+
+        return Ok(result);
+    }
 }

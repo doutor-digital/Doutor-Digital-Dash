@@ -261,7 +261,7 @@ public class KpiConfigService(AppDbContext db)
                     (n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento")
                     || n.Contains("fisio") || n.Contains("doutor")),
                 Qualificacao = ExtractFieldByName(cf, n => n.Contains("qualifica")),
-                OrigemCustom = ExtractFieldByName(cf, n => n == "origem"),
+                OrigemCustom = ExtractFieldByName(cf, n => n.Contains("origem")),
                 TreatmentValue = TryParseDecimal(ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"))),
             });
 
@@ -318,7 +318,8 @@ public class KpiConfigService(AppDbContext db)
         foreach (var l in rows)
         {
             var cf = l.CustomFieldsJson;
-            var origemCustom = ExtractFieldByName(cf, n => n == "origem");
+            // Origem: aceita "Origem", "Origem do lead", "Origem (UTM)" etc.
+            var origemCustom = ExtractFieldByName(cf, n => n.Contains("origem"));
             var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
                        : !string.IsNullOrWhiteSpace(l.Source) ? l.Source.Trim()
                        : "—";

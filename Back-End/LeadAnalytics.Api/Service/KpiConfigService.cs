@@ -144,8 +144,22 @@ public class KpiConfigService(AppDbContext db)
                 if (p.StageIds.Count == 0)
                     return (0, sample, "Selecione ao menos uma etapa.");
                 var ids = p.StageIds;
-                var count = await baseQuery
-                    .CountAsync(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value), ct);
+
+                // Conta por ENTRADA na etapa (LeadStageHistory dentro do período) —
+                // não por CurrentStageId + CreatedAt. Sem isso, lead criado em maio
+                // que entrou em "Agendado" em 09/06 some do KPI de 09/06 (era o bug
+                // que o KpiBreakdownsAsync já corrigiu em 6f29169, mas que faltava
+                // espelhar aqui no source KommoStage usado pelos overrides).
+                var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+                if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
+                scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+
+                var count = await _db.LeadStageHistories.AsNoTracking()
+                    .Where(h => ids.Contains(h.StageId)
+                        && h.ChangedAt >= from && h.ChangedAt <= to)
+                    .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
+                    .Distinct()
+                    .CountAsync(ct);
                 return (count, sample, null);
             }
 
@@ -207,26 +221,42 @@ public class KpiConfigService(AppDbContext db)
         const int MaxScan = 5000; // teto de varredura p/ filtro em memória
         from = AsUtc(from); to = AsUtc(to);
 
-        var q = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
-        if (unitId.HasValue)
-            q = q.Where(l => l.UnitId == unitId.Value);
-
         var p = ParseConfig(config);
         var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
             or KpiSourceTypes.CustomFieldSum or KpiSourceTypes.StageFieldFilter;
 
-        // Filtro por etapa (em SQL).
+        IQueryable<LeadAnalytics.Api.Models.Lead> q;
         if (sourceType == KpiSourceTypes.KommoStage)
         {
+            // Drill: leads que ENTRARAM na etapa no período (espelha ComputeAsync).
             if (p.StageIds.Count == 0) return (new(), 0, false);
             var ids = p.StageIds;
-            q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+
+            var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+            if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
+
+            var leadIds = await _db.LeadStageHistories.AsNoTracking()
+                .Where(h => ids.Contains(h.StageId)
+                    && h.ChangedAt >= from && h.ChangedAt <= to)
+                .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            q = _db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id));
         }
-        else if (sourceType == KpiSourceTypes.StageFieldFilter && p.StageIds.Count > 0)
+        else
         {
-            var ids = p.StageIds;
-            q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+            // Demais sources continuam por CreatedAt (semântica original).
+            q = _db.Leads.AsNoTracking()
+                .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+            if (unitId.HasValue)
+                q = q.Where(l => l.UnitId == unitId.Value);
+
+            if (sourceType == KpiSourceTypes.StageFieldFilter && p.StageIds.Count > 0)
+            {
+                var ids = p.StageIds;
+                q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+            }
         }
 
         q = q.OrderByDescending(l => l.CreatedAt);

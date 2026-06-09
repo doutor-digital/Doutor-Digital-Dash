@@ -138,15 +138,19 @@ public class KommoIngestionService(
 
             string? canonical = null;
             if (!string.IsNullOrWhiteSpace(rawStage)
-                && stageMap.TryGetValue(rawStage, out var canonicalRaw)
-                && CanonicalStages.IsKnown(canonicalRaw))
+                && stageMap.TryGetValue(rawStage, out var canonicalRaw))
             {
-                canonical = canonicalRaw;
+                // Resolve é tolerante: aceita o nome canônico exato, o nome da etapa da
+                // Kommo com prefixo ("04_AGENDADO_SEM_PAGAMENTO") ou por palavra-chave.
+                // Antes exigíamos o canônico exato (IsKnown) — qualquer outra grafia caía
+                // no fallback de status_id cru e sumia dos cards (bug do "agendado").
+                canonical = CanonicalStages.Resolve(canonicalRaw);
             }
+
+            var mappedLeadStage = canonical != null ? CanonicalStages.ToLeadStage(canonical) : null;
 
             if (stageChanged)
             {
-                var mappedLeadStage = canonical != null ? CanonicalStages.ToLeadStage(canonical) : null;
                 var newCurrentStage = mappedLeadStage ?? rawStage!;
 
                 lead.CurrentStage = newCurrentStage;
@@ -159,6 +163,15 @@ public class KommoIngestionService(
                     StageLabel = newCurrentStage,
                     ChangedAt = now,
                 });
+            }
+            else if (mappedLeadStage != null
+                && !string.Equals(lead.CurrentStage, mappedLeadStage, StringComparison.Ordinal))
+            {
+                // Heal retroativo: o status_id não mudou (stageChanged=false), mas o lead
+                // ficou gravado com o status_id cru (ex.: "67548620") porque o mapa antes
+                // exigia o canônico exato. Agora que Resolve reconhece a etapa, corrigimos
+                // o CurrentStage em vigor — sem forjar uma transição no histórico.
+                lead.CurrentStage = mappedLeadStage;
             }
 
             // Automação de Consulta/Tratamento — só se a unidade mapeou esse status_id.

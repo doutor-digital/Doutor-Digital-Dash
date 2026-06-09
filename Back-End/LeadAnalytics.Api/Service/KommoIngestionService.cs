@@ -170,8 +170,17 @@ public class KommoIngestionService(
                 // Heal retroativo: o status_id não mudou (stageChanged=false), mas o lead
                 // ficou gravado com o status_id cru (ex.: "67548620") porque o mapa antes
                 // exigia o canônico exato. Agora que Resolve reconhece a etapa, corrigimos
-                // o CurrentStage em vigor — sem forjar uma transição no histórico.
+                // o CurrentStage em vigor e registramos a entrada na etapa canônica — o
+                // histórico só tinha o status_id cru, então sem essa linha o lead não
+                // apareceria nas métricas que contam por entrada na etapa (ex.: agendados).
                 lead.CurrentStage = mappedLeadStage;
+                lead.StageHistory.Add(new LeadStageHistory
+                {
+                    LeadId = lead.Id,
+                    StageId = lead.CurrentStageId ?? rawStageId ?? 0,
+                    StageLabel = mappedLeadStage,
+                    ChangedAt = now,
+                });
             }
 
             // Automação de Consulta/Tratamento — só se a unidade mapeou esse status_id.

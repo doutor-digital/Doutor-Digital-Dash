@@ -1696,18 +1696,19 @@ public class LeadService(
         var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
         var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
 
-        var baseQ = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId
-                     && l.CreatedAt >= startUtc
-                     && l.CreatedAt < endExclUtc);
-
-        if (unitId.HasValue) baseQ = baseQ.Where(l => l.UnitId == unitId.Value);
-        if (attendantId.HasValue) baseQ = baseQ.Where(l => l.AttendantId == attendantId.Value);
-        if (!string.IsNullOrWhiteSpace(source)) baseQ = baseQ.Where(l => l.Source == source);
+        // scopeQ = filtros de lead SEM a janela de data — reaproveitado para contar
+        // agendados pela data de ENTRADA na etapa (e não por criação).
+        var scopeQ = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+        if (unitId.HasValue) scopeQ = scopeQ.Where(l => l.UnitId == unitId.Value);
+        if (attendantId.HasValue) scopeQ = scopeQ.Where(l => l.AttendantId == attendantId.Value);
+        if (!string.IsNullOrWhiteSpace(source)) scopeQ = scopeQ.Where(l => l.Source == source);
 
         // Filtro por SDR responsável (custom field "Usuário responsável"). Aplicado por
         // último para que todos os KPIs/agregações abaixo já considerem só os leads dele.
-        baseQ = await ResponsibleUserFilter.ApplyAsync(baseQ, responsibleUser, ct);
+        scopeQ = await ResponsibleUserFilter.ApplyAsync(scopeQ, responsibleUser, ct);
+
+        // baseQ = scopeQ + janela por data de CRIAÇÃO (cohort do período).
+        var baseQ = scopeQ.Where(l => l.CreatedAt >= startUtc && l.CreatedAt < endExclUtc);
 
         var totalLeads = await baseQ.CountAsync(ct);
 
@@ -1823,6 +1824,19 @@ public class LeadService(
             })
             .ToListAsync(ct);
 
+        // Agendados por DATA DE ENTRADA na etapa (histórico), e não por data de criação
+        // do lead — inclui leads antigos agendados dentro do período. Mesmos filtros
+        // (scopeQ). Sobrescreve a contagem cohort-by-creation do funil logo abaixo.
+        var agStages = new[] { LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento };
+        var agEntryRows = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => agStages.Contains(h.StageLabel)
+                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc)
+            .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
+            .Distinct()
+            .ToListAsync(ct);
+        var agByType = agEntryRows.GroupBy(x => x.Type).ToDictionary(g => g.Key, g => g.Count());
+        var agendadosTotal = agByType.Values.Sum();
+
         FunnelGroupDto BuildFunnel(string? type)
         {
             if (type == null)
@@ -1831,7 +1845,7 @@ public class LeadService(
                 {
                     Total = funnelRows.Sum(r => r.Total),
                     Interacoes = funnelRows.Sum(r => r.Interacoes),
-                    Agendados = funnelRows.Sum(r => r.Agendados),
+                    Agendados = agendadosTotal,
                     Consultas = funnelRows.Sum(r => r.Consultas),
                     Tratamentos = funnelRows.Sum(r => r.Tratamentos),
                     NoShow = funnelRows.Sum(r => r.NoShow),
@@ -1843,7 +1857,7 @@ public class LeadService(
             {
                 Total = row.Total,
                 Interacoes = row.Interacoes,
-                Agendados = row.Agendados,
+                Agendados = agByType.GetValueOrDefault(type, 0),
                 Consultas = row.Consultas,
                 Tratamentos = row.Tratamentos,
                 NoShow = row.NoShow,

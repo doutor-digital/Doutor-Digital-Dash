@@ -372,7 +372,9 @@ public class KpiConfigService(AppDbContext db)
             var leadIsCadastro = !leadIsResgate && IsCadastro(l.LeadType);
 
             var stage = l.CurrentStage ?? "";
-            var isAgendado = stage == LeadStages.AgendadoSemPagamento || stage == LeadStages.AgendadoComPagamento;
+            // Agendados NÃO são contados aqui — são contados por data de ENTRADA na
+            // etapa (histórico), num passo separado abaixo, pra incluir leads antigos
+            // agendados dentro do período.
             var isConsulta = stage == LeadStages.EmTratamento || stage == LeadStages.FechouTratamento || stage == LeadStages.NaoFechouTratamento;
             var isTratamento = stage == LeadStages.FechouTratamento;
 
@@ -402,15 +404,6 @@ public class KpiConfigService(AppDbContext db)
                 resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
             }
 
-            // ── Agendados
-            if (isAgendado)
-            {
-                ag.Total++;
-                if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;
-                if (l.HasPayment) ag.ComPagamento++; else ag.SemPagamento++;
-                agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
-            }
-
             // ── Tratamentos
             if (isTratamento)
             {
@@ -438,6 +431,37 @@ public class KpiConfigService(AppDbContext db)
                     });
                 }
             }
+        }
+
+        // ── Agendados: contados por DATA DE ENTRADA na etapa (histórico de etapas),
+        //    e não pela data de criação do lead — assim leads antigos agendados dentro
+        //    do período aparecem. com/sem pagamento vem da própria etapa (04 vs 05).
+        var agStages = new[] { LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento };
+        var agHist = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => agStages.Contains(h.StageLabel)
+                && h.ChangedAt >= from && h.ChangedAt <= to
+                && h.Lead.TenantId == clinicId
+                && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
+            .Select(h => new { h.LeadId, h.StageLabel, h.ChangedAt, h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson })
+            .ToListAsync(ct);
+
+        // Um lead pode reentrar em agendado no período — conta uma vez (entrada mais recente).
+        foreach (var grp in agHist.GroupBy(x => x.LeadId))
+        {
+            var h = grp.OrderByDescending(x => x.ChangedAt).First();
+            var cf = h.CustomFieldsJson;
+            var origemCustom = ExtractField(cf, profile.OrigemFieldId, n => n.Contains("origem"));
+            var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
+                       : !string.IsNullOrWhiteSpace(h.Source) ? h.Source!.Trim()
+                       : "—";
+            var tipo = ExtractField(cf, profile.TipoFieldId, n => n == "tipo" || n.Contains("tipo"))?.Trim();
+            var leadIsResgate = !string.IsNullOrWhiteSpace(tipo) || IsResgate(h.LeadType);
+            var leadIsCadastro = !leadIsResgate && IsCadastro(h.LeadType);
+
+            ag.Total++;
+            if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;
+            if (h.StageLabel == LeadStages.AgendadoComPagamento) ag.ComPagamento++; else ag.SemPagamento++;
+            agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
         }
 
         // ── Finaliza CadastroOrigens

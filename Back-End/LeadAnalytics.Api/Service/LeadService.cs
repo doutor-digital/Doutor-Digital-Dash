@@ -1680,6 +1680,13 @@ public class LeadService(
     //  filtrado por dateFrom/dateTo em Lead.CreatedAt.
     // ════════════════════════════════════════════════════════════════
 
+    // Normaliza para UTC respeitando o Kind (mesma regra do KpiConfigService),
+    // para que o overview e o breakdown janelem o período de forma idêntica.
+    private static DateTime AsUtc(DateTime d) =>
+        d.Kind == DateTimeKind.Utc ? d
+        : d.Kind == DateTimeKind.Local ? d.ToUniversalTime()
+        : DateTime.SpecifyKind(d, DateTimeKind.Utc);
+
     public async Task<DashboardOverviewDto> GetDashboardOverviewAsync(
         int clinicId,
         DateTime dateFrom,
@@ -1692,9 +1699,15 @@ public class LeadService(
     {
         if (dateTo < dateFrom) throw new ArgumentException("dateTo deve ser >= dateFrom");
 
-        // Janela UTC com fim exclusivo (+1 dia para incluir o dia inteiro)
-        var startUtc = DateTime.SpecifyKind(dateFrom.Date, DateTimeKind.Utc);
-        var endExclUtc = DateTime.SpecifyKind(dateTo.Date.AddDays(1), DateTimeKind.Utc);
+        // Janela alinhada ao INSTANTE exato enviado pelo front (a meia-noite/fim-de-dia
+        // do fuso local já vem embutida no ISO, ex.: 00:00 BRT = 03:00Z). NÃO truncar
+        // para .Date — isso reintroduzia a meia-noite UTC e desalinhava o filtro "Dia"
+        // em ~3h (leads da noite caíam no dia UTC seguinte e sumiam do "Dia").
+        var startUtc = AsUtc(dateFrom);
+        var endUtc = AsUtc(dateTo);
+        // Se vier só a data (meia-noite), inclui o dia inteiro; se vier instante de
+        // fim-de-dia (como o front manda), usa o próprio instante como fim exclusivo.
+        var endExclUtc = endUtc.TimeOfDay == TimeSpan.Zero ? endUtc.AddDays(1) : endUtc;
 
         // scopeQ = filtros de lead SEM a janela de data — reaproveitado para contar
         // agendados pela data de ENTRADA na etapa (e não por criação).

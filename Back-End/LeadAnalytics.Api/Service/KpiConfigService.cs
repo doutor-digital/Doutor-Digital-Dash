@@ -1077,6 +1077,27 @@ public class KpiConfigService(AppDbContext db)
         var origem = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var responsavel = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var qualificacao = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // Cruzamentos × desfecho
+        var atendenteOutcome = new Dictionary<string, DTOs.Dashboard.OutcomeRowDto>(StringComparer.OrdinalIgnoreCase);
+        var origemOutcome = new Dictionary<string, DTOs.Dashboard.OutcomeRowDto>(StringComparer.OrdinalIgnoreCase);
+        var qualificacaoOutcome = new Dictionary<string, DTOs.Dashboard.OutcomeRowDto>(StringComparer.OrdinalIgnoreCase);
+        // Motivo não-agendamento × atendente
+        var motivoByAtendente = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        static void BumpOutcome(Dictionary<string, DTOs.Dashboard.OutcomeRowDto> bucket, string key,
+            bool agendou, bool compareceu, bool fechou, bool faltou)
+        {
+            if (!bucket.TryGetValue(key, out var row))
+            {
+                row = new DTOs.Dashboard.OutcomeRowDto { Label = key };
+                bucket[key] = row;
+            }
+            row.Total++;
+            if (agendou) row.Agendou++;
+            if (compareceu) row.Compareceu++;
+            if (fechou) row.Fechou++;
+            if (faltou) row.Faltou++;
+        }
 
         foreach (var l in rows)
         {
@@ -1139,6 +1160,21 @@ public class KpiConfigService(AppDbContext db)
             var qual = ExtractFieldByName(cf, n => n.Contains("qualifica"));
             if (!string.IsNullOrWhiteSpace(qual))
                 qualificacao[qual.Trim()] = qualificacao.GetValueOrDefault(qual.Trim()) + 1;
+
+            // ── Cruzamentos × desfecho ──
+            if (!string.IsNullOrWhiteSpace(resp))
+                BumpOutcome(atendenteOutcome, resp.Trim(), agendou, compareceu, fechou, faltou);
+            if (!string.IsNullOrWhiteSpace(orig))
+                BumpOutcome(origemOutcome, orig.Trim(), agendou, compareceu, fechou, faltou);
+            if (!string.IsNullOrWhiteSpace(qual))
+                BumpOutcome(qualificacaoOutcome, qual.Trim(), agendou, compareceu, fechou, faltou);
+
+            // Motivo do não agendamento × Atendente (par)
+            if (!string.IsNullOrWhiteSpace(motivo) && !string.IsNullOrWhiteSpace(resp))
+            {
+                var pairKey = $"{resp.Trim()}|||{motivo.Trim()}";
+                motivoByAtendente[pairKey] = motivoByAtendente.GetValueOrDefault(pairKey) + 1;
+            }
         }
 
         return new DTOs.Dashboard.CustomFieldsCrossAnalysisDto
@@ -1152,6 +1188,23 @@ public class KpiConfigService(AppDbContext db)
             Origem = TopN(origem, topPerField),
             ResponsavelAgendamento = TopN(responsavel, topPerField),
             Qualificacao = TopN(qualificacao, topPerField),
+            AtendenteByOutcome = atendenteOutcome.Values.OrderByDescending(r => r.Total).Take(topPerField).ToList(),
+            OrigemByOutcome = origemOutcome.Values.OrderByDescending(r => r.Total).Take(topPerField).ToList(),
+            QualificacaoByOutcome = qualificacaoOutcome.Values.OrderByDescending(r => r.Total).ToList(),
+            MotivoByAtendente = motivoByAtendente
+                .OrderByDescending(kv => kv.Value)
+                .Take(topPerField)
+                .Select(kv =>
+                {
+                    var parts = kv.Key.Split("|||", 2);
+                    return new DTOs.Dashboard.PairCountDto
+                    {
+                        GroupA = parts[0],
+                        GroupB = parts.Length > 1 ? parts[1] : "",
+                        Count = kv.Value,
+                    };
+                })
+                .ToList(),
         };
     }
 

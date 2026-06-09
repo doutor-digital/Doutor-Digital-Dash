@@ -66,9 +66,20 @@ public class KommoAdapter
                 Phone = FindCustomField(lead.CustomFields, PhoneCode) ?? string.Empty,
                 Email = FindCustomField(lead.CustomFields, EmailCode),
                 CustomFieldsJson = SerializeCustomFields(lead.CustomFields),
+                // Data real da Kommo: pra eventos lead:status/lead:update, o webhook
+                // chega no exato instante da transição, então updated_at ≈ momento
+                // da mudança de etapa. Usado como ChangedAt no LeadStageHistory pra
+                // o KPI por dia bater mesmo com webhook atrasado.
+                KommoModifiedAtUtc = ParseUnixSecondsUtc(lead.UpdatedAt),
+                KommoCreatedAtUtc = ParseUnixSecondsUtc(lead.CreatedAt),
             });
         }
     }
+
+    private static DateTime? ParseUnixSecondsUtc(string? unix) =>
+        long.TryParse(unix, out var s) && s > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(s).UtcDateTime
+            : null;
 
     private static void MapContacts(KommoContactsEnvelope? env, List<LeadEvent> sink, string? accountId)
     {

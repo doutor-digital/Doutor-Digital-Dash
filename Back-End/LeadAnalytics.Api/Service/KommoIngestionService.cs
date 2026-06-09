@@ -70,6 +70,12 @@ public class KommoIngestionService(
             var action = ev.Action?.ToLowerInvariant();
             var now = DateTime.UtcNow;
 
+            // Data REAL da mudança na Kommo (last_modified/updated_at). Usada como
+            // ChangedAt no LeadStageHistory pra o KPI por dia ("agendados em 09/06")
+            // refletir o que aconteceu na Kommo, não quando o backend processou.
+            // Fallback: now — se o payload não trouxer (improvável em lead:status/update).
+            var stageChangedAt = ev.KommoModifiedAtUtc ?? now;
+
             if (action == "delete")
             {
                 if (lead is not null)
@@ -169,7 +175,7 @@ public class KommoIngestionService(
                     LeadId = lead.Id,
                     StageId = lead.CurrentStageId ?? 0,
                     StageLabel = newCurrentStage,
-                    ChangedAt = now,
+                    ChangedAt = stageChangedAt,
                 });
             }
             else if (mappedLeadStage != null
@@ -187,7 +193,7 @@ public class KommoIngestionService(
                     LeadId = lead.Id,
                     StageId = lead.CurrentStageId ?? rawStageId ?? 0,
                     StageLabel = mappedLeadStage,
-                    ChangedAt = now,
+                    ChangedAt = stageChangedAt,
                 });
             }
 

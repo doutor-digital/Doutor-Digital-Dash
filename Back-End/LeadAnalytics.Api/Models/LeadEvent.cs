@@ -39,4 +39,14 @@ public class LeadEvent
     /// "data do primeiro sync" e bagunçava a contagem de leads do dia).
     /// </summary>
     public DateTime? KommoCreatedAtUtc { get; set; }
+
+    /// <summary>
+    /// Última modificação do lead na Kommo (UTC), vinda de <c>last_modified</c> /
+    /// <c>updated_at</c>. Usada como <c>ChangedAt</c> no <c>LeadStageHistory</c>
+    /// — assim a entrada na etapa é gravada com a data real da Kommo (não com o
+    /// instante em que o backend processou o webhook/sync). Decisivo pra o KPI
+    /// "agendados no dia X" não perder leads quando o webhook chega atrasado ou
+    /// quando o heal retroativo roda dias depois. Fallback: <c>DateTime.UtcNow</c>.
+    /// </summary>
+    public DateTime? KommoModifiedAtUtc { get; set; }
 }

@@ -230,6 +230,15 @@ public class KommoSyncService
                 KommoCreatedAtUtc = lead.CreatedAt.HasValue
                     ? DateTimeOffset.FromUnixTimeSeconds(lead.CreatedAt.Value).UtcDateTime
                     : null,
+                // Última modificação real na Kommo — vira ChangedAt do histórico
+                // de etapa. Melhor aproximação possível pra "quando o lead entrou
+                // na etapa" via sync (sem precisar bater em /leads/{id}/events).
+                // Se o lead foi modificado depois da mudança de etapa, vai pra
+                // data do último update — ainda muito melhor que DateTime.UtcNow
+                // do sync, que jogaria leads agendados ontem no KPI de hoje.
+                KommoModifiedAtUtc = lead.UpdatedAt.HasValue
+                    ? DateTimeOffset.FromUnixTimeSeconds(lead.UpdatedAt.Value).UtcDateTime
+                    : null,
             });
         }
 

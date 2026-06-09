@@ -32,9 +32,17 @@ public class KommoIngestionService(
     private readonly KommoStageProcessor _stageProcessor = stageProcessor;
     private readonly ILogger<KommoIngestionService> _logger = logger;
 
-    public async Task<int> IngestAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct = default)
+    public async Task<int> IngestAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? stageMapOverride = null)
     {
-        var stageMap = ParseStageMap(unit.KommoStageMapJson);
+        // Mapa efetivo de etapas: começa pelo mapa derivado dos NOMES das etapas da Kommo
+        // (override passado pelo sync — resolve agendados mesmo sem KommoStageMapJson) e
+        // sobrepõe o mapa explícito da unidade, que tem prioridade (config do admin vence).
+        var stageMap = stageMapOverride is null
+            ? new Dictionary<string, string>()
+            : new Dictionary<string, string>(stageMapOverride);
+        foreach (var kv in ParseStageMap(unit.KommoStageMapJson))
+            stageMap[kv.Key] = kv.Value;
         var changed = 0;
 
         foreach (var ev in events)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LeadAnalytics.Api.Models;
+using LeadAnalytics.Api.Service.Stages;
 
 namespace LeadAnalytics.Api.Service;
 
@@ -157,6 +158,31 @@ public class KommoSyncService
                 unit.Id);
         }
 
+        // 1.75) Mapa de etapas derivado dos NOMES das etapas da Kommo (status_id → etapa
+        //       canônica). Resolve agendados/etapas mesmo quando a unidade NÃO tem
+        //       KommoStageMapJson preenchido — CanonicalStages.Resolve reconhece nomes
+        //       como "04_AGENDADO_SEM_PAGAMENTO". O mapa explícito da unidade ainda vence.
+        var stageNameMap = new Dictionary<string, string>();
+        try
+        {
+            var pipes = await _api.GetPipelinesAsync(unit.KommoSubdomain, accessToken, ct);
+            foreach (var p in pipes?.Embedded?.Pipelines ?? new())
+                foreach (var st in p.Embedded?.Statuses ?? new())
+                {
+                    var canonical = CanonicalStages.Resolve(st.Name);
+                    if (canonical != null) stageNameMap[st.Id.ToString()] = canonical;
+                }
+            _logger.LogInformation(
+                "Sync Kommo unit {Unit}: {N} etapas resolvidas por nome (auto stage-map)",
+                unit.Id, stageNameMap.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Sync Kommo unit {Unit}: falha ao buscar pipelines — sem auto-resolve de etapa por nome",
+                unit.Id);
+        }
+
         // 2) Busca os contatos em lotes (até 250 por chamada) pra pegar phone/email
         var contactById = new Dictionary<long, KommoApiContact>();
         foreach (var chunk in Chunk(contactIds, 250))
@@ -207,7 +233,7 @@ public class KommoSyncService
             });
         }
 
-        result.LeadsPersisted = await _ingestion.IngestAsync(events, unit, ct);
+        result.LeadsPersisted = await _ingestion.IngestAsync(events, unit, ct, stageNameMap);
 
         sw.Stop();
         result.DurationMs = (int)sw.ElapsedMilliseconds;

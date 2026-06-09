@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.Service.Stages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -59,5 +60,24 @@ public class KommoStagesResolver(
         if (stageId is not int id) return null;
         var map = await GetStageMapAsync(unitId, ct);
         return map.TryGetValue(id, out var name) ? name : null;
+    }
+
+    /// <summary>
+    /// Mapa <c>status_id (string) → etapa canônica</c> derivado dos NOMES das etapas
+    /// na Kommo (reusa o cache de <see cref="GetStageMapAsync"/>). Usado pelo webhook
+    /// ao vivo como <c>stageMapOverride</c> do <see cref="KommoIngestionService"/>,
+    /// pra resolver agendados mesmo quando a unidade NÃO tem <c>KommoStageMapJson</c>
+    /// preenchido — análogo ao que o sync já faz.
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetCanonicalStageMapAsync(int unitId, CancellationToken ct)
+    {
+        var byId = await GetStageMapAsync(unitId, ct);
+        var canonical = new Dictionary<string, string>(byId.Count);
+        foreach (var (id, name) in byId)
+        {
+            var c = CanonicalStages.Resolve(name);
+            if (c != null) canonical[id.ToString()] = c;
+        }
+        return canonical;
     }
 }

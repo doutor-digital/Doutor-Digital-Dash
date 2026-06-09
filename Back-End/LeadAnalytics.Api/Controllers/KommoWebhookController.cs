@@ -4,6 +4,7 @@ using System.Text.Json;
 using LeadAnalytics.Api.Adapters;
 using LeadAnalytics.Api.Models;
 using LeadAnalytics.Api.Service;
+using LeadAnalytics.Api.Service.Ai;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -32,12 +33,14 @@ public class KommoWebhookController(
     UnitService unitService,
     KommoAdapter kommoAdapter,
     KommoIngestionService ingestionService,
+    KommoStagesResolver stagesResolver,
     WebhookExecutionLogger execLogger,
     ILogger<KommoWebhookController> logger) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
     private readonly KommoAdapter _kommoAdapter = kommoAdapter;
     private readonly KommoIngestionService _ingestionService = ingestionService;
+    private readonly KommoStagesResolver _stagesResolver = stagesResolver;
     private readonly WebhookExecutionLogger _execLogger = execLogger;
     private readonly ILogger<KommoWebhookController> _logger = logger;
 
@@ -137,7 +140,13 @@ public class KommoWebhookController(
                 "🔀 Webhook Kommo eventos parseados | slug={Slug} total={Count} breakdown=[{Summary}]",
                 slug, events.Count, summaryStr);
 
-            var persisted = await _ingestionService.IngestAsync(events, unit, ct);
+            // Auto-resolve por nome (status_id → canônica) reusando o cache do KommoStagesResolver.
+            // Mesmo papel do override que o sync passa: resolve agendados quando a unidade não
+            // tem KommoStageMapJson configurado. O mapa explícito da unidade ainda vence (mesclado
+            // dentro do IngestAsync). Falha em silêncio: sem token/Kommo offline → mapa vazio.
+            var stageMapOverride = await _stagesResolver.GetCanonicalStageMapAsync(unit.Id, ct);
+
+            var persisted = await _ingestionService.IngestAsync(events, unit, ct, stageMapOverride);
 
             _logger.LogInformation(
                 "✅ Webhook Kommo processado | unidade={Slug} (tenant={Tenant}) account={Account} eventos={Count} leadsPersistidos={Persisted}",

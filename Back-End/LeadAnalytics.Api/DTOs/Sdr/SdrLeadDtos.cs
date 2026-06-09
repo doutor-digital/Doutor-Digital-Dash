@@ -48,15 +48,15 @@ public class SdrLeadResponseDto
     public string? Clinica { get; set; }
     public string DataOrigem { get; set; } = string.Empty;
     public string? DataModificacao { get; set; }
-    public string Source { get; set; } = "cloudia";
+    public string Source { get; set; } = "crm";
     public string Status { get; set; } = "pendente_revisao";
     public string? ReviewedAt { get; set; }
     public int? ReviewedByUserId { get; set; }
     public string? ReviewedByName { get; set; }
     public string? RejectionReason { get; set; }
-    public List<string> CloudiaFields { get; set; } = new();
-    public string? CloudiaReceivedAt { get; set; }
-    public string? CloudiaWebhookEvent { get; set; }
+    public List<string> SourceFields { get; set; } = new();
+    public string? SourceReceivedAt { get; set; }
+    public string? SourceWebhookEvent { get; set; }
     public int? UnitId { get; set; }
     public int? AttendantId { get; set; }
     public int? ImportBatchId { get; set; }

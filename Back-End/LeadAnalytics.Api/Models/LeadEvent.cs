@@ -1,7 +1,7 @@
 namespace LeadAnalytics.Api.Models;
 
 /// <summary>
-/// Evento normalizado de uma entidade vinda de um CRM externo (Kommo, Cloudia, …).
+/// Evento normalizado de uma entidade vinda de um CRM externo (Kommo).
 /// É a fronteira entre o formato cru do webhook e o domínio interno.
 /// </summary>
 public class LeadEvent

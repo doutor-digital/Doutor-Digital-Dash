@@ -11,9 +11,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// <summary>
 /// Endpoints para a tela "Revisar leads" do SDR.
 ///
-/// Modelo de dados: a Cloudia empurra leads via POST /webhooks/cloudia →
-/// LeadService.SaveLeadAsync persiste na tabela `leads`. Esta controller
-/// expõe esses leads no formato esperado pelo front (SdrLeadResponseDto)
+/// Modelo de dados: a Kommo empurra leads via webhook/sync → ingestão grava
+/// na tabela `leads`. Esta controller expõe esses leads no formato esperado
+/// pelo front (SdrLeadResponseDto)
 /// pra mergeagem com o store local de revisão, com filtros de unidade e
 /// janela de horário (turnos) para que cada secretária só puxe os leads
 /// que entraram no SEU turno na sua unidade.
@@ -221,7 +221,7 @@ public class SdrLeadsController : ControllerBase
             Nome = l.Name ?? string.Empty,
             Telefone = l.Phone ?? string.Empty,
             Tipo = "Cadastro",
-            Origem = l.Source ?? "Cloudia",
+            Origem = l.Source ?? "Kommo",
             Interacao = false,
             AgendouConsulta = l.HasAppointment,
             DataAgendamento = null,
@@ -231,11 +231,11 @@ public class SdrLeadsController : ControllerBase
             Clinica = l.Unit?.Name,
             DataOrigem = l.CreatedAt.ToString("o"),
             DataModificacao = l.UpdatedAt.ToString("o"),
-            Source = "cloudia",
+            Source = "crm",
             Status = "pendente_revisao",
-            CloudiaFields = cf,
-            CloudiaReceivedAt = l.CreatedAt.ToString("o"),
-            CloudiaWebhookEvent = "CUSTOMER_CREATED",
+            SourceFields = cf,
+            SourceReceivedAt = l.CreatedAt.ToString("o"),
+            SourceWebhookEvent = "CUSTOMER_CREATED",
             UnitId = l.UnitId,
             AttendantId = l.AttendantId,
             CreatedAt = l.CreatedAt.ToString("o"),

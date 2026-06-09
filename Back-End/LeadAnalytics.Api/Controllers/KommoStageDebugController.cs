@@ -37,6 +37,119 @@ public class KommoStageDebugController(
         return await BuildReportAsync(unitId, ct);
     }
 
+    /// <summary>
+    /// Identifica linhas de <c>LeadStageHistory</c> geradas pelo HEAL RETROATIVO do
+    /// sync com data errada (ChangedAt = DateTime.UtcNow do sync em vez do
+    /// updated_at real da Kommo). Critério: linha com <c>StageLabel</c> CANÔNICO
+    /// (não numérico) cuja existe linha mais antiga pro MESMO LeadId+StageId com
+    /// <c>StageLabel</c> CRU (só dígitos). Isso é assinatura inequívoca do heal —
+    /// o webhook real nunca produz essa sequência.
+    /// </summary>
+    [HttpGet("heal-cleanup/preview/{slug}")]
+    public async Task<IActionResult> HealCleanupPreview(string slug, CancellationToken ct)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Slug == slug, ct);
+        if (unit is null) return NotFound(new { error = $"unit não encontrada para slug '{slug}'" });
+
+        var (toDelete, byDay) = await FindHealCandidatesAsync(unit.Id, unit.ClinicId, ct);
+
+        return Ok(new
+        {
+            unit = new { unit.Id, unit.Slug, unit.Name },
+            candidatesCount = toDelete.Count,
+            byDay,
+            sample = toDelete.Take(30),
+            hint = $"POST /api/admin/kommo-stage-debug/heal-cleanup/{slug} pra deletar.",
+        });
+    }
+
+    [HttpPost("heal-cleanup/{slug}")]
+    public async Task<IActionResult> HealCleanup(string slug, CancellationToken ct)
+    {
+        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Slug == slug, ct);
+        if (unit is null) return NotFound(new { error = $"unit não encontrada para slug '{slug}'" });
+
+        var (candidates, _) = await FindHealCandidatesAsync(unit.Id, unit.ClinicId, ct);
+        if (candidates.Count == 0)
+            return Ok(new { unit.Slug, deleted = 0, message = "nada a deletar" });
+
+        var ids = candidates.Select(c => c.Id).ToHashSet();
+        var rows = await db.LeadStageHistories.Where(h => ids.Contains(h.Id)).ToListAsync(ct);
+        db.LeadStageHistories.RemoveRange(rows);
+        var deleted = await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("[heal-cleanup] unit={Slug} deletadas {Count} linhas", slug, rows.Count);
+        return Ok(new { unit.Slug, deleted = rows.Count, savedChanges = deleted });
+    }
+
+    /// <summary>
+    /// Carrega o histórico da unit dos últimos 30 dias e identifica linhas de heal:
+    /// canônica (StageLabel com letras/underscore) cujo (LeadId, StageId) tem uma
+    /// linha anterior com StageLabel cru (apenas dígitos). Tudo em memória pra
+    /// evitar regex no SQL — janela limitada a 30 dias mantém o custo baixo.
+    /// </summary>
+    private async Task<(List<HealCandidate> ToDelete, List<DayCount> ByDay)> FindHealCandidatesAsync(
+        int unitId, int clinicId, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        var history = await db.LeadStageHistories.AsNoTracking()
+            .Where(h => h.Lead.UnitId == unitId
+                     && h.Lead.TenantId == clinicId
+                     && h.ChangedAt >= since)
+            .Select(h => new HealCandidate
+            {
+                Id = h.Id,
+                LeadId = h.LeadId,
+                LeadName = h.Lead.Name,
+                StageId = h.StageId,
+                StageLabel = h.StageLabel,
+                ChangedAt = h.ChangedAt,
+            })
+            .ToListAsync(ct);
+
+        static bool IsRaw(string? s) => !string.IsNullOrEmpty(s) && s.All(char.IsDigit);
+        static bool IsCanonical(string? s) => !string.IsNullOrEmpty(s) && !IsRaw(s);
+
+        var byLead = history.GroupBy(h => h.LeadId);
+        var toDelete = new List<HealCandidate>();
+        foreach (var grp in byLead)
+        {
+            var list = grp.ToList();
+            foreach (var row in list.Where(r => IsCanonical(r.StageLabel)))
+            {
+                var hasRawBefore = list.Any(r =>
+                    r.StageId == row.StageId
+                    && r.ChangedAt < row.ChangedAt
+                    && IsRaw(r.StageLabel));
+                if (hasRawBefore) toDelete.Add(row);
+            }
+        }
+
+        var byDay = toDelete
+            .GroupBy(r => r.ChangedAt.Date)
+            .OrderByDescending(g => g.Key)
+            .Select(g => new DayCount { Day = g.Key.ToString("yyyy-MM-dd"), Count = g.Count() })
+            .ToList();
+
+        return (toDelete.OrderByDescending(r => r.ChangedAt).ToList(), byDay);
+    }
+
+    private class HealCandidate
+    {
+        public long Id { get; set; }
+        public int LeadId { get; set; }
+        public string? LeadName { get; set; }
+        public int StageId { get; set; }
+        public string? StageLabel { get; set; }
+        public DateTime ChangedAt { get; set; }
+    }
+
+    private class DayCount
+    {
+        public string Day { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
     private async Task<IActionResult> BuildReportAsync(int unitId, CancellationToken ct)
     {
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);

@@ -46,41 +46,71 @@ public class KommoStageDebugController(
     /// o webhook real nunca produz essa sequência.
     /// </summary>
     [HttpGet("heal-cleanup/preview/{slug}")]
-    public async Task<IActionResult> HealCleanupPreview(string slug, CancellationToken ct)
+    public async Task<IActionResult> HealCleanupPreview(
+        string slug,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct)
     {
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Slug == slug, ct);
         if (unit is null) return NotFound(new { error = $"unit não encontrada para slug '{slug}'" });
 
-        var (toDelete, byDay) = await FindHealCandidatesAsync(unit.Id, unit.ClinicId, ct);
+        var (toDelete, byDay) = await FindHealCandidatesAsync(
+            unit.Id, unit.ClinicId, AsUtc(from), AsUtc(to), ct);
 
         return Ok(new
         {
             unit = new { unit.Id, unit.Slug, unit.Name },
+            window = new { from = AsUtc(from), to = AsUtc(to) },
             candidatesCount = toDelete.Count,
             byDay,
             sample = toDelete.Take(30),
-            hint = $"POST /api/admin/kommo-stage-debug/heal-cleanup/{slug} pra deletar.",
+            hint = $"POST /api/admin/kommo-stage-debug/heal-cleanup/{slug}?from=...&to=... pra deletar SÓ a janela. "
+                 + "Webhook real fica de fora se a janela cobrir só os segundos do sync (ex.: 5 min). "
+                 + "Sem from/to, varre últimos 30d — pode incluir webhook real (false positive).",
         });
     }
 
     [HttpPost("heal-cleanup/{slug}")]
-    public async Task<IActionResult> HealCleanup(string slug, CancellationToken ct)
+    public async Task<IActionResult> HealCleanup(
+        string slug,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct)
     {
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Slug == slug, ct);
         if (unit is null) return NotFound(new { error = $"unit não encontrada para slug '{slug}'" });
 
-        var (candidates, _) = await FindHealCandidatesAsync(unit.Id, unit.ClinicId, ct);
+        // Exige janela explícita pra evitar deletar webhook real por acidente
+        // (o critério "tem cru anterior" pega webhook pós-fix se houve webhook pré-fix antes).
+        if (from is null || to is null)
+            return BadRequest(new
+            {
+                error = "Passa from + to (UTC) pra delimitar a janela do sync. "
+                      + "Ex.: ?from=2026-06-09T20:30:00Z&to=2026-06-09T20:45:00Z. "
+                      + "Use o preview pra descobrir a janela exata.",
+            });
+
+        var (candidates, _) = await FindHealCandidatesAsync(
+            unit.Id, unit.ClinicId, AsUtc(from), AsUtc(to), ct);
         if (candidates.Count == 0)
-            return Ok(new { unit.Slug, deleted = 0, message = "nada a deletar" });
+            return Ok(new { unit.Slug, deleted = 0, message = "nada a deletar na janela" });
 
         var ids = candidates.Select(c => c.Id).ToHashSet();
         var rows = await db.LeadStageHistories.Where(h => ids.Contains(h.Id)).ToListAsync(ct);
         db.LeadStageHistories.RemoveRange(rows);
         var deleted = await db.SaveChangesAsync(ct);
 
-        logger.LogInformation("[heal-cleanup] unit={Slug} deletadas {Count} linhas", slug, rows.Count);
-        return Ok(new { unit.Slug, deleted = rows.Count, savedChanges = deleted });
+        logger.LogInformation("[heal-cleanup] unit={Slug} janela=[{From},{To}] deletadas {Count} linhas",
+            slug, from, to, rows.Count);
+        return Ok(new { unit.Slug, window = new { from, to }, deleted = rows.Count, savedChanges = deleted });
     }
+
+    private static DateTime? AsUtc(DateTime? d) =>
+        d is null ? null :
+        d.Value.Kind == DateTimeKind.Utc ? d :
+        d.Value.Kind == DateTimeKind.Local ? d.Value.ToUniversalTime() :
+        DateTime.SpecifyKind(d.Value, DateTimeKind.Utc);
 
     /// <summary>
     /// Carrega o histórico da unit dos últimos 30 dias e identifica linhas de heal:
@@ -89,8 +119,10 @@ public class KommoStageDebugController(
     /// evitar regex no SQL — janela limitada a 30 dias mantém o custo baixo.
     /// </summary>
     private async Task<(List<HealCandidate> ToDelete, List<DayCount> ByDay)> FindHealCandidatesAsync(
-        int unitId, int clinicId, CancellationToken ct)
+        int unitId, int clinicId, DateTime? windowFrom, DateTime? windowTo, CancellationToken ct)
     {
+        // Sempre carrega 30d pra detectar "tem cru anterior" mesmo quando o cru não
+        // está na janela do sync. O filtro de janela é aplicado SÓ na linha-alvo.
         var since = DateTime.UtcNow.AddDays(-30);
         var history = await db.LeadStageHistories.AsNoTracking()
             .Where(h => h.Lead.UnitId == unitId
@@ -117,6 +149,10 @@ public class KommoStageDebugController(
             var list = grp.ToList();
             foreach (var row in list.Where(r => IsCanonical(r.StageLabel)))
             {
+                // Restringe pela janela do sync — webhook real fica fora.
+                if (windowFrom.HasValue && row.ChangedAt < windowFrom.Value) continue;
+                if (windowTo.HasValue && row.ChangedAt > windowTo.Value) continue;
+
                 var hasRawBefore = list.Any(r =>
                     r.StageId == row.StageId
                     && r.ChangedAt < row.ChangedAt

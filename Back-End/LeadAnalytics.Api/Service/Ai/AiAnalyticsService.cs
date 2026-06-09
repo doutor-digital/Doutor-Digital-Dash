@@ -267,6 +267,43 @@ public class AiAnalyticsService(
             .Take(5)
             .ToListAsync(ct);
 
+        // Horário/dia de chegada — alimenta o preset "Melhores horários".
+        // (CreatedAt está em UTC; o relatório usa hora local BRT = UTC-3.)
+        var rawTimes = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= from && l.CreatedAt <= to)
+            .Select(l => l.CreatedAt)
+            .ToListAsync(ct);
+        var brOffset = TimeSpan.FromHours(-3);
+        var byHour = rawTimes.GroupBy(t => t.Add(brOffset).Hour)
+            .Select(g => new { hour = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .Take(5)
+            .ToList();
+        var byWeekday = rawTimes.GroupBy(t => (int)t.Add(brOffset).DayOfWeek)
+            .Select(g => new { weekday = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .ToList();
+
+        // Tempo de conversão (CreatedAt → ConvertedAt) — alimenta o preset
+        // "Quem converteu mais rápido".
+        var converted = await db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+                        && l.CreatedAt >= from && l.CreatedAt <= to
+                        && l.ConvertedAt != null)
+            .Select(l => new { l.Name, l.Source, l.CreatedAt, Converted = l.ConvertedAt!.Value })
+            .ToListAsync(ct);
+        var fastest = converted
+            .Select(l => new { l.Name, l.Source, Hours = (l.Converted - l.CreatedAt).TotalHours })
+            .Where(x => x.Hours >= 0)
+            .OrderBy(x => x.Hours)
+            .Take(10)
+            .ToList();
+
+        // Atendente "bombando" — vem do custom field "Responsável agendamento"
+        // (nomes reais), não do AttendantId numérico.
+        var cross = await kpiService.CustomFieldsCrossAnalysisAsync(tenantId, unitId, from, to, 8, ct);
+
         var sb = new StringBuilder();
         sb.AppendLine($"## Números rápidos da unidade {unit.Name}");
         sb.AppendLine($"- Total de leads no período: {total}");
@@ -279,6 +316,32 @@ public class AiAnalyticsService(
         {
             sb.AppendLine("- Top origens:");
             foreach (var s in topSources) sb.AppendLine($"  - {s.src}: {s.count}");
+        }
+        if (byHour.Count > 0)
+        {
+            sb.AppendLine("- Melhores horários de chegada de leads (hora BRT, top 5):");
+            foreach (var h in byHour) sb.AppendLine($"  - {h.hour:00}h: {h.count} leads");
+        }
+        if (byWeekday.Count > 0)
+        {
+            var weekdayNames = new[] { "Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado" };
+            sb.AppendLine("- Por dia da semana:");
+            foreach (var w in byWeekday) sb.AppendLine($"  - {weekdayNames[w.weekday]}: {w.count} leads");
+        }
+        if (cross.ResponsavelAgendamento.Count > 0)
+        {
+            sb.AppendLine("- Atendentes (Responsável pelo agendamento, por volume):");
+            foreach (var r in cross.ResponsavelAgendamento) sb.AppendLine($"  - {r.Value}: {r.Count}");
+        }
+        if (fastest.Count > 0)
+        {
+            sb.AppendLine("- Quem converteu mais rápido (entrada → conversão, top 10):");
+            foreach (var f in fastest)
+                sb.AppendLine($"  - {f.Name} ({f.Source}): {f.Hours.ToString("F1", CultureInfo.InvariantCulture)}h");
+        }
+        else
+        {
+            sb.AppendLine("- Tempo de conversão: nenhum lead com data de conversão registrada no período.");
         }
         return sb.ToString();
     }

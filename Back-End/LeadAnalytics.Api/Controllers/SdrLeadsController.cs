@@ -44,8 +44,8 @@ public class SdrLeadsController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/sdr/leads/sync-from-cloudia
-    /// Lê leads gravados pelo webhook Cloudia, filtrando por unidade,
+    /// POST /api/sdr/leads/sync-from-leads
+    /// Lê leads gravados pelo webhook/sync da Kommo, filtrando por unidade,
     /// data e janela de horário. Devolve no formato SdrLeadResponseDto
     /// para o front mergiar no localStorage.
     ///

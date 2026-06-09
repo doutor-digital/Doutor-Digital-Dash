@@ -196,6 +196,7 @@ builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPreenchimentoPend
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasadoJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoSyncPeriodicJob>();
+builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoNightlySyncJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<KommoAdapter>();

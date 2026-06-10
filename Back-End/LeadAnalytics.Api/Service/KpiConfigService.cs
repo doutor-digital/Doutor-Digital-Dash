@@ -156,7 +156,6 @@ public class KpiConfigService(AppDbContext db)
 
                 var count = await _db.LeadStageHistories.AsNoTracking()
                     .Where(h => ids.Contains(h.StageId)
-                        && h.EntrySource != LeadStageHistory.SourceLegacy
                         && h.ChangedAt >= from && h.ChangedAt <= to)
                     .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
                     .Distinct()
@@ -238,7 +237,6 @@ public class KpiConfigService(AppDbContext db)
 
             var leadIds = await _db.LeadStageHistories.AsNoTracking()
                 .Where(h => ids.Contains(h.StageId)
-                    && h.EntrySource != LeadStageHistory.SourceLegacy
                     && h.ChangedAt >= from && h.ChangedAt <= to)
                 .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
                 .Distinct()
@@ -471,7 +469,6 @@ public class KpiConfigService(AppDbContext db)
         var agStages = new[] { LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento };
         var agHist = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
-                && h.EntrySource != LeadStageHistory.SourceLegacy
                 && h.ChangedAt >= from && h.ChangedAt <= to
                 && h.Lead.TenantId == clinicId
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))

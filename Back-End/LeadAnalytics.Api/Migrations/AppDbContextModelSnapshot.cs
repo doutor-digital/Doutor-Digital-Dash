@@ -1311,16 +1311,6 @@ namespace LeadAnalytics.Api.Migrations
                     b.Property<DateTime>("ChangedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("EntrySource")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasDefaultValue("webhook");
-
-                    b.Property<long?>("KommoEventId")
-                        .HasColumnType("bigint");
-
                     b.Property<int>("LeadId")
                         .HasColumnType("integer");
 
@@ -1334,12 +1324,6 @@ namespace LeadAnalytics.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("LeadId");
-
-                    b.HasIndex("LeadId", "KommoEventId")
-                        .IsUnique()
-                        .HasFilter("\"KommoEventId\" IS NOT NULL");
-
-                    b.HasIndex("StageLabel", "ChangedAt");
 
                     b.ToTable("lead_stage_histories", (string)null);
                 });

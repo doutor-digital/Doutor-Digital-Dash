@@ -322,30 +322,6 @@ public class KommoApiClient
     }
 
     /// <summary>
-    /// Lista eventos de MUDANÇA DE ETAPA (<c>lead_status_changed</c>) da conta, paginado.
-    /// É a fonte de verdade pra "quando o lead entrou na etapa": cada evento traz o
-    /// <c>created_at</c> REAL da transição e o <c>value_after.lead_status.id</c> (status_id
-    /// de destino). Usado pelo backfill (<see cref="KommoStageHistoryBackfillService"/>) pra
-    /// reconstruir o <c>LeadStageHistory</c> com datas corretas — diferente do sync, que só
-    /// tem o <c>updated_at</c> (última modificação qualquer). Limite máx. da Kommo: 100/página.
-    /// </summary>
-    public async Task<KommoEventsPageResponse?> GetLeadStatusEventsPageAsync(
-        string subdomainOrHost, string token, int page, int limit, long? createdFromUnix, CancellationToken ct)
-    {
-        var qs = new List<string>
-        {
-            "filter[type][]=lead_status_changed",
-            "filter[entity]=lead",
-            $"limit={limit}",
-            $"page={page}",
-            "order[created_at]=desc",
-        };
-        if (createdFromUnix is long f) qs.Add($"filter[created_at][from]={f}");
-        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/events?{string.Join("&", qs)}";
-        return await GetAsync<KommoEventsPageResponse>(url, token, ct);
-    }
-
-    /// <summary>
     /// Tipos de nota que correspondem a mensagens de chat (WhatsApp, Telegram, etc).
     /// Lista vem da doc da Kommo — qualquer um desses tipos contém texto em
     /// <c>params.text</c> e marca de direção em <c>params.service</c>.
@@ -673,42 +649,4 @@ public class KommoApiUser
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("email")] public string? Email { get; set; }
-}
-
-// ─── Events (lead_status_changed) ─────────────────────────────────────────────
-
-public class KommoEventsPageResponse
-{
-    [JsonPropertyName("_page")] public int Page { get; set; }
-    [JsonPropertyName("_links")] public KommoLinks? Links { get; set; }
-    [JsonPropertyName("_embedded")] public KommoEventsEmbedded? Embedded { get; set; }
-}
-
-public class KommoEventsEmbedded
-{
-    [JsonPropertyName("events")] public List<KommoApiEvent>? Events { get; set; }
-}
-
-public class KommoApiEvent
-{
-    [JsonPropertyName("id")] public long Id { get; set; }
-    [JsonPropertyName("type")] public string? Type { get; set; }
-    /// <summary>Id do lead (a entidade do evento).</summary>
-    [JsonPropertyName("entity_id")] public long EntityId { get; set; }
-    [JsonPropertyName("entity_type")] public string? EntityType { get; set; }
-    /// <summary>Instante REAL da transição (unix segundos, UTC).</summary>
-    [JsonPropertyName("created_at")] public long CreatedAt { get; set; }
-    /// <summary>Estado APÓS a mudança — contém o lead_status (status_id de destino).</summary>
-    [JsonPropertyName("value_after")] public List<KommoEventValue>? ValueAfter { get; set; }
-}
-
-public class KommoEventValue
-{
-    [JsonPropertyName("lead_status")] public KommoEventLeadStatus? LeadStatus { get; set; }
-}
-
-public class KommoEventLeadStatus
-{
-    [JsonPropertyName("id")] public long Id { get; set; }
-    [JsonPropertyName("pipeline_id")] public long? PipelineId { get; set; }
 }

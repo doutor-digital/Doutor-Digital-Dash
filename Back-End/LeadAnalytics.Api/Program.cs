@@ -197,14 +197,12 @@ builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasado
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoSyncPeriodicJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoNightlySyncJob>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoStageBackfillJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
 builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
 builder.Services.AddScoped<KommoIngestionService>();
 builder.Services.AddScoped<KommoSyncService>();
-builder.Services.AddScoped<KommoStageHistoryBackfillService>();
 builder.Services.AddScoped<KommoConversationsImporter>();
 builder.Services.AddScoped<AgentIngestionService>();
 builder.Services.AddHttpClient<KommoApiClient>(c =>

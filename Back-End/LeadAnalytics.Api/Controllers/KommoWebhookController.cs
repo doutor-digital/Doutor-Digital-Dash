@@ -146,9 +146,7 @@ public class KommoWebhookController(
             // dentro do IngestAsync). Falha em silêncio: sem token/Kommo offline → mapa vazio.
             var stageMapOverride = await _stagesResolver.GetCanonicalStageMapAsync(unit.Id, ct);
 
-            // recordStageHistory: true — o webhook ao vivo é a única fonte (junto do backfill
-            // de eventos) que sabe o instante real da transição de etapa. O sync REST passa false.
-            var persisted = await _ingestionService.IngestAsync(events, unit, ct, stageMapOverride, recordStageHistory: true);
+            var persisted = await _ingestionService.IngestAsync(events, unit, ct, stageMapOverride);
 
             _logger.LogInformation(
                 "✅ Webhook Kommo processado | unidade={Slug} (tenant={Tenant}) account={Account} eventos={Count} leadsPersistidos={Persisted}",

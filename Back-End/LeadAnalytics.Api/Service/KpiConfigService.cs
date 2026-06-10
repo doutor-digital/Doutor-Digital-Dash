@@ -394,13 +394,16 @@ public class KpiConfigService(AppDbContext db)
                 n => n.Contains("valor") && n.Contains("tratamento"));
             var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
 
-            // Campo "Tipo" da Kommo (resgate/ligação/mensagem). Define o card Resgate:
-            // a coluna LeadType vem vazia nessas unidades, então a classificação real
-            // mora nesse custom field. Se não estiver mapeado, casa pelo nome "tipo".
-            var tipo = ExtractField(cf, profile.TipoFieldId, n => n == "tipo" || n.Contains("tipo"))?.Trim();
+            // Resgate = lead com "Tentativas de resgastes" preenchido (multiselect das
+            // tentativas de recuperação). É o sinal REAL de resgate nessas unidades — a coluna
+            // LeadType vem vazia e o antigo match por "tipo" colidia com "Tipo de agendamento"/
+            // "Tipo de fechamento". Casa por nome ("tentativ"+"resgat").
+            var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resgat"))?.Trim();
+            var hasResgate = !string.IsNullOrWhiteSpace(tentativasResgate);
+            // "Tipo de resgaste" = canal da tentativa (Ligação/Disparo/Mensagem) — só pra quebra do card.
+            var tipo = ExtractField(cf, null, n => n.Contains("tipo") && n.Contains("resgat"))?.Trim();
             var hasTipo = !string.IsNullOrWhiteSpace(tipo);
-            // Resgate = tem o campo Tipo preenchido (qualquer canal) OU LeadType="resgate" (legado).
-            var leadIsResgate = hasTipo || IsResgate(l.LeadType);
+            var leadIsResgate = hasResgate || IsResgate(l.LeadType);
             var leadIsCadastro = !leadIsResgate && IsCadastro(l.LeadType);
 
             var stage = l.CurrentStage ?? "";
@@ -431,7 +434,7 @@ public class KpiConfigService(AppDbContext db)
                 resgateTotal++;
                 // Quebra por valor do campo "Tipo" (resgate/ligação/mensagem); cai pro
                 // LeadType só quando o custom field não existe/está vazio.
-                var tipoLabel = hasTipo ? tipo! : (l.LeadType?.Trim() ?? "—");
+                var tipoLabel = hasTipo ? tipo! : (hasResgate ? tentativasResgate! : (l.LeadType?.Trim() ?? "—"));
                 resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
                 resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
             }
@@ -487,8 +490,8 @@ public class KpiConfigService(AppDbContext db)
             var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
                        : !string.IsNullOrWhiteSpace(h.Source) ? h.Source!.Trim()
                        : "—";
-            var tipo = ExtractField(cf, profile.TipoFieldId, n => n == "tipo" || n.Contains("tipo"))?.Trim();
-            var leadIsResgate = !string.IsNullOrWhiteSpace(tipo) || IsResgate(h.LeadType);
+            var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resgat"))?.Trim();
+            var leadIsResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(h.LeadType);
             var leadIsCadastro = !leadIsResgate && IsCadastro(h.LeadType);
 
             ag.Total++;

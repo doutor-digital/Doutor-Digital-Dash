@@ -10,19 +10,19 @@ namespace LeadAnalytics.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "EntrySource",
-                table: "lead_stage_histories",
-                type: "character varying(16)",
-                maxLength: 16,
-                nullable: false,
-                defaultValue: "webhook");
-
-            // Toda linha que já existe foi gravada pelo sync/heal com ChangedAt = updated_at
-            // (NÃO é a data de entrada na etapa) — marca como 'legacy' pra sair das contagens
-            // por data. O backfill da API de eventos repõe as datas reais como 'events_api'.
+            // IMPORTANTE: operações SÓ DE METADADOS (instantâneas), pra não estourar o
+            // timeout de comando do Migrate() no boot numa tabela grande.
+            //
+            // No Postgres 11+, ADD COLUMN com default CONSTANTE é metadado (não reescreve
+            // linha por linha): adicionamos com default 'legacy' — assim TODA linha existente
+            // passa a ler 'legacy' instantaneamente (eram gravadas pelo sync/heal com
+            // ChangedAt = updated_at, que não é a data de entrada na etapa). Em seguida
+            // trocamos o default pra 'webhook' (só afeta INSERTs futuros; não toca linhas
+            // existentes). Evita o UPDATE de tabela inteira que falhava no deploy.
             migrationBuilder.Sql(
-                "UPDATE lead_stage_histories SET \"EntrySource\" = 'legacy';");
+                "ALTER TABLE lead_stage_histories ADD COLUMN \"EntrySource\" character varying(16) NOT NULL DEFAULT 'legacy';");
+            migrationBuilder.Sql(
+                "ALTER TABLE lead_stage_histories ALTER COLUMN \"EntrySource\" SET DEFAULT 'webhook';");
 
             migrationBuilder.AddColumn<long>(
                 name: "KommoEventId",
@@ -30,6 +30,8 @@ namespace LeadAnalytics.Api.Migrations
                 type: "bigint",
                 nullable: true);
 
+            // Índice parcial sobre KommoEventId (todas NULL agora) → cobre 0 linhas → criação
+            // instantânea, independente do tamanho da tabela. Dedup do backfill.
             migrationBuilder.CreateIndex(
                 name: "IX_lead_stage_histories_LeadId_KommoEventId",
                 table: "lead_stage_histories",
@@ -37,10 +39,10 @@ namespace LeadAnalytics.Api.Migrations
                 unique: true,
                 filter: "\"KommoEventId\" IS NOT NULL");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_lead_stage_histories_StageLabel_ChangedAt",
-                table: "lead_stage_histories",
-                columns: new[] { "StageLabel", "ChangedAt" });
+            // (StageLabel, ChangedAt) seria ótimo pro KPI por dia, mas construir índice sobre
+            // a tabela inteira no boot pode estourar o timeout. Fica pra um índice CONCURRENTLY
+            // separado, fora da migration transacional. Sem ele não há regressão: a query já
+            // fazia esse scan antes.
         }
 
         /// <inheritdoc />
@@ -48,10 +50,6 @@ namespace LeadAnalytics.Api.Migrations
         {
             migrationBuilder.DropIndex(
                 name: "IX_lead_stage_histories_LeadId_KommoEventId",
-                table: "lead_stage_histories");
-
-            migrationBuilder.DropIndex(
-                name: "IX_lead_stage_histories_StageLabel_ChangedAt",
                 table: "lead_stage_histories");
 
             migrationBuilder.DropColumn(

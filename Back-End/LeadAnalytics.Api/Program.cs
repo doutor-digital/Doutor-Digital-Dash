@@ -258,6 +258,10 @@ using (var scope = app.Services.CreateScope())
     var startupLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
+        // Timeout generoso: o default (30s) estoura em migrations que mexem em tabelas
+        // grandes (ADD COLUMN com rewrite, CREATE INDEX, UPDATE em massa) e a exceção
+        // é engolida abaixo → app sobe com schema incompleto → 500 nas queries novas.
+        db.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
         db.Database.Migrate();
         startupLogger.LogInformation("Migrations aplicadas com sucesso no startup.");
     }

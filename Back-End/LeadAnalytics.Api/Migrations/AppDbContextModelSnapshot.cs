@@ -1339,8 +1339,6 @@ namespace LeadAnalytics.Api.Migrations
                         .IsUnique()
                         .HasFilter("\"KommoEventId\" IS NOT NULL");
 
-                    b.HasIndex("StageLabel", "ChangedAt");
-
                     b.ToTable("lead_stage_histories", (string)null);
                 });
 

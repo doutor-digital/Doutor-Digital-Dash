@@ -189,9 +189,6 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(e => new { e.LeadId, e.KommoEventId })
                   .IsUnique()
                   .HasFilter("\"KommoEventId\" IS NOT NULL");
-
-            // Consultas por entrada na etapa (agendados no dia) filtram por StageLabel + ChangedAt.
-            entity.HasIndex(e => new { e.StageLabel, e.ChangedAt });
         });
 
         // ─── LeadConversation ────────────────────────────────────

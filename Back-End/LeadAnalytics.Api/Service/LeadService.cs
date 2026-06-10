@@ -1898,8 +1898,13 @@ public class LeadService(
             return $"{year}-W{week:D2}";
         }
 
+        // "Dia comercial": o dia da clínica vai das 19h às 19h (lead após 19h conta como o
+        // dia seguinte). CreatedAt é UTC; BRT = UTC-3 e o corte é 19h, então o relógio
+        // comercial = UTC+2h (= BRT + 5h). Usado nas agregações por dia/semana.
+        static DateTime BizClock(DateTime utc) => utc.AddHours(2);
+
         var leadsPorSemana = dateStageRows
-            .GroupBy(r => WeekKey(r.CreatedAt))
+            .GroupBy(r => WeekKey(BizClock(r.CreatedAt)))
             .OrderBy(g => g.Key)
             .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
             .ToList();
@@ -1908,21 +1913,21 @@ public class LeadService(
             .Where(r => r.CurrentStage == LeadStages.EmTratamento
                      || r.CurrentStage == LeadStages.FechouTratamento
                      || r.CurrentStage == LeadStages.NaoFechouTratamento)
-            .GroupBy(r => WeekKey(r.CreatedAt))
+            .GroupBy(r => WeekKey(BizClock(r.CreatedAt)))
             .OrderBy(g => g.Key)
             .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
             .ToList();
 
         var tratamentosPorSemana = dateStageRows
             .Where(r => r.CurrentStage == LeadStages.FechouTratamento)
-            .GroupBy(r => WeekKey(r.CreatedAt))
+            .GroupBy(r => WeekKey(BizClock(r.CreatedAt)))
             .OrderBy(g => g.Key)
             .Select(g => new PeriodoQtdDto { Periodo = g.Key, Quantidade = g.Count() })
             .ToList();
 
-        // Dia da semana: .NET DayOfWeek = 0(Dom)..6(Sab) → mapear para 1..7.
+        // Dia da semana: .NET DayOfWeek = 0(Dom)..6(Sab) → mapear para 1..7. Pelo dia comercial.
         var dowCounts = dateStageRows
-            .GroupBy(r => (int)r.CreatedAt.DayOfWeek)
+            .GroupBy(r => (int)BizClock(r.CreatedAt).DayOfWeek)
             .ToDictionary(g => g.Key, g => g.Count());
         var leadsPorDiaSemana = Enumerable.Range(0, 7)
             .Select(d => new DiaSemanaQtdDto

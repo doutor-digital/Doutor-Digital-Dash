@@ -242,6 +242,9 @@ public class KommoSyncService
             });
         }
 
+        // recordStageHistory omitido (=false): o sync só conhece updated_at, não a data de
+        // entrada na etapa. Atualiza CurrentStage, mas não crava histórico datado — isso é do
+        // webhook ao vivo e do backfill via API de eventos.
         result.LeadsPersisted = await _ingestion.IngestAsync(events, unit, ct, stageNameMap);
 
         sw.Stop();

@@ -180,6 +180,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(e => e.Lead)
                   .WithMany(l => l.StageHistory)
                   .HasForeignKey(e => e.LeadId);
+
+            entity.Property(e => e.EntrySource).HasMaxLength(16).HasDefaultValue(LeadStageHistory.SourceWebhook);
+
+            // Dedup do backfill: o mesmo evento da Kommo nunca vira duas linhas pro mesmo lead.
+            // Escopado por LeadId porque o id de evento é único POR CONTA Kommo (unidades
+            // diferentes poderiam repetir o valor). Índice parcial — webhook/legado têm null.
+            entity.HasIndex(e => new { e.LeadId, e.KommoEventId })
+                  .IsUnique()
+                  .HasFilter("\"KommoEventId\" IS NOT NULL");
+
+            // Consultas por entrada na etapa (agendados no dia) filtram por StageLabel + ChangedAt.
+            entity.HasIndex(e => new { e.StageLabel, e.ChangedAt });
         });
 
         // ─── LeadConversation ────────────────────────────────────

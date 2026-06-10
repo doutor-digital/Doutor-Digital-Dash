@@ -1841,13 +1841,20 @@ public class LeadService(
         // do lead — inclui leads antigos agendados dentro do período. Mesmos filtros
         // (scopeQ). Sobrescreve a contagem cohort-by-creation do funil logo abaixo.
         var agStages = new[] { LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento };
+        // EntrySource != legacy: linhas legadas têm ChangedAt = updated_at (não é a data de
+        // entrada na etapa) — eram a causa do "211 no dia". Contamos só webhook/eventos.
+        // Dedup por LeadId (não por {Id,Type}): um lead que reentra ou cujo Type mudou conta uma vez.
         var agEntryRows = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
+                     && h.EntrySource != LeadStageHistory.SourceLegacy
                      && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc)
             .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
-            .Distinct()
             .ToListAsync(ct);
-        var agByType = agEntryRows.GroupBy(x => x.Type).ToDictionary(g => g.Key, g => g.Count());
+        var agByType = agEntryRows
+            .GroupBy(x => x.Id)
+            .Select(g => g.First().Type)
+            .GroupBy(t => t)
+            .ToDictionary(g => g.Key, g => g.Count());
         var agendadosTotal = agByType.Values.Sum();
 
         FunnelGroupDto BuildFunnel(string? type)

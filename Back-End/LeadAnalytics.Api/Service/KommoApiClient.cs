@@ -322,6 +322,27 @@ public class KommoApiClient
     }
 
     /// <summary>
+    /// Lista eventos de MUDANÇA de um custom field específico (<c>custom_field_{fieldId}_value_changed</c>),
+    /// paginado. Cada evento traz o <c>created_at</c> REAL da alteração e o novo valor
+    /// (<c>value_after.custom_field_value.text</c>). Usado pra contar "Tentativas de resgastes"
+    /// pela data em que o campo foi preenchido (e não pela criação do lead).
+    /// </summary>
+    public async Task<KommoEventsPageResponse?> GetCustomFieldChangeEventsPageAsync(
+        string subdomainOrHost, string token, long fieldId, int page, int limit, CancellationToken ct)
+    {
+        var qs = new List<string>
+        {
+            $"filter[type][]=custom_field_{fieldId}_value_changed",
+            "filter[entity]=lead",
+            $"limit={limit}",
+            $"page={page}",
+            "order[created_at]=desc",
+        };
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/events?{string.Join("&", qs)}";
+        return await GetAsync<KommoEventsPageResponse>(url, token, ct);
+    }
+
+    /// <summary>
     /// Lista eventos de MUDANÇA DE ETAPA (<c>lead_status_changed</c>) da conta, paginado.
     /// É a fonte de verdade pra "quando o lead entrou na etapa": cada evento traz o
     /// <c>created_at</c> REAL da transição e o <c>value_after.lead_status.id</c> (status_id
@@ -708,6 +729,14 @@ public class KommoApiEvent
 public class KommoEventValue
 {
     [JsonPropertyName("lead_status")] public KommoEventLeadStatus? LeadStatus { get; set; }
+    [JsonPropertyName("custom_field_value")] public KommoEventCustomFieldValue? CustomFieldValue { get; set; }
+}
+
+public class KommoEventCustomFieldValue
+{
+    [JsonPropertyName("field_id")] public long FieldId { get; set; }
+    [JsonPropertyName("text")] public string? Text { get; set; }
+    [JsonPropertyName("enum_id")] public long? EnumId { get; set; }
 }
 
 public class KommoEventLeadStatus

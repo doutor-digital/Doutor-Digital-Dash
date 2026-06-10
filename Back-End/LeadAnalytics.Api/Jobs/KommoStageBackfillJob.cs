@@ -51,6 +51,7 @@ public class KommoStageBackfillJob : BackgroundService
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var backfill = scope.ServiceProvider.GetRequiredService<KommoStageHistoryBackfillService>();
+        var resgateBackfill = scope.ServiceProvider.GetRequiredService<ResgateAttemptBackfillService>();
 
         var unitIds = await db.Units.AsNoTracking()
             .Where(u => u.IsActive
@@ -86,6 +87,16 @@ public class KommoStageBackfillJob : BackgroundService
                     _logger.LogInformation(
                         "[stage-backfill] unit={Unit} ok: {Inserted} novas linhas de {Scanned} eventos (capTeto={Cap})",
                         id, r.Inserted, r.EventsScanned, r.HitCap);
+
+                // Tentativas de resgate (mudança do campo "Tentativas de resgastes") — data real.
+                var rr = await resgateBackfill.BackfillUnitAsync(unit, MaxPagesPerUnit, ct);
+                totalInserted += rr.Inserted;
+                if (rr.Error is not null)
+                    _logger.LogWarning("[resgate-backfill] unit={Unit} falhou: {Err}", id, rr.Error);
+                else
+                    _logger.LogInformation(
+                        "[resgate-backfill] unit={Unit} ok: {Inserted} tentativas de {Scanned} eventos (capTeto={Cap})",
+                        id, rr.Inserted, rr.EventsScanned, rr.HitCap);
             }
             catch (Exception ex)
             {

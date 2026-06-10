@@ -35,4 +35,15 @@ public class RecoveryAttempt
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Id do evento de mudança de campo na Kommo (ULID) quando a tentativa veio do backfill
+    /// do campo "Tentativas de resgastes". Chave de dedup: reexecutar não duplica. Null p/ manual.
+    /// </summary>
+    [Column("kommo_event_id")]
+    public string? KommoEventId { get; set; }
+
+    /// <summary>Procedência: "events_api" (backfill do campo) | "manual". Define a data confiável.</summary>
+    [Column("entry_source")]
+    public string EntrySource { get; set; } = "manual";
 }

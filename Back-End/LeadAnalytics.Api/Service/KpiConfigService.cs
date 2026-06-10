@@ -400,9 +400,6 @@ public class KpiConfigService(AppDbContext db)
             // "Tipo de fechamento". Casa por nome ("tentativ"+"resgat").
             var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resgat"))?.Trim();
             var hasResgate = !string.IsNullOrWhiteSpace(tentativasResgate);
-            // "Tipo de resgaste" = canal da tentativa (Ligação/Disparo/Mensagem) — só pra quebra do card.
-            var tipo = ExtractField(cf, null, n => n.Contains("tipo") && n.Contains("resgat"))?.Trim();
-            var hasTipo = !string.IsNullOrWhiteSpace(tipo);
             var leadIsResgate = hasResgate || IsResgate(l.LeadType);
             var leadIsCadastro = !leadIsResgate && IsCadastro(l.LeadType);
 
@@ -428,16 +425,10 @@ public class KpiConfigService(AppDbContext db)
                 cadByOrigem[origem] = row;
             }
 
-            // ── Resgate
-            if (leadIsResgate)
-            {
-                resgateTotal++;
-                // Quebra por valor do campo "Tipo" (resgate/ligação/mensagem); cai pro
-                // LeadType só quando o custom field não existe/está vazio.
-                var tipoLabel = hasTipo ? tipo! : (hasResgate ? tentativasResgate! : (l.LeadType?.Trim() ?? "—"));
-                resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
-                resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
-            }
+            // ── Resgate: NÃO conta aqui. Resgate é lead velho recuperado, então conta pela
+            // DATA DO PREENCHIMENTO de "Tentativas de resgastes" (recovery_attempts, via backfill
+            // de eventos), não por criação do lead. Cálculo logo após o loop. (hasResgate acima
+            // ainda serve pra excluir esses leads do cadastro.)
 
             // ── Tratamentos
             if (isTratamento)
@@ -521,6 +512,29 @@ public class KpiConfigService(AppDbContext db)
             d.OrderByDescending(kv => kv.Value).Take(n)
              .Select(kv => new DTOs.Dashboard.ValueCountDto { Value = kv.Key, Count = kv.Value })
              .ToList();
+
+        // ── Resgate: por DATA DO PREENCHIMENTO de "Tentativas de resgastes" (recovery_attempts
+        //    via backfill de eventos), e não por criação do lead — resgate é lead velho
+        //    recuperado. Conta lead DISTINTO no período. Quebra por valor da tentativa (Outcome)
+        //    e por origem (custom field/Source do lead).
+        var resgateRows = await _db.RecoveryAttempts.AsNoTracking()
+            .Where(r => r.EntrySource == "events_api"
+                && r.CreatedAt >= from && r.CreatedAt <= to
+                && r.Lead!.TenantId == clinicId
+                && (!unitId.HasValue || r.Lead.UnitId == unitId.Value))
+            .Select(r => new { r.LeadId, r.Outcome, r.Lead!.Source, r.Lead.CustomFieldsJson })
+            .ToListAsync(ct);
+        foreach (var grp in resgateRows.GroupBy(x => x.LeadId))
+        {
+            var x = grp.OrderBy(_ => 0).First();
+            resgateTotal++;
+            var tipoLabel = !string.IsNullOrWhiteSpace(x.Outcome) ? x.Outcome!.Trim() : "—";
+            resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
+            var oc = ExtractField(x.CustomFieldsJson, profile.OrigemFieldId, n => n.Contains("origem"));
+            var origemR = !string.IsNullOrWhiteSpace(oc) ? oc!.Trim()
+                        : !string.IsNullOrWhiteSpace(x.Source) ? x.Source!.Trim() : "—";
+            resgateOrigens[origemR] = resgateOrigens.GetValueOrDefault(origemR) + 1;
+        }
 
         var resgate = new DTOs.Dashboard.TipoOrigemBreakdownDto
         {

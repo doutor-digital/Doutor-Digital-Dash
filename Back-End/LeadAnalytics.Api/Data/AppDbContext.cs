@@ -225,6 +225,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             entity.HasIndex(e => new { e.LeadId, e.CreatedAt });
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+
+            entity.Property(e => e.KommoEventId).HasMaxLength(32);
+            entity.Property(e => e.EntrySource).HasMaxLength(16).HasDefaultValue("manual");
+            // Dedup do backfill: o mesmo evento de mudança do campo não vira duas tentativas.
+            entity.HasIndex(e => new { e.LeadId, e.KommoEventId })
+                  .IsUnique()
+                  .HasFilter("\"kommo_event_id\" IS NOT NULL");
         });
 
         // ─── LeadPaymentReceipt ──────────────────────────────────

@@ -701,6 +701,8 @@ public class KommoApiEvent
     [JsonPropertyName("created_at")] public long CreatedAt { get; set; }
     /// <summary>Estado APÓS a mudança — contém o lead_status (status_id de destino).</summary>
     [JsonPropertyName("value_after")] public List<KommoEventValue>? ValueAfter { get; set; }
+    /// <summary>Estado ANTES da mudança — usado pra ignorar movimentos intra-agendado (04↔05).</summary>
+    [JsonPropertyName("value_before")] public List<KommoEventValue>? ValueBefore { get; set; }
 }
 
 public class KommoEventValue

@@ -85,6 +85,16 @@ public class KommoStageHistoryBackfillService(
                 var label = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(name));
                 if (label is null) continue; // etapa fora do funil canônico — não rastreamos
 
+                // Ignora movimento ENTRE etapas de agendado (04↔05): é reclassificação
+                // (com/sem pagamento), não um agendamento novo. Vê a etapa de ORIGEM do evento.
+                var beforeId = ev.ValueBefore?.FirstOrDefault()?.LeadStatus?.Id;
+                if (beforeId is long bid)
+                {
+                    var beforeName = stageNameById.TryGetValue((int)bid, out var bn) ? bn : null;
+                    var beforeLabel = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(beforeName));
+                    if (LeadStages.IsScheduled(label) && LeadStages.IsScheduled(beforeLabel)) continue;
+                }
+
                 candidates.Add(new LeadStageHistory
                 {
                     LeadId = internalLeadId,

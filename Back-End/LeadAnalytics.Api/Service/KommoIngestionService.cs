@@ -174,16 +174,22 @@ public class KommoIngestionService(
 
             if (stageChanged)
             {
+                var prevStage = lead.CurrentStage; // etapa ANTES da mudança (pra detectar bounce intra-agendado)
                 var newCurrentStage = mappedLeadStage ?? rawStage!;
 
                 lead.CurrentStage = newCurrentStage;
                 if (rawStageId.HasValue) lead.CurrentStageId = rawStageId;
 
+                // Mover ENTRE "agendado com pagamento" e "agendado sem pagamento" (04↔05) é
+                // reclassificação, não um agendamento novo — não conta como entrada. Atualiza a
+                // etapa atual, mas não grava linha de histórico datada.
+                var intraAgendadoBounce = LeadStages.IsScheduled(newCurrentStage) && LeadStages.IsScheduled(prevStage);
+
                 // Só grava entrada DATADA quando a fonte conhece o instante real da transição
                 // (webhook ao vivo). No sync, stageChangedAt = updated_at da Kommo, que não é a
                 // data de entrada na etapa — datar aqui inflava o KPI por dia. O backfill da API
                 // de eventos repõe o histórico real do passado.
-                if (recordStageHistory)
+                if (recordStageHistory && !intraAgendadoBounce)
                 {
                     lead.StageHistory.Add(new LeadStageHistory
                     {

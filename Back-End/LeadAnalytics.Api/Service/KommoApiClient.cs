@@ -691,7 +691,8 @@ public class KommoEventsEmbedded
 
 public class KommoApiEvent
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    /// <summary>ULID (string), ex.: "01ktrqv6w4b4h7z727zft1bvqe" — NÃO é numérico.</summary>
+    [JsonPropertyName("id")] public string? Id { get; set; }
     [JsonPropertyName("type")] public string? Type { get; set; }
     /// <summary>Id do lead (a entidade do evento).</summary>
     [JsonPropertyName("entity_id")] public long EntityId { get; set; }

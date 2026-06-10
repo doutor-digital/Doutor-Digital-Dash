@@ -1318,8 +1318,9 @@ namespace LeadAnalytics.Api.Migrations
                         .HasColumnType("character varying(16)")
                         .HasDefaultValue("webhook");
 
-                    b.Property<long?>("KommoEventId")
-                        .HasColumnType("bigint");
+                    b.Property<string>("KommoEventId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("LeadId")
                         .HasColumnType("integer");

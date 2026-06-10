@@ -74,6 +74,7 @@ public class KommoStageHistoryBackfillService(
                 var changedAt = DateTimeOffset.FromUnixTimeSeconds(ev.CreatedAt).UtcDateTime;
                 if (oldest is null || changedAt < oldest) oldest = changedAt;
 
+                if (string.IsNullOrEmpty(ev.Id)) continue;
                 if (ev.EntityId > int.MaxValue) continue;
                 if (!leadIdByExternal.TryGetValue((int)ev.EntityId, out var internalLeadId)) continue;
 
@@ -99,17 +100,17 @@ public class KommoStageHistoryBackfillService(
             // (LeadId, KommoEventId) — id de evento é único só dentro da conta/lead.
             if (candidates.Count > 0)
             {
-                var ids = candidates.Select(c => c.KommoEventId!.Value).ToList();
+                var ids = candidates.Select(c => c.KommoEventId!).ToList();
                 var leadIds = candidates.Select(c => c.LeadId).Distinct().ToList();
                 var existing = await db.LeadStageHistories.AsNoTracking()
                     .Where(h => h.KommoEventId != null
                                 && leadIds.Contains(h.LeadId)
-                                && ids.Contains(h.KommoEventId.Value))
-                    .Select(h => new { h.LeadId, EventId = h.KommoEventId!.Value })
+                                && ids.Contains(h.KommoEventId))
+                    .Select(h => new { h.LeadId, EventId = h.KommoEventId! })
                     .ToListAsync(ct);
                 var existingSet = existing.Select(x => (x.LeadId, x.EventId)).ToHashSet();
 
-                var fresh = candidates.Where(c => !existingSet.Contains((c.LeadId, c.KommoEventId!.Value))).ToList();
+                var fresh = candidates.Where(c => !existingSet.Contains((c.LeadId, c.KommoEventId!))).ToList();
                 if (fresh.Count > 0)
                 {
                     db.LeadStageHistories.AddRange(fresh);

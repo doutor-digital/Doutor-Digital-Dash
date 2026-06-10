@@ -24,10 +24,11 @@ namespace LeadAnalytics.Api.Migrations
             migrationBuilder.Sql(
                 "ALTER TABLE lead_stage_histories ALTER COLUMN \"EntrySource\" SET DEFAULT 'webhook';");
 
-            migrationBuilder.AddColumn<long>(
+            migrationBuilder.AddColumn<string>(
                 name: "KommoEventId",
                 table: "lead_stage_histories",
-                type: "bigint",
+                type: "character varying(32)",
+                maxLength: 32,
                 nullable: true);
 
             // Índice parcial sobre KommoEventId (todas NULL agora) → cobre 0 linhas → criação

@@ -23,11 +23,11 @@ public class LeadStageHistory
     public DateTime ChangedAt { get; set; }
 
     /// <summary>
-    /// Id do evento <c>lead_status_changed</c> na Kommo, quando a linha veio do backfill da
-    /// API de eventos. Chave de deduplicação: reexecutar o backfill não duplica linhas.
-    /// Null para linhas de webhook/legado.
+    /// Id do evento <c>lead_status_changed</c> na Kommo (ULID, ex.: "01ktrqv6w4b4h7z..."),
+    /// quando a linha veio do backfill da API de eventos. Chave de deduplicação: reexecutar
+    /// o backfill não duplica linhas. Null para linhas de webhook/legado.
     /// </summary>
-    public long? KommoEventId { get; set; }
+    public string? KommoEventId { get; set; }
 
     /// <summary>
     /// Procedência da linha — define se a <see cref="ChangedAt"/> pode ser usada como data de

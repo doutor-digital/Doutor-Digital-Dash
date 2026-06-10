@@ -1857,6 +1857,16 @@ public class LeadService(
             .ToDictionary(g => g.Key, g => g.Count());
         var agendadosTotal = agByType.Values.Sum();
 
+        // Resgate por DATA DO PREENCHIMENTO de "Tentativas de resgastes" (recovery_attempts via
+        // backfill de eventos) — NÃO por LeadType (vem vazio) nem por criação do lead. Conta lead
+        // distinto na janela. Sobrescreve o total do funil de resgate (era a causa do "10").
+        var resgateTotal = await _db.RecoveryAttempts.AsNoTracking()
+            .Where(r => r.EntrySource == "events_api"
+                     && r.CreatedAt >= startUtc && r.CreatedAt < endExclUtc)
+            .Join(scopeQ, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
+            .Distinct()
+            .CountAsync(ct);
+
         FunnelGroupDto BuildFunnel(string? type)
         {
             if (type == null)
@@ -1872,15 +1882,15 @@ public class LeadService(
                 };
             }
             var row = funnelRows.FirstOrDefault(r => r.Type == type);
-            if (row == null) return new FunnelGroupDto();
             return new FunnelGroupDto
             {
-                Total = row.Total,
-                Interacoes = row.Interacoes,
+                // Resgate: total pela data real do preenchimento (recovery_attempts).
+                Total = type == "resgate" ? resgateTotal : (row?.Total ?? 0),
+                Interacoes = row?.Interacoes ?? 0,
                 Agendados = agByType.GetValueOrDefault(type, 0),
-                Consultas = row.Consultas,
-                Tratamentos = row.Tratamentos,
-                NoShow = row.NoShow,
+                Consultas = row?.Consultas ?? 0,
+                Tratamentos = row?.Tratamentos ?? 0,
+                NoShow = row?.NoShow ?? 0,
             };
         }
 

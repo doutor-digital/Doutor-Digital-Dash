@@ -32,8 +32,17 @@ public class KommoIngestionService(
     private readonly KommoStageProcessor _stageProcessor = stageProcessor;
     private readonly ILogger<KommoIngestionService> _logger = logger;
 
+    /// <param name="recordStageHistory">
+    /// Só o webhook AO VIVO (lead:status) sabe o instante real da transição — aí grava
+    /// <see cref="LeadStageHistory"/> datado. O sync REST passa <c>false</c>: ele só conhece
+    /// <c>updated_at</c> (última modificação qualquer, não a entrada na etapa), então atualiza
+    /// <c>CurrentStage</c> mas NÃO crava data de entrada — isso é trabalho do webhook ou do
+    /// backfill via API de eventos (<see cref="KommoStageHistoryBackfillService"/>). Era a
+    /// causa do "211 agendados no dia": o sync/heal carimbava updated_at como data de entrada.
+    /// </param>
     public async Task<int> IngestAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct = default,
-        IReadOnlyDictionary<string, string>? stageMapOverride = null)
+        IReadOnlyDictionary<string, string>? stageMapOverride = null,
+        bool recordStageHistory = false)
     {
         // Mapa efetivo de etapas: começa pelo mapa derivado dos NOMES das etapas da Kommo
         // (override passado pelo sync — resolve agendados mesmo sem KommoStageMapJson) e
@@ -170,31 +179,31 @@ public class KommoIngestionService(
                 lead.CurrentStage = newCurrentStage;
                 if (rawStageId.HasValue) lead.CurrentStageId = rawStageId;
 
-                lead.StageHistory.Add(new LeadStageHistory
+                // Só grava entrada DATADA quando a fonte conhece o instante real da transição
+                // (webhook ao vivo). No sync, stageChangedAt = updated_at da Kommo, que não é a
+                // data de entrada na etapa — datar aqui inflava o KPI por dia. O backfill da API
+                // de eventos repõe o histórico real do passado.
+                if (recordStageHistory)
                 {
-                    LeadId = lead.Id,
-                    StageId = lead.CurrentStageId ?? 0,
-                    StageLabel = newCurrentStage,
-                    ChangedAt = stageChangedAt,
-                });
+                    lead.StageHistory.Add(new LeadStageHistory
+                    {
+                        LeadId = lead.Id,
+                        StageId = lead.CurrentStageId ?? 0,
+                        StageLabel = newCurrentStage,
+                        ChangedAt = stageChangedAt,
+                        EntrySource = LeadStageHistory.SourceWebhook,
+                    });
+                }
             }
             else if (mappedLeadStage != null
                 && !string.Equals(lead.CurrentStage, mappedLeadStage, StringComparison.Ordinal))
             {
                 // Heal retroativo: o status_id não mudou (stageChanged=false), mas o lead
                 // ficou gravado com o status_id cru (ex.: "67548620") porque o mapa antes
-                // exigia o canônico exato. Agora que Resolve reconhece a etapa, corrigimos
-                // o CurrentStage em vigor e registramos a entrada na etapa canônica — o
-                // histórico só tinha o status_id cru, então sem essa linha o lead não
-                // apareceria nas métricas que contam por entrada na etapa (ex.: agendados).
+                // exigia o canônico exato. Corrige o CurrentStage em vigor — mas NÃO crava
+                // linha de histórico datada: não sabemos quando o lead entrou na etapa
+                // (updated_at não serve). A data real vem do backfill via API de eventos.
                 lead.CurrentStage = mappedLeadStage;
-                lead.StageHistory.Add(new LeadStageHistory
-                {
-                    LeadId = lead.Id,
-                    StageId = lead.CurrentStageId ?? rawStageId ?? 0,
-                    StageLabel = mappedLeadStage,
-                    ChangedAt = stageChangedAt,
-                });
             }
 
             // Automação de Consulta/Tratamento — só se a unidade mapeou esse status_id.

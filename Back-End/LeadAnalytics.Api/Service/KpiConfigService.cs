@@ -124,8 +124,15 @@ public class KpiConfigService(AppDbContext db)
         DateTime from, DateTime to, string? responsibleUser = null, CancellationToken ct = default)
     {
         from = AsUtc(from); to = AsUtc(to);
+        // Janela pela DATA REAL de criação do lead (mesma regra do DashboardOverview):
+        // OriginalCreatedAt (custom field "Data de criação lead", vindo da Kommo ou do
+        // backfill da Cloudia) com fallback pro CreatedAt do backend. Sem isso, leads
+        // migrados da Cloudia ficam todos amontoados no mês da migração e desalinham
+        // do card "Total de Leads".
         var baseQuery = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+            .Where(l => l.TenantId == clinicId
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
         if (unitId.HasValue)
             baseQuery = baseQuery.Where(l => l.UnitId == unitId.Value);
         baseQuery = await ResponsibleUserFilter.ApplyAsync(baseQuery, responsibleUser, ct);
@@ -206,6 +213,26 @@ public class KpiConfigService(AppDbContext db)
                 return (matched, sample, null);
             }
 
+            case KpiSourceTypes.RecoveryAttempt:
+            {
+                // Conta leads DISTINTOS com tentativa de resgate dentro do período pela
+                // data do EVENTO na Kommo (CreatedAt do attempt vindo do backfill do campo
+                // "Tentativas de resgastes" — ver ResgateAttemptBackfillService:80,97).
+                // EntrySource="events_api" exclui tentativas inseridas manualmente, que têm
+                // CreatedAt=DateTime.UtcNow do backend (não confiável pra agregação por dia).
+                var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+                if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
+                scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+
+                var count = await _db.RecoveryAttempts.AsNoTracking()
+                    .Where(r => r.EntrySource == "events_api"
+                        && r.CreatedAt >= from && r.CreatedAt <= to)
+                    .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
+                    .Distinct()
+                    .CountAsync(ct);
+                return (count, sample, null);
+            }
+
             default:
                 return (0, sample, $"Tipo de fonte desconhecido: {sourceType}");
         }
@@ -246,11 +273,29 @@ public class KpiConfigService(AppDbContext db)
 
             q = _db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id));
         }
+        else if (sourceType == KpiSourceTypes.RecoveryAttempt)
+        {
+            // Drill: leads com tentativa de resgate no período (espelha ComputeAsync).
+            var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+            if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
+
+            var leadIds = await _db.RecoveryAttempts.AsNoTracking()
+                .Where(r => r.EntrySource == "events_api"
+                    && r.CreatedAt >= from && r.CreatedAt <= to)
+                .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            q = _db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id));
+        }
         else
         {
-            // Demais sources continuam por CreatedAt (semântica original).
+            // Demais sources janelam pela DATA REAL de criação do lead (espelha
+            // ComputeAsync e DashboardOverview): OriginalCreatedAt ?? CreatedAt.
             q = _db.Leads.AsNoTracking()
-                .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+                .Where(l => l.TenantId == clinicId
+                         && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
+                         && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
             if (unitId.HasValue)
                 q = q.Where(l => l.UnitId == unitId.Value);
 

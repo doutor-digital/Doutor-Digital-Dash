@@ -18,8 +18,16 @@ public static class KpiSourceTypes
     /// <summary>Conta leads que estão na etapa X E têm o campo Y = Z (filtro combinado).</summary>
     public const string StageFieldFilter = "stage_field_filter";
 
+    /// <summary>
+    /// Conta leads DISTINTOS que tiveram tentativa de resgate no período, pela data do
+    /// EVENTO na Kommo (preenchimento do campo "Tentativas de resgastes") — não pela
+    /// data de criação do lead. Resgate é lead velho reativado; contar por criação perdia
+    /// a maioria. Lê <c>recovery_attempts</c> com EntrySource="events_api".
+    /// </summary>
+    public const string RecoveryAttempt = "recovery_attempt";
+
     public static readonly string[] All =
-        { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter };
+        { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt };
 
     public static bool IsValid(string? type) =>
         type is not null && Array.Exists(All, t => t == type);

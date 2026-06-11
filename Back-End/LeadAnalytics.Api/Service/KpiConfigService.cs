@@ -337,8 +337,11 @@ public class KpiConfigService(AppDbContext db)
         const int MaxScan = 8000;
         from = AsUtc(from); to = AsUtc(to);
 
+        // Janela pela DATA REAL: OriginalCreatedAt quando setada (Kommo/CSV), CreatedAt como fallback.
         var q = _db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+            .Where(l => l.TenantId == clinicId
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 

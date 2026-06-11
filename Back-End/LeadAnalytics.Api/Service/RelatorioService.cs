@@ -33,12 +33,13 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
 
         var (inicioUtc, fimUtc) = ObterIntervaloUtc(mes, ano);
 
+        // Janela pela DATA REAL: prefere OriginalCreatedAt (vindo da Kommo/CSV) sobre CreatedAt.
         var leads = await _db.Leads
             .AsNoTracking()
             .Where(l =>
                 l.TenantId == clinicId &&
-                l.CreatedAt >= inicioUtc &&
-                l.CreatedAt < fimUtc)
+                (l.OriginalCreatedAt ?? l.CreatedAt) >= inicioUtc &&
+                (l.OriginalCreatedAt ?? l.CreatedAt) < fimUtc)
             .Select(l => new LeadProjecaoRelatorio(
                 l.Name,
                 l.Phone,
@@ -46,7 +47,7 @@ public class RelatorioService(AppDbContext db, IPdfRelatorioService pdfService) 
                 l.CurrentStage,
                 l.UnitId,
                 l.HasAppointment,
-                l.CreatedAt,
+                l.OriginalCreatedAt ?? l.CreatedAt,
                 l.Payments.Sum(p => (decimal?)p.Amount) ?? 0m
             ))
             .ToListAsync(ct);

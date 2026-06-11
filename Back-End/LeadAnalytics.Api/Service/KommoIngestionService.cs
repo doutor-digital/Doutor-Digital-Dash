@@ -144,6 +144,12 @@ public class KommoIngestionService(
                 lead.CustomFieldsJson = MergeCustomFieldsJson(lead.CustomFieldsJson, ev.CustomFieldsJson);
             if (ev.TagsJson != null) lead.TagsJson = ev.TagsJson;
 
+            // Data REAL de criação (custom field "Data de criação lead" — preenchido pelo
+            // backfill da Cloudia/CSV). Usado pelo dashboard como fonte da verdade quando
+            // o CreatedAt do nosso backend é a "data do 1º sync" (leads antigos da Cloudia).
+            var original = TryExtractOriginalCreatedAt(lead.CustomFieldsJson);
+            if (original.HasValue) lead.OriginalCreatedAt = original;
+
             // Valor do negócio (price da Kommo) — string crua → decimal (invariant).
             if (!string.IsNullOrWhiteSpace(ev.Price)
                 && decimal.TryParse(ev.Price, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
@@ -302,5 +308,61 @@ public class KommoIngestionService(
         }
 
         return JsonSerializer.Serialize(merged);
+    }
+
+    /// <summary>
+    /// Extrai a data do custom field "Data de criação lead" do CustomFieldsJson.
+    /// Casa por nome (contém "data" + "cria") pra funcionar em qualquer unidade,
+    /// independente do field_id. Aceita unix em segundos ou milissegundos.
+    /// </summary>
+    private static DateTime? TryExtractOriginalCreatedAt(string? customFieldsJson)
+    {
+        if (string.IsNullOrWhiteSpace(customFieldsJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(customFieldsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+                if (!el.TryGetProperty("field_name", out var fn) || fn.ValueKind != JsonValueKind.String) continue;
+                var name = fn.GetString()?.ToLowerInvariant() ?? "";
+                if (!(name.Contains("data") && name.Contains("cria"))) continue;
+
+                if (!el.TryGetProperty("values", out var vals)) continue;
+                string? rawValue = null;
+                if (vals.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var v in vals.EnumerateArray())
+                    {
+                        if (v.ValueKind == JsonValueKind.Object && v.TryGetProperty("value", out var inner))
+                        {
+                            rawValue = inner.ValueKind == JsonValueKind.Number ? inner.GetRawText() : inner.GetString();
+                            break;
+                        }
+                        if (v.ValueKind == JsonValueKind.Number || v.ValueKind == JsonValueKind.String)
+                        {
+                            rawValue = v.ValueKind == JsonValueKind.Number ? v.GetRawText() : v.GetString();
+                            break;
+                        }
+                    }
+                }
+                else if (vals.ValueKind == JsonValueKind.Number) rawValue = vals.GetRawText();
+                else if (vals.ValueKind == JsonValueKind.String) rawValue = vals.GetString();
+
+                if (string.IsNullOrWhiteSpace(rawValue)) continue;
+                if (!long.TryParse(rawValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var num)) continue;
+                if (num <= 0) continue;
+                try
+                {
+                    return num > 99999999999L
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(num).UtcDateTime
+                        : DateTimeOffset.FromUnixTimeSeconds(num).UtcDateTime;
+                }
+                catch { return null; }
+            }
+        }
+        catch (JsonException) { /* ignora json malformado */ }
+        return null;
     }
 }

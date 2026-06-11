@@ -65,6 +65,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             entity.HasIndex(e => new { e.ExternalId, e.TenantId }).IsUnique();
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+            // Índice pra agregações por OriginalCreatedAt (data real vinda da Kommo/CSV).
+            entity.HasIndex(e => new { e.TenantId, e.OriginalCreatedAt });
 
             entity.HasOne(l => l.Unit)
                   .WithMany(u => u.Leads)

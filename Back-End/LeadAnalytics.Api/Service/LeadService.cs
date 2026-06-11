@@ -1720,8 +1720,12 @@ public class LeadService(
         // último para que todos os KPIs/agregações abaixo já considerem só os leads dele.
         scopeQ = await ResponsibleUserFilter.ApplyAsync(scopeQ, responsibleUser, ct);
 
-        // baseQ = scopeQ + janela por data de CRIAÇÃO (cohort do período).
-        var baseQ = scopeQ.Where(l => l.CreatedAt >= startUtc && l.CreatedAt < endExclUtc);
+        // baseQ = scopeQ + janela pela DATA REAL DE CRIAÇÃO do lead. Prefere OriginalCreatedAt
+        // (vindo da Kommo via custom field "Data de criação lead" / backfill da Cloudia) e cai
+        // pra CreatedAt do nosso backend só quando ela não existe.
+        var baseQ = scopeQ.Where(l =>
+            (l.OriginalCreatedAt ?? l.CreatedAt) >= startUtc &&
+            (l.OriginalCreatedAt ?? l.CreatedAt) <  endExclUtc);
 
         var totalLeads = await baseQ.CountAsync(ct);
 
@@ -1897,8 +1901,9 @@ public class LeadService(
         // ─── Séries temporais ─────────────────────────────────────
         // Projeção leve pra agregar em memória (evita necessidade de funções de data
         // específicas do provider). N tipicamente < 50k por período no caso de uso.
+        // CreatedAt = COALESCE(OriginalCreatedAt, CreatedAt) — mesma data real usada no filtro.
         var dateStageRows = await baseQ
-            .Select(l => new { l.CreatedAt, l.CurrentStage })
+            .Select(l => new { CreatedAt = (l.OriginalCreatedAt ?? l.CreatedAt), l.CurrentStage })
             .ToListAsync(ct);
 
         static string WeekKey(DateTime d)

@@ -117,4 +117,11 @@ public class Lead
     public DateTime UpdatedAt { get; set; }
     public DateTime? ConvertedAt { get; set; }
     public DateTime LastUpdatedAt { get; internal set; }
+
+    /// <summary>
+    /// Data REAL de criação do lead (vem do custom field "Data de criação lead" na Kommo).
+    /// Usado nas agregações por dia/mês quando preenchida — fallback pra <see cref="CreatedAt"/>.
+    /// Preenchida via backfill da Cloudia/CSV ou pelo webhook quando o field estiver setado.
+    /// </summary>
+    public DateTime? OriginalCreatedAt { get; set; }
 }

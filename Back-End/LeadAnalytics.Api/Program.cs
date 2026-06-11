@@ -158,6 +158,7 @@ builder.Services.AddScoped<AuthService>();  // ← apenas uma vez
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<ContactImportService>();
+builder.Services.AddScoped<CloudiaCsvImportService>();
 builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddScoped<LeadEventService>();

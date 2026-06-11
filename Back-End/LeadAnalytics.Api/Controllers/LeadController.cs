@@ -711,8 +711,7 @@ public class WebhooksController(
         if (error is not null) return error;
         if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
 
-        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-        var from = (dateFrom ?? to.AddDays(-30)).Date;
+        var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
         var result = await _kpiService.KpiBreakdownsAsync(tenantId.Value, unitId, from, to, ct);
         return Ok(result);
@@ -734,12 +733,7 @@ public class WebhooksController(
         if (error is not null) return error;
         if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
 
-        // Frontend manda dateTo = "2026-06-05" (date-only) que parseia como
-        // 2026-06-05T00:00:00 — meia-noite no INÍCIO do dia. Isso corta tudo
-        // que foi atualizado DURANTE o último dia do período. Expande pro
-        // último instante do dia pra incluir hoje quando o sync rodar agora.
-        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-        var from = (dateFrom ?? to.AddDays(-30)).Date;
+        var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
         var (total, fields, truncated) = await _kpiService.CustomFieldsSummaryAsync(
             tenantId.Value, unitId, from, to, 8, ct);
@@ -769,8 +763,7 @@ public class WebhooksController(
         if (error is not null) return error;
         if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
 
-        var to = (dateTo ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
-        var from = (dateFrom ?? to.AddDays(-30)).Date;
+        var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
         var result = await _kpiService.CustomFieldsCrossAnalysisAsync(
             tenantId.Value, unitId, from, to, 12, ct);
@@ -917,6 +910,31 @@ public class WebhooksController(
 
         var users = await _leadService.GetDistinctResponsibleUsersAsync(clinicId, unitId, HttpContext.RequestAborted);
         return Ok(users);
+    }
+
+    /// <summary>
+    /// Resolve a janela do dashboard preservando o horário enviado pelo cliente.
+    /// O front manda ISO com Z do "dia comercial" (véspera 19h → dia 19h);
+    /// truncar pra <c>.Date.AddDays(1)</c> jogava o horário fora e expandia
+    /// pra dois dias inteiros UTC, inflando KPIs (ex.: RESGATE mostrando 2× o
+    /// real). A expansão pro fim do dia só roda quando o cliente manda apenas
+    /// "yyyy-MM-dd" (TimeOfDay = 0).
+    /// </summary>
+    private static (DateTime From, DateTime To) ResolveDashboardRange(DateTime? dateFrom, DateTime? dateTo)
+    {
+        var to = dateTo.HasValue
+            ? (dateTo.Value.TimeOfDay == TimeSpan.Zero
+                ? dateTo.Value.Date.AddDays(1).AddTicks(-1)
+                : dateTo.Value)
+            : DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+
+        var from = dateFrom.HasValue
+            ? (dateFrom.Value.TimeOfDay == TimeSpan.Zero
+                ? dateFrom.Value.Date
+                : dateFrom.Value)
+            : to.AddDays(-30).Date;
+
+        return (from, to);
     }
 
     private static bool TryParseGranularity(string raw, out LeadService.Granularity g)

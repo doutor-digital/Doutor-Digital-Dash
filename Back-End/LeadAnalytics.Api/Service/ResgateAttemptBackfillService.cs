@@ -32,10 +32,13 @@ public class ResgateAttemptBackfillService(
         try
         {
             var fields = await api.GetCustomFieldsAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, ct);
+            // O nome do campo na Kommo é "Tentativas de resgastes" (typo do cliente:
+            // "resgaSTes" em vez de "resgaTes"). Procurar "resgat" não casa porque
+            // entre 'a' e 't' tem um 'S'. Usa "resga" pra cobrir as duas grafias.
             var f = fields?.Embedded?.CustomFields?.FirstOrDefault(x =>
             {
                 var n = (x.Name ?? string.Empty).ToLowerInvariant();
-                return n.Contains("tentativ") && n.Contains("resgat");
+                return n.Contains("tentativ") && n.Contains("resga");
             });
             if (f is null) return new BackfillResult(0, 0, false, null, "campo 'Tentativas de resgastes' não encontrado");
             fieldId = f.Id;

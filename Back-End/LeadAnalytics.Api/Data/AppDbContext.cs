@@ -56,6 +56,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<AdsSetting> AdsSettings { get; set; }
 
     public DbSet<CloudiaImportBatch> CloudiaImportBatches { get; set; }
+    public DbSet<CloudiaKommoJob> CloudiaKommoJobs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,6 +95,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(e => new { e.UnitId, e.CreatedAt });
             entity.Property(e => e.Status).HasMaxLength(16);
             entity.Property(e => e.SnapshotJson).HasColumnType("jsonb");
+            entity.Property(e => e.CsvDataJson).HasColumnType("jsonb");
+        });
+
+        // ─── CloudiaKommoJob ────────────────────────────────────────
+        modelBuilder.Entity<CloudiaKommoJob>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.UnitId, e.CreatedAt });
+            entity.HasIndex(e => e.BatchId);
+            entity.Property(e => e.Id).HasMaxLength(32);
+            entity.Property(e => e.Status).HasMaxLength(16);
+            entity.Property(e => e.FieldsJson).HasColumnType("jsonb");
         });
 
         // ─── Unit ────────────────────────────────────────────────

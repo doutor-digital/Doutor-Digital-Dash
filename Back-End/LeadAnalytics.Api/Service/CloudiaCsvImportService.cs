@@ -82,11 +82,21 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
         result.SampleDuplicates = dupSamples;
 
         // 3) Para cada linha, match por nome+data no DB (UnitId = unitId)
-        var writes = new List<(int id, DateTime oca)>();
+        // CsvDataEntry guarda os campos CSV necessários pra Kommo PATCH posterior.
+        var writes = new List<(int id, DateTime oca, CsvDataEntry csvData)>();
         var sampleMatches = new List<CloudiaCsvSampleMatchDto>();
         var sampleMissed = new List<string>();
         var distMonth = new Dictionary<string, int>();
         var usedDbIds = new HashSet<int>();
+
+        // Resolve indices de campos extras pra Kommo PATCH
+        var iOrigem      = IndexOf(headers, "Origem Cadastro");
+        var iInteracao   = IndexOf(headers, "Interação", "Interacao");
+        var iAgendou     = IndexOf(headers, "Cliente Agendou?", "Cliente Agendou");
+        var iDataAg      = IndexOf(headers, "Data do Agendamento");
+        var iMotivo      = IndexOf(headers, "Motivo para Não Agendamento", "Motivo para Nao Agendamento");
+        var iTipoResgate = IndexOf(headers, "Tipo de Resgate");
+        var iObs         = IndexOf(headers, "Observação", "Observacao");
 
         foreach (var row in byPhone.Values)
         {
@@ -129,7 +139,21 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
             }
 
             result.Matched++;
-            writes.Add((lead.Id, oca.Value));
+            writes.Add((lead.Id, oca.Value, new CsvDataEntry
+            {
+                Id = lead.Id,
+                ExternalId = lead.ExternalId,
+                Nome = nome,
+                Tipo = SafeGet(row, iTipo),
+                Origem = SafeGet(row, iOrigem),
+                Interacao = SafeGet(row, iInteracao),
+                Agendou = SafeGet(row, iAgendou),
+                DataAgendamento = SafeGet(row, iDataAg),
+                Motivo = SafeGet(row, iMotivo),
+                TipoResgate = SafeGet(row, iTipoResgate),
+                Observacao = SafeGet(row, iObs),
+                DataOrigem = dataOrigem,
+            }));
 
             if (sampleMatches.Count < 10)
                 sampleMatches.Add(new CloudiaCsvSampleMatchDto
@@ -165,7 +189,7 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
                 })
                 .ToListAsync(ct);
 
-            // 4.2) Cria batch row (status=applied), guarda snapshot
+            // 4.2) Cria batch row (status=applied), guarda snapshot + csv_data
             var batchRow = new CloudiaImportBatch
             {
                 UnitId = unitId,
@@ -178,6 +202,7 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
                 Updated = 0,
                 UpdateLeadType = updateLeadType,
                 SnapshotJson = JsonSerializer.Serialize(snapshot),
+                CsvDataJson = JsonSerializer.Serialize(writes.Select(w => w.csvData).ToList()),
                 CreatedAt = DateTime.UtcNow,
             };
             _db.CloudiaImportBatches.Add(batchRow);
@@ -349,7 +374,23 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    private sealed record DbMatchRow(int Id, string Name);
+    private sealed record DbMatchRow(int Id, string Name, int ExternalId);
+
+    public sealed class CsvDataEntry
+    {
+        public int Id { get; set; }
+        public int ExternalId { get; set; }
+        public string Nome { get; set; } = "";
+        public string Tipo { get; set; } = "";
+        public string Origem { get; set; } = "";
+        public string Interacao { get; set; } = "";
+        public string Agendou { get; set; } = "";
+        public string DataAgendamento { get; set; } = "";
+        public string Motivo { get; set; } = "";
+        public string TipoResgate { get; set; } = "";
+        public string Observacao { get; set; } = "";
+        public string DataOrigem { get; set; } = "";
+    }
 
     private async Task<List<DbMatchRow>?> FindMatchAsync(int unitId, List<string> words, List<string> dates, CancellationToken ct)
     {
@@ -366,7 +407,7 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
         var datePats = dates.Select(d => $"%{d}%").ToList();
         q = q.Where(l => datePats.Any(p => EF.Functions.ILike(l.Name, p)));
 
-        var rows = await q.Take(5).Select(l => new DbMatchRow(l.Id, l.Name)).ToListAsync(ct);
+        var rows = await q.Take(5).Select(l => new DbMatchRow(l.Id, l.Name, l.ExternalId)).ToListAsync(ct);
         return rows.Count == 0 ? null : rows;
     }
 

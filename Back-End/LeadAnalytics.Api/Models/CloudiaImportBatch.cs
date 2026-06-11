@@ -56,4 +56,13 @@ public class CloudiaImportBatch
 
     [Column("reverted_by_user_id")]
     public int? RevertedByUserId { get; set; }
+
+    /// <summary>
+    /// Array JSON dos dados do CSV por lead (necessários pra Kommo PATCH posterior):
+    /// <c>[{"id":123,"externalId":13016462,"nome":"Edileusa","tipo":"Cadastro","origem":"Campanha Meta (Facebook)",…}, …]</c>
+    /// Vazio em batches antigos (pré-feature).
+    /// </summary>
+    [Column("csv_data_json")]
+    public string CsvDataJson { get; set; } = "[]";
 }
+

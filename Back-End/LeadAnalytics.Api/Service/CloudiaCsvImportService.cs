@@ -103,10 +103,12 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
             var nome = SafeGet(row, iNome);
             var dataCsv = SafeGet(row, iData);
             var dataOrigem = SafeGet(row, iDataOrig);
+            var phone = NormPhone(SafeGet(row, iFone));
 
             var words = NameWords(nome);
             var dates = DateVariants(dataCsv);
-            if (words.Count == 0 || dates.Count == 0)
+            // Sem telefone E sem (palavras+data) → input inválido
+            if (string.IsNullOrEmpty(phone) && (words.Count == 0 || dates.Count == 0))
             {
                 result.InvalidInput++;
                 continue;
@@ -119,7 +121,7 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
                 continue;
             }
 
-            var match = await FindMatchAsync(unitId, words, dates, ct);
+            var match = await FindMatchAsync(unitId, phone, words, dates, ct);
             if (match == null)
             {
                 result.Missed++;
@@ -392,18 +394,57 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
         public string DataOrigem { get; set; } = "";
     }
 
-    private async Task<List<DbMatchRow>?> FindMatchAsync(int unitId, List<string> words, List<string> dates, CancellationToken ct)
+    /// <summary>
+    /// Match em 2 níveis:
+    /// (1) Telefone — preferido. Aceita variantes de 8/9/11 dígitos (sufixo do Phone).
+    ///     Se achar mais de 1 lead, exige ao menos 1 palavra do nome em comum.
+    /// (2) Nome + data — fallback original. Funciona pra SDR que escreve a data inline
+    ///     no nome do lead na Kommo (ex: "Edileusa 01/02/25").
+    /// </summary>
+    private async Task<List<DbMatchRow>?> FindMatchAsync(
+        int unitId, string? phone, List<string> words, List<string> dates, CancellationToken ct)
     {
-        var q = _db.Leads.AsNoTracking().Where(l => l.UnitId == unitId);
+        // (1) Telefone primeiro
+        if (!string.IsNullOrEmpty(phone))
+        {
+            // Variantes: 11 (com DDD+9), 10 (sem 9), 9 (sem DDD), 8 (curto)
+            var variants = new HashSet<string>();
+            variants.Add(phone);
+            if (phone.Length >= 11) variants.Add(phone[..2] + phone[3..]);
+            if (phone.Length >= 9)  variants.Add(phone[^9..]);
+            if (phone.Length >= 8)  variants.Add(phone[^8..]);
 
-        // Todas as palavras do CSV têm que estar no Name (rigoroso)
+            // Compara por SUFIXO dos dígitos do Phone (ignora prefixo de país etc.)
+            var phonePats = variants.Select(v => $"%{v}%").ToList();
+            var phoneQ = _db.Leads.AsNoTracking()
+                .Where(l => l.UnitId == unitId)
+                .Where(l => phonePats.Any(p => EF.Functions.ILike(l.Phone, p)));
+
+            var phoneRows = await phoneQ.Take(5)
+                .Select(l => new DbMatchRow(l.Id, l.Name, l.ExternalId))
+                .ToListAsync(ct);
+
+            if (phoneRows.Count == 1) return phoneRows;
+            if (phoneRows.Count > 1)
+            {
+                // Desempata por palavra do nome em comum (>=1)
+                var csvWordSet = new HashSet<string>(words);
+                var filtered = phoneRows
+                    .Where(r => NameWords(r.Name).Any(w => csvWordSet.Contains(w)))
+                    .ToList();
+                if (filtered.Count > 0) return filtered;
+            }
+        }
+
+        // (2) Fallback: palavras + data inline no nome (lógica original)
+        if (words.Count == 0 || dates.Count == 0) return null;
+
+        var q = _db.Leads.AsNoTracking().Where(l => l.UnitId == unitId);
         foreach (var w in words)
         {
             var pat = $"%{w.Replace("%","\\%").Replace("_","\\_")}%";
             q = q.Where(l => EF.Functions.ILike(l.Name, pat));
         }
-
-        // Pelo menos 1 das variações da data tem que estar no Name
         var datePats = dates.Select(d => $"%{d}%").ToList();
         q = q.Where(l => datePats.Any(p => EF.Functions.ILike(l.Name, p)));
 

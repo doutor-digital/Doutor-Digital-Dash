@@ -60,6 +60,10 @@ public class CloudiaCsvImportResultDto
     /// <summary>Tempo de execução em ms.</summary>
     [JsonPropertyName("duration_ms")]
     public long DurationMs { get; set; }
+
+    /// <summary>Id do batch criado (só preenchido em apply, não em dry-run).</summary>
+    [JsonPropertyName("batch_id")]
+    public int? BatchId { get; set; }
 }
 
 public class CloudiaCsvSampleMatchDto
@@ -68,4 +72,51 @@ public class CloudiaCsvSampleMatchDto
     public string DbName { get; set; } = "";
     public string DataOrigem { get; set; } = "";
     public int DbLeadId { get; set; }
+}
+
+/// <summary>Resumo de um batch (pra listagem).</summary>
+public class CloudiaImportBatchDto
+{
+    public int Id { get; set; }
+
+    [JsonPropertyName("unit_id")]
+    public int UnitId { get; set; }
+
+    public string? Filename { get; set; }
+
+    public string Status { get; set; } = "";
+
+    [JsonPropertyName("total_rows")]
+    public int TotalRows { get; set; }
+
+    public int Matched { get; set; }
+
+    public int Updated { get; set; }
+
+    [JsonPropertyName("update_lead_type")]
+    public bool UpdateLeadType { get; set; }
+
+    [JsonPropertyName("created_at")]
+    public DateTime CreatedAt { get; set; }
+
+    [JsonPropertyName("uploaded_by_user_id")]
+    public int? UploadedByUserId { get; set; }
+
+    [JsonPropertyName("reverted_at")]
+    public DateTime? RevertedAt { get; set; }
+
+    [JsonPropertyName("reverted_by_user_id")]
+    public int? RevertedByUserId { get; set; }
+}
+
+public class CloudiaRevertResultDto
+{
+    [JsonPropertyName("batch_id")]
+    public int BatchId { get; set; }
+
+    [JsonPropertyName("leads_restored")]
+    public int LeadsRestored { get; set; }
+
+    [JsonPropertyName("duration_ms")]
+    public long DurationMs { get; set; }
 }

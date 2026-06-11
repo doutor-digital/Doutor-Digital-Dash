@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.DTOs.Imports;
+using LeadAnalytics.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Service;
@@ -20,7 +22,10 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
 
     public async Task<CloudiaCsvImportResultDto> ProcessAsync(
         int unitId,
+        int tenantId,
         Stream csvStream,
+        string? filename,
+        int? uploadedByUserId,
         bool dryRun,
         bool updateLeadType,
         CancellationToken ct)
@@ -144,17 +149,49 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
         result.SampleMissed = sampleMissed;
         result.DistributionByMonth = distMonth.OrderBy(kv => kv.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        // 4) Aplica UPDATEs em batches (skip se dry-run)
+        // 4) Aplica UPDATEs em batches (skip se dry-run). Antes de cada UPDATE
+        //    capturamos o snapshot pra permitir REVERT depois.
         if (!dryRun && writes.Count > 0)
         {
+            // 4.1) Captura snapshot dos valores ATUAIS antes do UPDATE
+            var leadIds = writes.Select(w => w.id).ToList();
+            var snapshot = await _db.Leads.AsNoTracking()
+                .Where(l => leadIds.Contains(l.Id))
+                .Select(l => new SnapshotEntry
+                {
+                    Id = l.Id,
+                    PrevOca = l.OriginalCreatedAt,
+                    PrevLeadType = l.LeadType,
+                })
+                .ToListAsync(ct);
+
+            // 4.2) Cria batch row (status=applied), guarda snapshot
+            var batchRow = new CloudiaImportBatch
+            {
+                UnitId = unitId,
+                TenantId = tenantId,
+                Filename = filename,
+                UploadedByUserId = uploadedByUserId,
+                Status = "applied",
+                TotalRows = result.TotalRows,
+                Matched = result.Matched,
+                Updated = 0,
+                UpdateLeadType = updateLeadType,
+                SnapshotJson = JsonSerializer.Serialize(snapshot),
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.CloudiaImportBatches.Add(batchRow);
+            await _db.SaveChangesAsync(ct);
+
+            // 4.3) Aplica UPDATEs em batches
             const int BATCH = 500;
             for (var i = 0; i < writes.Count; i += BATCH)
             {
-                var batch = writes.Skip(i).Take(BATCH).ToList();
+                var chunk = writes.Skip(i).Take(BATCH).ToList();
                 await using var tx = await _db.Database.BeginTransactionAsync(ct);
                 try
                 {
-                    foreach (var w in batch)
+                    foreach (var w in chunk)
                     {
                         if (updateLeadType)
                         {
@@ -182,6 +219,11 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
                     throw;
                 }
             }
+
+            // 4.4) Atualiza Updated final no batch
+            batchRow.Updated = result.Updated;
+            await _db.SaveChangesAsync(ct);
+            result.BatchId = batchRow.Id;
         }
 
         sw.Stop();
@@ -192,6 +234,117 @@ public class CloudiaCsvImportService(AppDbContext db, ILogger<CloudiaCsvImportSe
             result.Matched, result.Ambiguous, result.Missed, result.Updated);
 
         return result;
+    }
+
+    // ─── Listagem + Revert ───────────────────────────────────────────────────
+
+    public async Task<List<CloudiaImportBatchDto>> ListBatchesAsync(int unitId, CancellationToken ct)
+    {
+        return await _db.CloudiaImportBatches
+            .AsNoTracking()
+            .Where(b => b.UnitId == unitId)
+            .OrderByDescending(b => b.CreatedAt)
+            .Take(50)
+            .Select(b => new CloudiaImportBatchDto
+            {
+                Id = b.Id,
+                UnitId = b.UnitId,
+                Filename = b.Filename,
+                Status = b.Status,
+                TotalRows = b.TotalRows,
+                Matched = b.Matched,
+                Updated = b.Updated,
+                UpdateLeadType = b.UpdateLeadType,
+                CreatedAt = b.CreatedAt,
+                UploadedByUserId = b.UploadedByUserId,
+                RevertedAt = b.RevertedAt,
+                RevertedByUserId = b.RevertedByUserId,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<CloudiaRevertResultDto?> RevertBatchAsync(
+        int batchId, int? revertedByUserId, CancellationToken ct)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var batch = await _db.CloudiaImportBatches.FirstOrDefaultAsync(b => b.Id == batchId, ct);
+        if (batch is null) return null;
+        if (batch.Status == "reverted")
+            throw new InvalidOperationException("Batch já foi revertido.");
+
+        var snapshot = JsonSerializer.Deserialize<List<SnapshotEntry>>(batch.SnapshotJson) ?? new();
+        if (snapshot.Count == 0)
+        {
+            batch.Status = "reverted";
+            batch.RevertedAt = DateTime.UtcNow;
+            batch.RevertedByUserId = revertedByUserId;
+            await _db.SaveChangesAsync(ct);
+            sw.Stop();
+            return new CloudiaRevertResultDto { BatchId = batch.Id, LeadsRestored = 0, DurationMs = sw.ElapsedMilliseconds };
+        }
+
+        var restored = 0;
+        const int BATCH = 500;
+        for (var i = 0; i < snapshot.Count; i += BATCH)
+        {
+            var chunk = snapshot.Skip(i).Take(BATCH).ToList();
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                foreach (var s in chunk)
+                {
+                    // Restaura OCA + LeadType pros valores PRÉ-UPDATE
+                    if (s.PrevOca.HasValue)
+                    {
+                        await _db.Database.ExecuteSqlInterpolatedAsync(
+                            $@"UPDATE leads
+                                   SET ""OriginalCreatedAt"" = {s.PrevOca},
+                                       ""LeadType"" = {s.PrevLeadType}
+                                 WHERE ""Id"" = {s.Id}", ct);
+                    }
+                    else
+                    {
+                        await _db.Database.ExecuteSqlInterpolatedAsync(
+                            $@"UPDATE leads
+                                   SET ""OriginalCreatedAt"" = NULL,
+                                       ""LeadType"" = {s.PrevLeadType}
+                                 WHERE ""Id"" = {s.Id}", ct);
+                    }
+                    restored++;
+                }
+                await tx.CommitAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync(ct);
+                _logger.LogError(ex, "Revert batch falhou (chunk {Index})", i / BATCH);
+                throw;
+            }
+        }
+
+        batch.Status = "reverted";
+        batch.RevertedAt = DateTime.UtcNow;
+        batch.RevertedByUserId = revertedByUserId;
+        await _db.SaveChangesAsync(ct);
+
+        sw.Stop();
+        _logger.LogInformation(
+            "↩️  Cloudia revert OK. BatchId={BatchId} Restored={Restored} Duration={Ms}ms",
+            batchId, restored, sw.ElapsedMilliseconds);
+
+        return new CloudiaRevertResultDto
+        {
+            BatchId = batch.Id,
+            LeadsRestored = restored,
+            DurationMs = sw.ElapsedMilliseconds,
+        };
+    }
+
+    private sealed class SnapshotEntry
+    {
+        public int Id { get; set; }
+        public DateTime? PrevOca { get; set; }
+        public string? PrevLeadType { get; set; }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

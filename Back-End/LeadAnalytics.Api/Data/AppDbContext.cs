@@ -55,6 +55,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<CampaignDailySpend> CampaignDailySpends { get; set; }
     public DbSet<AdsSetting> AdsSettings { get; set; }
 
+    public DbSet<CloudiaImportBatch> CloudiaImportBatches { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ─── Lead ────────────────────────────────────────────────
@@ -83,6 +85,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // permitir queries com operadores @> / ? quando vierem filtros.
             entity.Property(l => l.CustomFieldsJson).HasColumnType("jsonb");
             entity.Property(l => l.TagsJson).HasColumnType("jsonb");
+        });
+
+        // ─── CloudiaImportBatch ─────────────────────────────────────
+        modelBuilder.Entity<CloudiaImportBatch>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.UnitId, e.CreatedAt });
+            entity.Property(e => e.Status).HasMaxLength(16);
+            entity.Property(e => e.SnapshotJson).HasColumnType("jsonb");
         });
 
         // ─── Unit ────────────────────────────────────────────────

@@ -44,6 +44,12 @@ public class AgendadosBreakdownDto
     [JsonPropertyName("resgate")] public int Resgate { get; set; }
     [JsonPropertyName("com_pagamento")] public int ComPagamento { get; set; }
     [JsonPropertyName("sem_pagamento")] public int SemPagamento { get; set; }
+    /// <summary>
+    /// Leads que JÁ tinham entrada em agendado* ANTES do período e só fizeram a transição
+    /// 04↔05 dentro dele (reclassificação de pagamento, não agendamento novo). Não somam
+    /// em <see cref="Total"/> — chip informativo no card pra SDR entender a diferença.
+    /// </summary>
+    [JsonPropertyName("reclassificacoes")] public int Reclassificacoes { get; set; }
     [JsonPropertyName("origens")] public List<ValueCountDto> Origens { get; set; } = new();
     /// <summary>Quebra pelo custom field "Tipo de agendamento" (consulta/retorno/avaliação...).</summary>
     [JsonPropertyName("tipos_agendamento")] public List<ValueCountDto> TiposAgendamento { get; set; } = new();

@@ -727,9 +727,30 @@ public class KpiConfigService(AppDbContext db)
             })
             .ToListAsync(ct);
 
+        // Primeira ENTRADA EM AGENDADO* por lead em qualquer momento — usado pra
+        // descontar reclassificações: lead que já era agendado antes do período e só
+        // bounceou 04↔05 dentro dele NÃO é agendamento novo. Cobre o caso de bounce
+        // que escapou do filtro da ingestion (ex.: prevStage armazenado como status_id
+        // raw quando o heal canônico não rodou — IsScheduled falha e linha é criada).
+        var agLeadIds = agHist.Select(x => x.LeadId).Distinct().ToList();
+        var firstAgendadoByLead = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => agStages.Contains(h.StageLabel)
+                && h.EntrySource != LeadStageHistory.SourceLegacy
+                && agLeadIds.Contains(h.LeadId))
+            .GroupBy(h => h.LeadId)
+            .Select(g => new { LeadId = g.Key, FirstAt = g.Min(x => x.CorrectedChangedAt ?? x.ChangedAt) })
+            .ToDictionaryAsync(x => x.LeadId, x => x.FirstAt, ct);
+
         // Um lead pode reentrar em agendado no período — conta uma vez (entrada mais recente).
         foreach (var grp in agHist.GroupBy(x => x.LeadId))
         {
+            // Se a primeira vez que o lead virou agendado foi ANTES do período, é
+            // reclassificação (04↔05 dentro do período não conta como novo agendamento).
+            if (firstAgendadoByLead.TryGetValue(grp.Key, out var firstAt) && firstAt < from)
+            {
+                ag.Reclassificacoes++;
+                continue;
+            }
             var h = grp.OrderByDescending(x => x.ChangedAt).First();
             var cf = h.CustomFieldsJson;
             var origemCustom = ExtractField(cf, profile.OrigemFieldId, n => n.Contains("origem"));

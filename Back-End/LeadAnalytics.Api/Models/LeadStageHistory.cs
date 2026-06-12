@@ -34,4 +34,23 @@ public class LeadStageHistory
     /// entrada na etapa. Ver constantes <see cref="SourceWebhook"/>/<see cref="SourceEventsApi"/>/<see cref="SourceLegacy"/>.
     /// </summary>
     public string EntrySource { get; set; } = SourceWebhook;
+
+    /// <summary>
+    /// Data corrigida pelo admin quando a SDR moveu o lead na etapa fora do dia real
+    /// (ex.: esqueceu de mover e fez no dia seguinte). Quando setada, os KPIs usam esta
+    /// no lugar de <see cref="ChangedAt"/>. Null = sem correção; original vale.
+    /// </summary>
+    public DateTime? CorrectedChangedAt { get; set; }
+
+    /// <summary>Quem aplicou a correção (id do usuário do nosso backend).</summary>
+    public int? CorrectedByUserId { get; set; }
+
+    /// <summary>Email de quem aplicou a correção (trilha de auditoria, sobrevive a delete de user).</summary>
+    public string? CorrectedByEmail { get; set; }
+
+    /// <summary>Quando a correção foi feita.</summary>
+    public DateTime? CorrectedAt { get; set; }
+
+    /// <summary>Motivo opcional preenchido pelo admin no momento da correção.</summary>
+    public string? CorrectionReason { get; set; }
 }

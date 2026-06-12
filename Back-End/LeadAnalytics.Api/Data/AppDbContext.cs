@@ -210,6 +210,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             entity.Property(e => e.EntrySource).HasMaxLength(16).HasDefaultValue(LeadStageHistory.SourceWebhook);
             entity.Property(e => e.KommoEventId).HasMaxLength(32);
+            entity.Property(e => e.CorrectedByEmail).HasMaxLength(256);
+            entity.Property(e => e.CorrectionReason).HasMaxLength(500);
 
             // Dedup do backfill: o mesmo evento da Kommo nunca vira duas linhas pro mesmo lead.
             // Escopado por LeadId porque o id de evento é único POR CONTA Kommo (unidades

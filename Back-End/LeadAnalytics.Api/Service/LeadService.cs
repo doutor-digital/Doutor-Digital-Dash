@@ -1876,7 +1876,8 @@ public class LeadService(
         var agEntryRows = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
                      && h.EntrySource != LeadStageHistory.SourceLegacy
-                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc
+                     && (h.CorrectedChangedAt ?? h.ChangedAt) >= startUtc
+                     && (h.CorrectedChangedAt ?? h.ChangedAt) < endExclUtc
                      && !agExcluded.Contains(h.LeadId))
             .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
             .ToListAsync(ct);
@@ -1925,10 +1926,18 @@ public class LeadService(
         // misturava "leads criados no período que ATUALMENTE estão em Faltou" — KPI virava
         // cumulativo do mês em vez de "entrou em Faltou no dia". Sobrescreve a contagem
         // cohort-by-creation do funil.
+        // kpi_exclusions: leads marcados como "não contar" no card No-show.
+        var nsExcluded = await _db.KpiExclusions.AsNoTracking()
+            .Where(e => e.TenantId == clinicId && e.KpiKey == "no_show"
+                     && (!unitId.HasValue || e.UnitId == unitId.Value))
+            .Select(e => e.LeadId)
+            .ToListAsync(ct);
         var nsEntryRows = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => h.StageLabel == LeadStages.Faltou
                      && h.EntrySource != LeadStageHistory.SourceLegacy
-                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc)
+                     && (h.CorrectedChangedAt ?? h.ChangedAt) >= startUtc
+                     && (h.CorrectedChangedAt ?? h.ChangedAt) < endExclUtc
+                     && !nsExcluded.Contains(h.LeadId))
             .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
             .ToListAsync(ct);
         var nsByType = nsEntryRows

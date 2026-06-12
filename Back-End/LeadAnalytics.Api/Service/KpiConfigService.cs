@@ -171,10 +171,13 @@ public class KpiConfigService(AppDbContext db)
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
 
+                // Janela usa a data CORRIGIDA quando o admin ajustou a transição
+                // (ex.: SDR moveu o lead no dia errado), senão a original.
                 var count = await _db.LeadStageHistories.AsNoTracking()
                     .Where(h => ids.Contains(h.StageId)
                         && h.EntrySource != LeadStageHistory.SourceLegacy
-                        && h.ChangedAt >= from && h.ChangedAt <= to)
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
                     .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
                     .Distinct()
                     .CountAsync(ct);
@@ -295,7 +298,8 @@ public class KpiConfigService(AppDbContext db)
             var leadIds = await _db.LeadStageHistories.AsNoTracking()
                 .Where(h => ids.Contains(h.StageId)
                     && h.EntrySource != LeadStageHistory.SourceLegacy
-                    && h.ChangedAt >= from && h.ChangedAt <= to)
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
                 .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
                 .Distinct()
                 .ToListAsync(ct);
@@ -582,12 +586,20 @@ public class KpiConfigService(AppDbContext db)
         //    do próprio Lead pra montar os mesmos chips do caminho hardcoded.
         if (tratStageIds is { Count: > 0 })
         {
+            // Leads marcados como "não contar" pelo admin neste KPI ficam de fora.
+            var tratExcluded = await _db.KpiExclusions.AsNoTracking()
+                .Where(e => e.TenantId == clinicId && e.KpiKey == "tratamentos"
+                    && (!unitId.HasValue || e.UnitId == unitId.Value))
+                .Select(e => e.LeadId)
+                .ToListAsync(ct);
             var tratHist = await _db.LeadStageHistories.AsNoTracking()
                 .Where(h => tratStageIds.Contains(h.StageId)
                     && h.EntrySource != LeadStageHistory.SourceLegacy
-                    && h.ChangedAt >= from && h.ChangedAt <= to
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
                     && h.Lead!.TenantId == clinicId
-                    && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
+                    && (!unitId.HasValue || h.Lead.UnitId == unitId.Value)
+                    && !tratExcluded.Contains(h.LeadId))
                 .Select(h => new {
                     h.LeadId, h.Lead!.Source, h.Lead.CustomFieldsJson, h.Lead.ConsultationValue,
                 })
@@ -699,11 +711,12 @@ public class KpiConfigService(AppDbContext db)
         var agHist = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
                 && h.EntrySource != LeadStageHistory.SourceLegacy
-                && h.ChangedAt >= from && h.ChangedAt <= to
+                && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
                 && h.Lead.TenantId == clinicId
                 && !agExcluded.Contains(h.LeadId)
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
-            .Select(h => new { h.LeadId, h.StageLabel, h.ChangedAt, h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson })
+            .Select(h => new { h.LeadId, h.StageLabel, ChangedAt = (h.CorrectedChangedAt ?? h.ChangedAt), h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson })
             .ToListAsync(ct);
 
         // Um lead pode reentrar em agendado no período — conta uma vez (entrada mais recente).

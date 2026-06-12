@@ -62,6 +62,13 @@ public class KommoStageProcessor(AppDbContext db, ILogger<KommoStageProcessor> l
 
     private async Task UpsertConsultationAsync(Lead lead, bool paidInAdvance, DateTime occurredAt, CancellationToken ct)
     {
+        // A etapa "Agendado com pagamento" (05_*) é por definição um lead que JÁ pagou
+        // a consulta antecipadamente. Sem isso, o card "Agendados" mostrava "Sem pagamento
+        // antecipado" pra esses leads (HasPayment ficava false porque só PaymentService o
+        // setava — flow de boleto/PIX manual). Nunca DESmarcamos aqui: voltar pra 04 não
+        // estorna um pagamento que já existiu.
+        if (paidInAdvance && !lead.HasPayment) lead.HasPayment = true;
+
         var existing = await _db.Consultations
             .Where(c => c.LeadId == lead.Id && (c.Status == "agendada" || c.Status == "realizada"))
             .OrderByDescending(c => c.CreatedAt)

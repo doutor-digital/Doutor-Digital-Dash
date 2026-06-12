@@ -716,7 +716,14 @@ public class KpiConfigService(AppDbContext db)
                 && h.Lead.TenantId == clinicId
                 && !agExcluded.Contains(h.LeadId)
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
-            .Select(h => new { h.LeadId, h.StageLabel, ChangedAt = (h.CorrectedChangedAt ?? h.ChangedAt), h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson })
+            .Select(h => new {
+                h.LeadId, h.StageLabel, ChangedAt = (h.CorrectedChangedAt ?? h.ChangedAt),
+                h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson,
+                // Etapa ATUAL e HasPayment do lead — sem isso, lead que bounceou 04→05
+                // (bounce intra-agendado NÃO gera nova linha de histórico) seguia contado
+                // como "Sem pagamento" porque a linha do histórico ainda era 04.
+                CurrentStage = h.Lead.CurrentStage, HasPayment = h.Lead.HasPayment,
+            })
             .ToListAsync(ct);
 
         // Um lead pode reentrar em agendado no período — conta uma vez (entrada mais recente).
@@ -735,7 +742,11 @@ public class KpiConfigService(AppDbContext db)
 
             ag.Total++;
             if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;
-            if (h.StageLabel == LeadStages.AgendadoComPagamento) ag.ComPagamento++; else ag.SemPagamento++;
+            // Pagamento antecipado: confia na etapa ATUAL ou no HasPayment do lead — não
+            // no StageLabel histórico (bounce 04↔05 não cria nova linha). Cobre o lead
+            // que entrou em 04 e foi promovido pra 05 (típico em ITZ).
+            var isComPagamento = h.HasPayment || h.CurrentStage == LeadStages.AgendadoComPagamento;
+            if (isComPagamento) ag.ComPagamento++; else ag.SemPagamento++;
             agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
             // Tipo de agendamento (custom field "Tipo de agendamento" mapeado em
             // Configurações; fallback por nome "tipo" + "agendamento").

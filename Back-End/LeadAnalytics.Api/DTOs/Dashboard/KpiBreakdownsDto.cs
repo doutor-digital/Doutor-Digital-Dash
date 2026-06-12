@@ -45,6 +45,8 @@ public class AgendadosBreakdownDto
     [JsonPropertyName("com_pagamento")] public int ComPagamento { get; set; }
     [JsonPropertyName("sem_pagamento")] public int SemPagamento { get; set; }
     [JsonPropertyName("origens")] public List<ValueCountDto> Origens { get; set; } = new();
+    /// <summary>Quebra pelo custom field "Tipo de agendamento" (consulta/retorno/avaliação...).</summary>
+    [JsonPropertyName("tipos_agendamento")] public List<ValueCountDto> TiposAgendamento { get; set; } = new();
 }
 
 public class TratamentosBreakdownDto
@@ -54,6 +56,8 @@ public class TratamentosBreakdownDto
     [JsonPropertyName("fisios")] public List<ValueCountDto> Fisios { get; set; } = new();
     [JsonPropertyName("valor_consulta_total")] public decimal ValorConsultaTotal { get; set; }
     [JsonPropertyName("valor_tratamento_total")] public decimal ValorTratamentoTotal { get; set; }
+    /// <summary>Quebra pelo custom field "Tipo de tratamento" (fisioterapia/pilates/...).</summary>
+    [JsonPropertyName("tipos_tratamento")] public List<ValueCountDto> TiposTratamento { get; set; } = new();
 }
 
 public class ConsultasBreakdownDto

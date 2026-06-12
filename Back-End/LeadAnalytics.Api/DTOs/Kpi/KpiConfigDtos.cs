@@ -206,6 +206,10 @@ public class LeadProfileConfigDto
     [JsonPropertyName("qualificacao_field_id")] public long? QualificacaoFieldId { get; set; }
     /// <summary>Campo "Tipo" (resgate/ligação/mensagem) — breakdown do card Resgate.</summary>
     [JsonPropertyName("tipo_field_id")] public long? TipoFieldId { get; set; }
+    /// <summary>Campo "Tipo de agendamento" (consulta/retorno/avaliação) — breakdown do card Agendados.</summary>
+    [JsonPropertyName("tipo_agendamento_field_id")] public long? TipoAgendamentoFieldId { get; set; }
+    /// <summary>Campo "Tipo de tratamento" (fisioterapia/pilates/...) — breakdown do card Tratamentos.</summary>
+    [JsonPropertyName("tipo_tratamento_field_id")] public long? TipoTratamentoFieldId { get; set; }
 }
 
 /// <summary>Resultado do preview.</summary>

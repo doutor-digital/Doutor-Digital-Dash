@@ -28,6 +28,8 @@ public class KpiConfigService(AppDbContext db)
     public const string ProfileTratFechadoKey = "profile_tratamento_fechado";
     public const string ProfileQualificacaoKey = "profile_qualificacao";
     public const string ProfileTipoKey = "profile_tipo";
+    public const string ProfileTipoAgendamentoKey = "profile_tipo_agendamento";
+    public const string ProfileTipoTratamentoKey = "profile_tipo_tratamento";
 
     /// <summary>Mapeamento dos custom fields da Kommo p/ os breakdowns do dashboard.</summary>
     public class LeadProfileFields
@@ -45,6 +47,10 @@ public class KpiConfigService(AppDbContext db)
         public long? QualificacaoFieldId { get; set; }
         /// <summary>Campo "Tipo" da Kommo (resgate/ligação/mensagem) — alimenta o breakdown do card Resgate.</summary>
         public long? TipoFieldId { get; set; }
+        /// <summary>Campo "Tipo de agendamento" (consulta/retorno/avaliação) — breakdown do card Agendados.</summary>
+        public long? TipoAgendamentoFieldId { get; set; }
+        /// <summary>Campo "Tipo de tratamento" (fisioterapia/pilates/...) — breakdown do card Tratamentos.</summary>
+        public long? TipoTratamentoFieldId { get; set; }
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -439,10 +445,12 @@ public class KpiConfigService(AppDbContext db)
 
         var ag = new DTOs.Dashboard.AgendadosBreakdownDto();
         var agOrigens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var agTipos = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var trat = new DTOs.Dashboard.TratamentosBreakdownDto();
         var tratOrigens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tratFisios = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tratTipos = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var cons = new DTOs.Dashboard.ConsultasBreakdownDto();
         var consUpcoming = new List<DTOs.Dashboard.AgendamentoItemDto>();
@@ -532,6 +540,12 @@ public class KpiConfigService(AppDbContext db)
                     tratFisios[fisio] = tratFisios.GetValueOrDefault(fisio) + 1;
                 if (l.ConsultationValue.HasValue) trat.ValorConsultaTotal += l.ConsultationValue.Value;
                 if (valorTrat > 0) trat.ValorTratamentoTotal += valorTrat;
+                // Tipo de tratamento (custom field "Tipo de tratamento" mapeado em
+                // Configurações; fallback por nome "tipo" + "tratamento").
+                var tipoTrat = ExtractField(cf, profile.TipoTratamentoFieldId,
+                    n => n.Contains("tipo") && n.Contains("tratamento"))?.Trim();
+                if (!string.IsNullOrWhiteSpace(tipoTrat))
+                    tratTipos[tipoTrat] = tratTipos.GetValueOrDefault(tipoTrat) + 1;
             }
 
             // ── Consultas NÃO contam aqui — vão pela "Data de agendamento" no range,
@@ -637,6 +651,12 @@ public class KpiConfigService(AppDbContext db)
             if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;
             if (h.StageLabel == LeadStages.AgendadoComPagamento) ag.ComPagamento++; else ag.SemPagamento++;
             agOrigens[origem] = agOrigens.GetValueOrDefault(origem) + 1;
+            // Tipo de agendamento (custom field "Tipo de agendamento" mapeado em
+            // Configurações; fallback por nome "tipo" + "agendamento").
+            var tipoAg = ExtractField(cf, profile.TipoAgendamentoFieldId,
+                n => n.Contains("tipo") && n.Contains("agendamento"))?.Trim();
+            if (!string.IsNullOrWhiteSpace(tipoAg))
+                agTipos[tipoAg] = agTipos.GetValueOrDefault(tipoAg) + 1;
         }
 
         // ── Finaliza CadastroOrigens
@@ -691,8 +711,10 @@ public class KpiConfigService(AppDbContext db)
             Origens = Top(resgateOrigens),
         };
         ag.Origens = Top(agOrigens);
+        ag.TiposAgendamento = Top(agTipos);
         trat.Origens = Top(tratOrigens);
         trat.Fisios = Top(tratFisios);
+        trat.TiposTratamento = Top(tratTipos);
         cons.Agendamentos = consUpcoming.OrderBy(x => x.When).Take(8).ToList();
 
         return new DTOs.Dashboard.KpiBreakdownsDto
@@ -1071,7 +1093,7 @@ public class KpiConfigService(AppDbContext db)
             ProfileOrigemKey, ProfileMotivoKey, ProfileFisioKey,
             ProfileValorTratKey, ProfileValorConsultaKey,
             ProfileTratFechadoKey, ProfileQualificacaoKey,
-            ProfileTipoKey,
+            ProfileTipoKey, ProfileTipoAgendamentoKey, ProfileTipoTratamentoKey,
         };
         var rows = await _db.KpiConfigurations.AsNoTracking()
             .Where(k => k.UnitId == unitId && keys.Contains(k.KpiKey))
@@ -1098,6 +1120,8 @@ public class KpiConfigService(AppDbContext db)
             TratamentoFechadoFieldId = FieldOf(ProfileTratFechadoKey),
             QualificacaoFieldId = FieldOf(ProfileQualificacaoKey),
             TipoFieldId = FieldOf(ProfileTipoKey),
+            TipoAgendamentoFieldId = FieldOf(ProfileTipoAgendamentoKey),
+            TipoTratamentoFieldId = FieldOf(ProfileTipoTratamentoKey),
         };
     }
 
@@ -1120,6 +1144,8 @@ public class KpiConfigService(AppDbContext db)
             new KpiSaveItem(ProfileTratFechadoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TratamentoFechadoFieldId)),
             new KpiSaveItem(ProfileQualificacaoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.QualificacaoFieldId)),
             new KpiSaveItem(ProfileTipoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TipoFieldId)),
+            new KpiSaveItem(ProfileTipoAgendamentoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TipoAgendamentoFieldId)),
+            new KpiSaveItem(ProfileTipoTratamentoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TipoTratamentoFieldId)),
         };
         await SaveAsync(unitId, clinicId, items, email, ct);
     }

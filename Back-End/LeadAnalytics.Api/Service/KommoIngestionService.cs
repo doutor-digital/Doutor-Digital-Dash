@@ -408,7 +408,7 @@ public class KommoIngestionService(
     /// field_id (id mapeado); cai pra match por nome quando o id não está configurado.
     /// Aceita ISO, "yyyy-MM-dd", "dd/MM/yyyy" e unix (s/ms) — formatos comuns da Kommo.
     /// </summary>
-    private static DateTime? TryExtractDateFromCustomFields(
+    internal static DateTime? TryExtractDateFromCustomFields(
         string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
     {
         var raw = ExtractFieldRaw(customFieldsJson, fieldId, nameMatches);
@@ -518,7 +518,7 @@ public class KommoIngestionService(
     }
 
     /// <summary>Extrai um decimal de um custom field (aceita "1.500,00" e "1500.00").</summary>
-    private static decimal? TryExtractDecimalFromCustomFields(
+    internal static decimal? TryExtractDecimalFromCustomFields(
         string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
     {
         var raw = ExtractFieldRaw(customFieldsJson, fieldId, nameMatches);

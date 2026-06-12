@@ -211,6 +211,7 @@ builder.Services.AddScoped<KommoIngestionService>();
 builder.Services.AddScoped<KommoSyncService>();
 builder.Services.AddScoped<KommoStageHistoryBackfillService>();
 builder.Services.AddScoped<ResgateAttemptBackfillService>();
+builder.Services.AddScoped<ConsultasBackfillService>();
 builder.Services.AddScoped<KommoConversationsImporter>();
 builder.Services.AddScoped<AgentIngestionService>();
 builder.Services.AddHttpClient<KommoApiClient>(c =>

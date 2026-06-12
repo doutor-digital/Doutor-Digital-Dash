@@ -88,6 +88,15 @@ public class Lead
 
     public DateTime? AppointmentScheduledAt { get; set; }
 
+    /// <summary>
+    /// Quando o campo AppointmentScheduledAt foi PREENCHIDO/atualizado (última mudança
+    /// do valor). Usado no card Consultas pra medir produtividade da SDR — quantos
+    /// agendamentos ela marcou no dia, independente de quando a consulta vai ser.
+    /// Setado no KommoIngestionService quando o valor do custom field muda, e no
+    /// PUT manual do perfil quando a Revisão Comercial atualiza.
+    /// </summary>
+    public DateTime? AppointmentScheduledAtFilledAt { get; set; }
+
     // enum (sem_interacao|sem_continuidade|plano_saude|terceiros|sem_condicoes|
     //       vai_se_organizar|busca_laudo|interesse_pilates|interesse_liberacao|
     //       mora_outra_cidade|sem_interesse|clicou_engano|outro_tratamento|

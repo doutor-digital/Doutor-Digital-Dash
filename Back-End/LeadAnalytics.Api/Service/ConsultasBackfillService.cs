@@ -57,6 +57,10 @@ public class ConsultasBackfillService(
                 if (date.HasValue)
                 {
                     l.AppointmentScheduledAt = date;
+                    // Pra dados antigos não temos a data exata em que a SDR preencheu o
+                    // campo. Usa Lead.UpdatedAt como proxy (última modificação do lead
+                    // — geralmente a mais próxima do preenchimento real).
+                    l.AppointmentScheduledAtFilledAt = l.UpdatedAt;
                     apptUpdated++;
                 }
             }

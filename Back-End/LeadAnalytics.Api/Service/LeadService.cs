@@ -262,7 +262,13 @@ public class LeadService(
         }
         if (dto.HadInteraction.HasValue) lead.HadInteraction = dto.HadInteraction.Value;
         if (dto.ScheduledConsultation.HasValue) lead.ScheduledConsultation = dto.ScheduledConsultation.Value;
-        if (dto.AppointmentScheduledAt.HasValue) lead.AppointmentScheduledAt = dto.AppointmentScheduledAt.Value;
+        if (dto.AppointmentScheduledAt.HasValue && dto.AppointmentScheduledAt.Value != lead.AppointmentScheduledAt)
+        {
+            // Atualização manual da Revisão Comercial conta como "agendamento preenchido agora"
+            // — alimenta o card Consultas (produtividade do dia).
+            lead.AppointmentScheduledAt = dto.AppointmentScheduledAt.Value;
+            lead.AppointmentScheduledAtFilledAt = DateTime.UtcNow;
+        }
         if (dto.NoAppointmentReason is not null) lead.NoAppointmentReason = string.IsNullOrWhiteSpace(dto.NoAppointmentReason) ? null : dto.NoAppointmentReason;
         if (dto.NoAppointmentCity is not null) lead.NoAppointmentCity = string.IsNullOrWhiteSpace(dto.NoAppointmentCity) ? null : dto.NoAppointmentCity;
         if (dto.NoCloseReason is not null) lead.NoCloseReason = string.IsNullOrWhiteSpace(dto.NoCloseReason) ? null : dto.NoCloseReason;
@@ -1743,14 +1749,14 @@ public class LeadService(
             .CountAsync(ct);
 
         // KPIs por etapa
-        // Consultas: leads com "Data de agendamento" (Lead.AppointmentScheduledAt) DENTRO
-        // do range. Não por stage — inclui leads agendados pra futuro no período E os
-        // que já compareceram. Sai do baseQ (cohort por criação) e vai pelo scopeQ porque
-        // a janela aqui é a do agendamento, não a da criação do lead.
+        // Consultas: leads cujo CAMPO "Data de agendamento" foi PREENCHIDO dentro do
+        // range (mede produtividade da SDR — quantos agendamentos ela marcou no
+        // período, não quantos vão acontecer). A data exata da consulta em si pode
+        // ser qualquer uma. Sai do baseQ pra alcançar leads criados em qualquer época.
         var consultas = await scopeQ
-            .Where(l => l.AppointmentScheduledAt != null
-                     && l.AppointmentScheduledAt >= startUtc
-                     && l.AppointmentScheduledAt <  endExclUtc)
+            .Where(l => l.AppointmentScheduledAtFilledAt != null
+                     && l.AppointmentScheduledAtFilledAt >= startUtc
+                     && l.AppointmentScheduledAtFilledAt <  endExclUtc)
             .CountAsync(ct);
         var comPag = await baseQ
             .Where(l => l.CurrentStage == LeadStages.AgendadoComPagamento)
@@ -1898,12 +1904,12 @@ public class LeadService(
             .Distinct()
             .CountAsync(ct);
 
-        // Consultas por LeadType — mesma semântica do headline (por AppointmentScheduledAt
-        // no range), agrupada pra dividir entre Cadastro/Resgate no funil.
+        // Consultas por LeadType — mesma semântica do headline (por data de PREENCHIMENTO
+        // do campo Data de agendamento, NÃO pela data da consulta em si).
         var consultasByType = await scopeQ
-            .Where(l => l.AppointmentScheduledAt != null
-                     && l.AppointmentScheduledAt >= startUtc
-                     && l.AppointmentScheduledAt <  endExclUtc)
+            .Where(l => l.AppointmentScheduledAtFilledAt != null
+                     && l.AppointmentScheduledAtFilledAt >= startUtc
+                     && l.AppointmentScheduledAtFilledAt <  endExclUtc)
             .GroupBy(l => l.LeadType ?? "indefinido")
             .Select(g => new { Type = g.Key, Count = g.Count() })
             .ToListAsync(ct);

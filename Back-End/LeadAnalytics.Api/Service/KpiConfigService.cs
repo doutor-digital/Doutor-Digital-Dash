@@ -637,16 +637,17 @@ public class KpiConfigService(AppDbContext db)
             }
         }
 
-        // ── Consultas: leads com Lead.AppointmentScheduledAt dentro do range. Não por
-        //    stage. Inclui leads agendados pra futuro nesse período e os que já
-        //    compareceram. Cadastro/Resgate vem do mesmo critério de classificação do loop.
+        // ── Consultas: leads cujo CAMPO "Data de agendamento" foi PREENCHIDO dentro do
+        //    range — mede produtividade da SDR no período (quantos agendamentos marcou),
+        //    não a data da consulta em si. Pra "vai chegar hoje/amanhã" ver Próximos
+        //    agendamentos abaixo (continua usando AppointmentScheduledAt).
         var consultasRows = await _db.Leads.AsNoTracking()
             .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                 && (!unitId.HasValue || l.UnitId == unitId.Value)
-                && l.AppointmentScheduledAt != null
-                && l.AppointmentScheduledAt >= from
-                && l.AppointmentScheduledAt <= to)
+                && l.AppointmentScheduledAtFilledAt != null
+                && l.AppointmentScheduledAtFilledAt >= from
+                && l.AppointmentScheduledAtFilledAt <= to)
             .Select(l => new { l.LeadType, l.ConsultationValue, l.CustomFieldsJson })
             .ToListAsync(ct);
         foreach (var l in consultasRows)

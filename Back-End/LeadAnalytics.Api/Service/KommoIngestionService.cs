@@ -166,7 +166,14 @@ public class KommoIngestionService(
             var apptDate = TryExtractDateFromCustomFields(
                 lead.CustomFieldsJson, profileFields.AppointmentFieldId,
                 n => n.Contains("agendamento"));
-            if (apptDate.HasValue) lead.AppointmentScheduledAt = apptDate;
+            if (apptDate.HasValue && apptDate.Value != lead.AppointmentScheduledAt)
+            {
+                // Data MUDOU (incluindo de null → valor) — atualiza e registra QUANDO
+                // foi preenchida. Card Consultas conta por essa data de preenchimento
+                // (produtividade do dia da SDR), não pela data da consulta em si.
+                lead.AppointmentScheduledAt = apptDate;
+                lead.AppointmentScheduledAtFilledAt = ev.KommoModifiedAtUtc ?? now;
+            }
 
             // Valor da consulta (campo escolhido em Configurações → "Valor da consulta").
             // Alimenta o card Consultas → Valor total. Não sobrescreve um valor já preenchido

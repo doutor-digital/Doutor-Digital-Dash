@@ -1956,7 +1956,10 @@ public class LeadService(
                     Total = funnelRows.Sum(r => r.Total),
                     Interacoes = funnelRows.Sum(r => r.Interacoes),
                     Agendados = agendadosTotal,
-                    Consultas = funnelRows.Sum(r => r.Consultas),
+                    // Consultas: usa Data de agendamento no range (consultasByTypeMap),
+                    // não a contagem por etapa antiga (que ficou em funnelRows.Consultas).
+                    // Alinha com o breakdown do card e com o card de Consultas.
+                    Consultas = consultasByTypeMap.Values.Sum(),
                     Tratamentos = funnelRows.Sum(r => r.Tratamentos),
                     NoShow = noShowTotal,
                 };

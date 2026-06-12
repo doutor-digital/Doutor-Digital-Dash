@@ -1060,6 +1060,58 @@ namespace LeadAnalytics.Api.Migrations
                     b.ToTable("kpi_configurations", (string)null);
                 });
 
+            modelBuilder.Entity("LeadAnalytics.Api.Models.KpiExclusion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ExcludedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("excluded_at");
+
+                    b.Property<int?>("ExcludedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("excluded_by_user_id");
+
+                    b.Property<string>("KpiKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("kpi_key");
+
+                    b.Property<int>("LeadId")
+                        .HasColumnType("integer")
+                        .HasColumnName("lead_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<int?>("UnitId")
+                        .HasColumnType("integer")
+                        .HasColumnName("unit_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("TenantId", "KpiKey");
+
+                    b.HasIndex("TenantId", "UnitId", "KpiKey", "LeadId")
+                        .IsUnique();
+
+                    b.ToTable("kpi_exclusions");
+                });
+
             modelBuilder.Entity("LeadAnalytics.Api.Models.Lead", b =>
                 {
                     b.Property<int>("Id")
@@ -2561,6 +2613,17 @@ namespace LeadAnalytics.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("LeadAnalytics.Api.Models.KpiExclusion", b =>
+                {
+                    b.HasOne("LeadAnalytics.Api.Models.Lead", "Lead")
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lead");
                 });
 
             modelBuilder.Entity("LeadAnalytics.Api.Models.Lead", b =>

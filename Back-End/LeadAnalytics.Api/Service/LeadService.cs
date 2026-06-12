@@ -1865,10 +1865,22 @@ public class LeadService(
         // backfill de eventos) — NÃO por LeadType (vem vazio) nem por criação do lead. Conta lead
         // distinto na janela. Sobrescreve o total do funil de resgate (era a causa do "10").
         var resgateTotal = await _db.RecoveryAttempts.AsNoTracking()
-            .Where(r => r.EntrySource == "events_api"
+            .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
                      && r.CreatedAt >= startUtc && r.CreatedAt < endExclUtc)
             .Join(scopeQ, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
             .Distinct()
+            .CountAsync(ct);
+
+        // Cadastro: NÃO conta por LeadType literal "cadastro" (perde os null/vazios, que
+        // são a maioria em unidades onde o LeadType raramente é preenchido — ex.: Açailândia
+        // tem 3935/3935 leads com LeadType=null). Conta IsCadastro(LeadType) = null/vazio ou
+        // contém "cadastro"/"novo" — alinhado com KpiBreakdownsAsync (KpiConfigService:424).
+        // Resgate roda em outra janela (recovery_attempts.CreatedAt), os dois não competem.
+        var cadastroTotal = await baseQ
+            .Where(l => l.LeadType == null
+                     || l.LeadType == string.Empty
+                     || EF.Functions.ILike(l.LeadType, "%cadastro%")
+                     || EF.Functions.ILike(l.LeadType, "%novo%"))
             .CountAsync(ct);
 
         // No-show por DATA DE ENTRADA no stage (mesmo padrão de Agendados). Antes contava
@@ -1907,7 +1919,13 @@ public class LeadService(
             return new FunnelGroupDto
             {
                 // Resgate: total pela data real do preenchimento (recovery_attempts).
-                Total = type == "resgate" ? resgateTotal : (row?.Total ?? 0),
+                // Cadastro: IsCadastro(LeadType) — não exige LeadType="cadastro" literal.
+                Total = type switch
+                {
+                    "resgate" => resgateTotal,
+                    "cadastro" => cadastroTotal,
+                    _ => row?.Total ?? 0,
+                },
                 Interacoes = row?.Interacoes ?? 0,
                 Agendados = agByType.GetValueOrDefault(type, 0),
                 Consultas = row?.Consultas ?? 0,

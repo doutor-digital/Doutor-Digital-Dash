@@ -219,16 +219,20 @@ public class KpiConfigService(AppDbContext db)
             case KpiSourceTypes.RecoveryAttempt:
             {
                 // Conta leads DISTINTOS com tentativa de resgate dentro do período pela
-                // data do EVENTO na Kommo (CreatedAt do attempt vindo do backfill do campo
-                // "Tentativas de resgastes" — ver ResgateAttemptBackfillService:80,97).
-                // EntrySource="events_api" exclui tentativas inseridas manualmente, que têm
-                // CreatedAt=DateTime.UtcNow do backend (não confiável pra agregação por dia).
+                // data do EVENTO na Kommo. Duas fontes confiáveis:
+                //  • "events_api" — backfill noturno via API de eventos da Kommo
+                //    (ResgateAttemptBackfillService); CreatedAt = data exata do evento.
+                //  • "webhook" — gravação ao vivo via KommoIngestionService quando o
+                //    "Tentativas de resgastes" é preenchido; CreatedAt = updated_at do
+                //    lead na Kommo (close enough — KPI agrega por dia).
+                // Excluímos "manual" porque CreatedAt = DateTime.UtcNow do backend, não
+                // confiável p/ agregar por dia ("preenchi semana passada" cairia hoje).
                 var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
 
                 var count = await _db.RecoveryAttempts.AsNoTracking()
-                    .Where(r => r.EntrySource == "events_api"
+                    .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
                         && r.CreatedAt >= from && r.CreatedAt <= to)
                     .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
                     .Distinct()
@@ -283,7 +287,7 @@ public class KpiConfigService(AppDbContext db)
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
             var leadIds = await _db.RecoveryAttempts.AsNoTracking()
-                .Where(r => r.EntrySource == "events_api"
+                .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
                     && r.CreatedAt >= from && r.CreatedAt <= to)
                 .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
                 .Distinct()
@@ -603,7 +607,7 @@ public class KpiConfigService(AppDbContext db)
         //    recuperado. Conta lead DISTINTO no período. Quebra por valor da tentativa (Outcome)
         //    e por origem (custom field/Source do lead).
         var resgateRows = await _db.RecoveryAttempts.AsNoTracking()
-            .Where(r => r.EntrySource == "events_api"
+            .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
                 && r.CreatedAt >= from && r.CreatedAt <= to
                 && r.Lead!.TenantId == clinicId
                 && (!unitId.HasValue || r.Lead.UnitId == unitId.Value))

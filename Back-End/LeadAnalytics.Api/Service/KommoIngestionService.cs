@@ -180,6 +180,13 @@ public class KommoIngestionService(
                 if (consVal.HasValue) lead.ConsultationValue = consVal;
             }
 
+            // Tentativas de resgate (multi-select "Tentativas de resgastes" — typo da Kommo).
+            // Antes só o backfill da API de eventos (24h) criava RecoveryAttempt; agora o
+            // webhook ao vivo também grava em tempo real, dedup por (LeadId, Outcome). Usa
+            // o updated_at do lead na Kommo como CreatedAt (close enough — KPI agrega por
+            // dia). O backfill noturno continua, e a query do KPI aceita ambos os sources.
+            await UpsertRecoveryAttemptsAsync(lead, unit.ClinicId, ev.KommoModifiedAtUtc ?? now, ct);
+
             // Valor do negócio (price da Kommo) — string crua → decimal (invariant).
             if (!string.IsNullOrWhiteSpace(ev.Price)
                 && decimal.TryParse(ev.Price, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
@@ -422,6 +429,92 @@ public class KommoIngestionService(
         if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d1)) return d1;
         if (DateTime.TryParse(raw, new CultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var d2)) return d2.ToUniversalTime();
         return null;
+    }
+
+    /// <summary>
+    /// Garante que existe uma <see cref="RecoveryAttempt"/> pra cada valor presente no
+    /// custom field "Tentativas de resgastes" do lead. Dedup por (LeadId, Outcome) —
+    /// rodar de novo não duplica. EntrySource="webhook" pra distinguir do backfill
+    /// (events_api). CreatedAt = updated_at do lead na Kommo (não DateTime.UtcNow).
+    /// </summary>
+    private async Task UpsertRecoveryAttemptsAsync(Lead lead, int tenantId, DateTime attemptAt, CancellationToken ct)
+    {
+        if (lead.Id <= 0) return;
+        var values = ExtractMultiselectValues(lead.CustomFieldsJson,
+            n => n.Contains("tentativ") && n.Contains("resga"));
+        if (values.Count == 0) return;
+
+        var existing = await _db.RecoveryAttempts.AsNoTracking()
+            .Where(r => r.LeadId == lead.Id)
+            .Select(r => r.Outcome)
+            .ToListAsync(ct);
+        var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var raw in values)
+        {
+            var outcome = raw.Trim();
+            if (outcome.Length == 0 || existingSet.Contains(outcome)) continue;
+            _db.RecoveryAttempts.Add(new RecoveryAttempt
+            {
+                LeadId = lead.Id,
+                TenantId = tenantId,
+                Method = "resgate",
+                Outcome = outcome,
+                CreatedAt = DateTime.SpecifyKind(attemptAt, DateTimeKind.Utc),
+                EntrySource = "webhook",
+            });
+            existingSet.Add(outcome);
+        }
+    }
+
+    /// <summary>
+    /// Lê todos os valores de um custom field multi-select (cada item de values[] vira
+    /// uma string). Match por nome (lowercase). Tolerante a formatos: values[] de objetos
+    /// com .value, values[] de strings cruas, ou value direto.
+    /// </summary>
+    private static List<string> ExtractMultiselectValues(string? customFieldsJson, Func<string, bool> nameMatches)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(customFieldsJson)) return result;
+        try
+        {
+            using var doc = JsonDocument.Parse(customFieldsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return result;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+                if (!el.TryGetProperty("field_name", out var fn) || fn.ValueKind != JsonValueKind.String) continue;
+                var name = fn.GetString()?.ToLowerInvariant() ?? "";
+                if (!nameMatches(name)) continue;
+
+                if (el.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var v in vals.EnumerateArray())
+                    {
+                        string? s = null;
+                        if (v.ValueKind == JsonValueKind.Object && v.TryGetProperty("value", out var inner))
+                        {
+                            s = inner.ValueKind == JsonValueKind.String ? inner.GetString()
+                              : inner.ValueKind == JsonValueKind.Number ? inner.GetRawText()
+                              : null;
+                        }
+                        else if (v.ValueKind == JsonValueKind.String) s = v.GetString();
+                        else if (v.ValueKind == JsonValueKind.Number) s = v.GetRawText();
+                        if (!string.IsNullOrWhiteSpace(s)) result.Add(s!);
+                    }
+                }
+                else if (el.TryGetProperty("value", out var direct))
+                {
+                    var s = direct.ValueKind == JsonValueKind.String ? direct.GetString()
+                          : direct.ValueKind == JsonValueKind.Number ? direct.GetRawText()
+                          : null;
+                    if (!string.IsNullOrWhiteSpace(s)) result.Add(s!);
+                }
+                return result;
+            }
+        }
+        catch (JsonException) { /* ignora json malformado */ }
+        return result;
     }
 
     /// <summary>Extrai um decimal de um custom field (aceita "1.500,00" e "1500.00").</summary>

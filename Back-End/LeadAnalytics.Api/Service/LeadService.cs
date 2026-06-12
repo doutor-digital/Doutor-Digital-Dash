@@ -1731,6 +1731,17 @@ public class LeadService(
 
         var totalLeads = await baseQ.CountAsync(ct);
 
+        // Leads que foram deletados na Kommo dentro do período (webhook delete →
+        // Status="deleted"). NÃO entram em totalLeads (scopeQ já exclui via
+        // ExcludeDeleted), mas o front mostra como chip "Deletados" pra SDR entender.
+        var totalLeadsDeleted = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                     && l.Status == LeadQueryExtensions.StatusDeleted
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) >= startUtc
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) <  endExclUtc
+                     && (!unitId.HasValue || l.UnitId == unitId.Value))
+            .CountAsync(ct);
+
         // KPIs por etapa
         // Consultas: leads com "Data de agendamento" (Lead.AppointmentScheduledAt) DENTRO
         // do range. Não por stage — inclui leads agendados pra futuro no período E os
@@ -2025,6 +2036,7 @@ public class LeadService(
             DateFrom = dateFrom.Date,
             DateTo = dateTo.Date,
             TotalLeads = totalLeads,
+            TotalLeadsDeleted = totalLeadsDeleted,
             Consultas = consultas,
             ComPagamento = comPag,
             SemPagamento = semPag,

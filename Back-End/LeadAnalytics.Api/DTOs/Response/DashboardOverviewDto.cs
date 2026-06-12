@@ -14,6 +14,10 @@ public class DashboardOverviewDto
     [JsonPropertyName("total_leads")]
     public int TotalLeads { get; set; }
 
+    /// <summary>Leads deletados na Kommo dentro do período (Status="deleted").</summary>
+    [JsonPropertyName("total_leads_deleted")]
+    public int TotalLeadsDeleted { get; set; }
+
     public int Consultas { get; set; }
 
     [JsonPropertyName("com_pagamento")]

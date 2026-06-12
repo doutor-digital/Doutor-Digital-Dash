@@ -430,6 +430,16 @@ public class KpiConfigService(AppDbContext db)
         static bool IsResgate(string? t) => !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
         static bool IsCadastro(string? t) => string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
 
+        // Prefere o custom field "Tipo" mapeado em Configurações → Perfil do Lead
+        // (TipoFieldId). Fallback: Lead.LeadType (coluna SQL — geralmente vazia em
+        // unidades novas). Resolve o caso "o lead tem TIPO preenchido na Kommo mas
+        // o card não classifica como Resgate/Cadastro".
+        string? ResolveTipo(string? cf, string? leadType)
+        {
+            var custom = ExtractField(cf, profile.TipoFieldId, n => n == "tipo")?.Trim();
+            return !string.IsNullOrWhiteSpace(custom) ? custom : leadType;
+        }
+
         foreach (var l in rows)
         {
             var cf = l.CustomFieldsJson;
@@ -455,12 +465,16 @@ public class KpiConfigService(AppDbContext db)
             // "Tipo de fechamento". Casa por nome ("tentativ"+"resga" — typo "resgastes").
             var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resga"))?.Trim();
             var hasResgate = !string.IsNullOrWhiteSpace(tentativasResgate);
-            var leadIsResgate = hasResgate || IsResgate(l.LeadType);
-            // Cadastro olha SÓ pro LeadType (e fallback null = considerado cadastro).
+            // Resolve tipo prefere o custom field "Tipo" mapeado (ResolveTipo),
+            // que é onde as moças marcam Cadastro/Resgate — LeadType (SQL) raramente
+            // está preenchido.
+            var tipoResolved = ResolveTipo(cf, l.LeadType);
+            var leadIsResgate = hasResgate || IsResgate(tipoResolved);
+            // Cadastro olha SÓ pro tipo resolvido (e fallback null = considerado cadastro).
             // Não exclui mais por hasResgate: lead criado hoje conta como Cadastro
             // de hoje mesmo que vire resgate depois — Resgate roda em outra janela
             // (data do preenchimento via recovery_attempts), os dois não competem.
-            var leadIsCadastro = IsCadastro(l.LeadType);
+            var leadIsCadastro = IsCadastro(tipoResolved);
 
             var stage = l.CurrentStage ?? "";
             // Agendados NÃO são contados aqui — são contados por data de ENTRADA na
@@ -520,8 +534,9 @@ public class KpiConfigService(AppDbContext db)
             cons.Total++;
             var tentativasResgate = ExtractField(l.CustomFieldsJson, null,
                 n => n.Contains("tentativ") && n.Contains("resga"))?.Trim();
-            var isResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(l.LeadType);
-            if (isResgate) cons.Resgate++; else if (IsCadastro(l.LeadType)) cons.Cadastro++;
+            var tipoResolved = ResolveTipo(l.CustomFieldsJson, l.LeadType);
+            var isResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(tipoResolved);
+            if (isResgate) cons.Resgate++; else if (IsCadastro(tipoResolved)) cons.Cadastro++;
             var consVal = l.ConsultationValue ?? TryParseDecimal(ExtractField(l.CustomFieldsJson,
                 profile.ValorConsultaFieldId,
                 n => n.Contains("valor") && n.Contains("consulta")));
@@ -584,8 +599,9 @@ public class KpiConfigService(AppDbContext db)
                        : !string.IsNullOrWhiteSpace(h.Source) ? h.Source!.Trim()
                        : "—";
             var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resgat"))?.Trim();
-            var leadIsResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(h.LeadType);
-            var leadIsCadastro = !leadIsResgate && IsCadastro(h.LeadType);
+            var tipoResolved = ResolveTipo(cf, h.LeadType);
+            var leadIsResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(tipoResolved);
+            var leadIsCadastro = !leadIsResgate && IsCadastro(tipoResolved);
 
             ag.Total++;
             if (leadIsResgate) ag.Resgate++; else if (leadIsCadastro) ag.Cadastro++;

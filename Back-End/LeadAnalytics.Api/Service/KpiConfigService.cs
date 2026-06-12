@@ -500,19 +500,32 @@ public class KpiConfigService(AppDbContext db)
                 if (valorTrat > 0) trat.ValorTratamentoTotal += valorTrat;
             }
 
-            // ── Consultas
-            if (isConsulta)
-            {
-                cons.Total++;
-                if (leadIsResgate) cons.Resgate++; else if (leadIsCadastro) cons.Cadastro++;
-                // Valor total: prefere a coluna SQL (preenchida na Revisão comercial) —
-                // se nula, cai pra leitura do custom field "valor consulta" (mapeado pelo
-                // analista via profile.ValorConsultaFieldId, fallback por nome).
-                var consVal = l.ConsultationValue ?? TryParseDecimal(ExtractField(cf,
-                    profile.ValorConsultaFieldId,
-                    n => n.Contains("valor") && n.Contains("consulta")));
-                if (consVal.HasValue) cons.ValorTotal += consVal.Value;
-            }
+            // ── Consultas NÃO contam aqui — vão pela "Data de agendamento" no range,
+            //    independente da etapa atual. Query separada logo após o loop.
+        }
+
+        // ── Consultas: leads com Lead.AppointmentScheduledAt dentro do range. Não por
+        //    stage. Inclui leads agendados pra futuro nesse período e os que já
+        //    compareceram. Cadastro/Resgate vem do mesmo critério de classificação do loop.
+        var consultasRows = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                && (!unitId.HasValue || l.UnitId == unitId.Value)
+                && l.AppointmentScheduledAt != null
+                && l.AppointmentScheduledAt >= from
+                && l.AppointmentScheduledAt <= to)
+            .Select(l => new { l.LeadType, l.ConsultationValue, l.CustomFieldsJson })
+            .ToListAsync(ct);
+        foreach (var l in consultasRows)
+        {
+            cons.Total++;
+            var tentativasResgate = ExtractField(l.CustomFieldsJson, null,
+                n => n.Contains("tentativ") && n.Contains("resga"))?.Trim();
+            var isResgate = !string.IsNullOrWhiteSpace(tentativasResgate) || IsResgate(l.LeadType);
+            if (isResgate) cons.Resgate++; else if (IsCadastro(l.LeadType)) cons.Cadastro++;
+            var consVal = l.ConsultationValue ?? TryParseDecimal(ExtractField(l.CustomFieldsJson,
+                profile.ValorConsultaFieldId,
+                n => n.Contains("valor") && n.Contains("consulta")));
+            if (consVal.HasValue) cons.ValorTotal += consVal.Value;
         }
 
         // ── Próximos agendamentos: leads com AppointmentScheduledAt FUTURO, independente

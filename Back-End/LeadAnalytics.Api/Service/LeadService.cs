@@ -1730,8 +1730,14 @@ public class LeadService(
         var totalLeads = await baseQ.CountAsync(ct);
 
         // KPIs por etapa
-        var consultas = await baseQ
-            .Where(l => l.CurrentStage == LeadStages.EmTratamento || l.CurrentStage == LeadStages.FechouTratamento)
+        // Consultas: leads com "Data de agendamento" (Lead.AppointmentScheduledAt) DENTRO
+        // do range. Não por stage — inclui leads agendados pra futuro no período E os
+        // que já compareceram. Sai do baseQ (cohort por criação) e vai pelo scopeQ porque
+        // a janela aqui é a do agendamento, não a da criação do lead.
+        var consultas = await scopeQ
+            .Where(l => l.AppointmentScheduledAt != null
+                     && l.AppointmentScheduledAt >= startUtc
+                     && l.AppointmentScheduledAt <  endExclUtc)
             .CountAsync(ct);
         var comPag = await baseQ
             .Where(l => l.CurrentStage == LeadStages.AgendadoComPagamento)
@@ -1871,6 +1877,17 @@ public class LeadService(
             .Distinct()
             .CountAsync(ct);
 
+        // Consultas por LeadType — mesma semântica do headline (por AppointmentScheduledAt
+        // no range), agrupada pra dividir entre Cadastro/Resgate no funil.
+        var consultasByType = await scopeQ
+            .Where(l => l.AppointmentScheduledAt != null
+                     && l.AppointmentScheduledAt >= startUtc
+                     && l.AppointmentScheduledAt <  endExclUtc)
+            .GroupBy(l => l.LeadType ?? "indefinido")
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var consultasByTypeMap = consultasByType.ToDictionary(x => x.Type, x => x.Count);
+
         // Cadastro: NÃO conta por LeadType literal "cadastro" (perde os null/vazios, que
         // são a maioria em unidades onde o LeadType raramente é preenchido — ex.: Açailândia
         // tem 3935/3935 leads com LeadType=null). Conta IsCadastro(LeadType) = null/vazio ou
@@ -1928,7 +1945,12 @@ public class LeadService(
                 },
                 Interacoes = row?.Interacoes ?? 0,
                 Agendados = agByType.GetValueOrDefault(type, 0),
-                Consultas = row?.Consultas ?? 0,
+                // Consultas: por Data de agendamento dentro do range, NÃO por stage.
+                // Dependendo do LeadType "indefinido" o sistema mapeia pra cadastro/resgate
+                // — mesmo critério do total: somamos o bucket "indefinido" no Cadastro.
+                Consultas = type == "cadastro"
+                    ? consultasByTypeMap.GetValueOrDefault("cadastro", 0) + consultasByTypeMap.GetValueOrDefault("indefinido", 0)
+                    : consultasByTypeMap.GetValueOrDefault(type, 0),
                 Tratamentos = row?.Tratamentos ?? 0,
                 NoShow = nsByType.GetValueOrDefault(type, 0),
             };

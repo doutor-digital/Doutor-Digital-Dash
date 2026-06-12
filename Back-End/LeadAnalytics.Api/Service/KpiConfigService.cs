@@ -24,6 +24,7 @@ public class KpiConfigService(AppDbContext db)
     public const string ProfileMotivoKey = "profile_motivo_nao_agendamento";
     public const string ProfileFisioKey = "profile_fisioterapeuta";
     public const string ProfileValorTratKey = "profile_valor_tratamento";
+    public const string ProfileValorConsultaKey = "profile_valor_consulta";
     public const string ProfileTratFechadoKey = "profile_tratamento_fechado";
     public const string ProfileQualificacaoKey = "profile_qualificacao";
     public const string ProfileTipoKey = "profile_tipo";
@@ -38,6 +39,8 @@ public class KpiConfigService(AppDbContext db)
         public long? MotivoNaoAgendamentoFieldId { get; set; }
         public long? FisioterapeutaFieldId { get; set; }
         public long? ValorTratamentoFieldId { get; set; }
+        /// <summary>Campo "Valor da consulta" da Kommo — alimenta o card Consultas.ValorTotal.</summary>
+        public long? ValorConsultaFieldId { get; set; }
         public long? TratamentoFechadoFieldId { get; set; }
         public long? QualificacaoFieldId { get; set; }
         /// <summary>Campo "Tipo" da Kommo (resgate/ligação/mensagem) — alimenta o breakdown do card Resgate.</summary>
@@ -498,17 +501,47 @@ public class KpiConfigService(AppDbContext db)
             {
                 cons.Total++;
                 if (leadIsResgate) cons.Resgate++; else if (leadIsCadastro) cons.Cadastro++;
-                if (l.ConsultationValue.HasValue) cons.ValorTotal += l.ConsultationValue.Value;
-                if (l.AppointmentScheduledAt.HasValue)
-                {
-                    consUpcoming.Add(new DTOs.Dashboard.AgendamentoItemDto
-                    {
-                        Name = l.Name,
-                        When = l.AppointmentScheduledAt,
-                        Tipo = leadIsResgate ? "resgate" : "cadastro",
-                    });
-                }
+                // Valor total: prefere a coluna SQL (preenchida na Revisão comercial) —
+                // se nula, cai pra leitura do custom field "valor consulta" (mapeado pelo
+                // analista via profile.ValorConsultaFieldId, fallback por nome).
+                var consVal = l.ConsultationValue ?? TryParseDecimal(ExtractField(cf,
+                    profile.ValorConsultaFieldId,
+                    n => n.Contains("valor") && n.Contains("consulta")));
+                if (consVal.HasValue) cons.ValorTotal += consVal.Value;
             }
+        }
+
+        // ── Próximos agendamentos: leads com AppointmentScheduledAt FUTURO, independente
+        //    de stage e do range comercial. Lê da coluna SQL (populada pelo sync via
+        //    AppointmentFieldId) e cai pro CustomFieldsJson quando o sync ainda não
+        //    rodou pra esse lead — assim funciona em dados novos e antigos.
+        var apptNow = DateTime.UtcNow;
+        var apptWindowEnd = apptNow.AddDays(60);
+        var apptRows = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == clinicId
+                && (!unitId.HasValue || l.UnitId == unitId.Value)
+                && (l.AppointmentScheduledAt != null
+                    || (l.CustomFieldsJson != null && profile.AppointmentFieldId != null)))
+            .Select(l => new { l.Name, l.AppointmentScheduledAt, l.CustomFieldsJson, l.LeadType })
+            .Take(MaxScan)
+            .ToListAsync(ct);
+        foreach (var l in apptRows)
+        {
+            DateTime? appt = l.AppointmentScheduledAt;
+            if (appt is null)
+            {
+                var apptStr = ExtractField(l.CustomFieldsJson, profile.AppointmentFieldId, n => n.Contains("agendamento"));
+                if (!string.IsNullOrWhiteSpace(apptStr) && TryParseDate(apptStr, out var d)) appt = d;
+            }
+            if (appt is null) continue;
+            var apUtc = AsUtc(appt.Value);
+            if (apUtc < apptNow || apUtc > apptWindowEnd) continue;
+            consUpcoming.Add(new DTOs.Dashboard.AgendamentoItemDto
+            {
+                Name = l.Name,
+                When = apUtc,
+                Tipo = IsResgate(l.LeadType) ? "resgate" : "cadastro",
+            });
         }
 
         // ── Agendados: contados por DATA DE ENTRADA na etapa (histórico de etapas),
@@ -969,7 +1002,8 @@ public class KpiConfigService(AppDbContext db)
         var keys = new[] {
             ProfileBirthdateKey, ProfileAppointmentKey, ProfileDoctorKey,
             ProfileOrigemKey, ProfileMotivoKey, ProfileFisioKey,
-            ProfileValorTratKey, ProfileTratFechadoKey, ProfileQualificacaoKey,
+            ProfileValorTratKey, ProfileValorConsultaKey,
+            ProfileTratFechadoKey, ProfileQualificacaoKey,
             ProfileTipoKey,
         };
         var rows = await _db.KpiConfigurations.AsNoTracking()
@@ -993,6 +1027,7 @@ public class KpiConfigService(AppDbContext db)
             MotivoNaoAgendamentoFieldId = FieldOf(ProfileMotivoKey),
             FisioterapeutaFieldId = FieldOf(ProfileFisioKey),
             ValorTratamentoFieldId = FieldOf(ProfileValorTratKey),
+            ValorConsultaFieldId = FieldOf(ProfileValorConsultaKey),
             TratamentoFechadoFieldId = FieldOf(ProfileTratFechadoKey),
             QualificacaoFieldId = FieldOf(ProfileQualificacaoKey),
             TipoFieldId = FieldOf(ProfileTipoKey),
@@ -1014,6 +1049,7 @@ public class KpiConfigService(AppDbContext db)
             new KpiSaveItem(ProfileMotivoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.MotivoNaoAgendamentoFieldId)),
             new KpiSaveItem(ProfileFisioKey, KpiSourceTypes.CustomFieldCount, Cfg(f.FisioterapeutaFieldId)),
             new KpiSaveItem(ProfileValorTratKey, KpiSourceTypes.CustomFieldCount, Cfg(f.ValorTratamentoFieldId)),
+            new KpiSaveItem(ProfileValorConsultaKey, KpiSourceTypes.CustomFieldCount, Cfg(f.ValorConsultaFieldId)),
             new KpiSaveItem(ProfileTratFechadoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TratamentoFechadoFieldId)),
             new KpiSaveItem(ProfileQualificacaoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.QualificacaoFieldId)),
             new KpiSaveItem(ProfileTipoKey, KpiSourceTypes.CustomFieldCount, Cfg(f.TipoFieldId)),

@@ -26,10 +26,12 @@ namespace LeadAnalytics.Api.Service;
 public class KommoIngestionService(
     AppDbContext db,
     KommoStageProcessor stageProcessor,
+    KpiConfigService kpiConfig,
     ILogger<KommoIngestionService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly KommoStageProcessor _stageProcessor = stageProcessor;
+    private readonly KpiConfigService _kpiConfig = kpiConfig;
     private readonly ILogger<KommoIngestionService> _logger = logger;
 
     /// <param name="recordStageHistory">
@@ -52,6 +54,13 @@ public class KommoIngestionService(
             : new Dictionary<string, string>(stageMapOverride);
         foreach (var kv in ParseStageMap(unit.KommoStageMapJson))
             stageMap[kv.Key] = kv.Value;
+
+        // Mapeamento dos custom fields do Perfil do Lead (escolhido em Configurações).
+        // Usado pra popular Lead.AppointmentScheduledAt e Lead.ConsultationValue direto
+        // do CustomFieldsJson, sem precisar de edição manual no painel do lead.
+        var profileFields = unit.Id > 0
+            ? await _kpiConfig.GetLeadProfileConfigAsync(unit.Id, ct)
+            : new KpiConfigService.LeadProfileFields();
         var changed = 0;
 
         foreach (var ev in events)
@@ -149,6 +158,27 @@ public class KommoIngestionService(
             // o CreatedAt do nosso backend é a "data do 1º sync" (leads antigos da Cloudia).
             var original = TryExtractOriginalCreatedAt(lead.CustomFieldsJson);
             if (original.HasValue) lead.OriginalCreatedAt = original;
+
+            // Data do agendamento da consulta (campo escolhido pelo analista em Configurações
+            // → Perfil do Lead → "Data de agendamento"). Alimenta o sino de notificação e o
+            // card Consultas → Próximos agendamentos. Fallback por nome ("agendamento") quando
+            // o id não foi mapeado.
+            var apptDate = TryExtractDateFromCustomFields(
+                lead.CustomFieldsJson, profileFields.AppointmentFieldId,
+                n => n.Contains("agendamento"));
+            if (apptDate.HasValue) lead.AppointmentScheduledAt = apptDate;
+
+            // Valor da consulta (campo escolhido em Configurações → "Valor da consulta").
+            // Alimenta o card Consultas → Valor total. Não sobrescreve um valor já preenchido
+            // manualmente na Revisão comercial — só seta quando o SQL está nulo, evitando
+            // que um valor zero/em-branco do Kommo apague um valor já corrigido.
+            if (!lead.ConsultationValue.HasValue)
+            {
+                var consVal = TryExtractDecimalFromCustomFields(
+                    lead.CustomFieldsJson, profileFields.ValorConsultaFieldId,
+                    n => n.Contains("valor") && n.Contains("consulta"));
+                if (consVal.HasValue) lead.ConsultationValue = consVal;
+            }
 
             // Valor do negócio (price da Kommo) — string crua → decimal (invariant).
             if (!string.IsNullOrWhiteSpace(ev.Price)
@@ -360,6 +390,103 @@ public class KommoIngestionService(
                         : DateTimeOffset.FromUnixTimeSeconds(num).UtcDateTime;
                 }
                 catch { return null; }
+            }
+        }
+        catch (JsonException) { /* ignora json malformado */ }
+        return null;
+    }
+
+    /// <summary>
+    /// Extrai uma data de um custom field do CustomFieldsJson. Prefere matching por
+    /// field_id (id mapeado); cai pra match por nome quando o id não está configurado.
+    /// Aceita ISO, "yyyy-MM-dd", "dd/MM/yyyy" e unix (s/ms) — formatos comuns da Kommo.
+    /// </summary>
+    private static DateTime? TryExtractDateFromCustomFields(
+        string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
+    {
+        var raw = ExtractFieldRaw(customFieldsJson, fieldId, nameMatches);
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        // Unix timestamp (date field da Kommo vem assim).
+        if (long.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var num) && num > 0)
+        {
+            try
+            {
+                return num > 99999999999L
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(num).UtcDateTime
+                    : DateTimeOffset.FromUnixTimeSeconds(num).UtcDateTime;
+            }
+            catch { /* overflow — segue pros parsers de string */ }
+        }
+
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d1)) return d1;
+        if (DateTime.TryParse(raw, new CultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var d2)) return d2.ToUniversalTime();
+        return null;
+    }
+
+    /// <summary>Extrai um decimal de um custom field (aceita "1.500,00" e "1500.00").</summary>
+    private static decimal? TryExtractDecimalFromCustomFields(
+        string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
+    {
+        var raw = ExtractFieldRaw(customFieldsJson, fieldId, nameMatches);
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim();
+        if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var v1)) return v1;
+        if (decimal.TryParse(s, NumberStyles.Any, new CultureInfo("pt-BR"), out var v2)) return v2;
+        return null;
+    }
+
+    /// <summary>
+    /// Lê o "value" de um custom field do CustomFieldsJson (formato persistido pelo
+    /// KommoFormParser/webhook: array de objetos com field_id + field_name + values[].value).
+    /// Match por field_id quando disponível, senão por predicado de nome (lowercase).
+    /// </summary>
+    private static string? ExtractFieldRaw(string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
+    {
+        if (string.IsNullOrWhiteSpace(customFieldsJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(customFieldsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+
+                bool match;
+                if (fieldId is not null)
+                {
+                    if (!el.TryGetProperty("field_id", out var fid)) continue;
+                    long idv = fid.ValueKind == JsonValueKind.Number ? fid.GetInt64()
+                             : (fid.ValueKind == JsonValueKind.String && long.TryParse(fid.GetString(), out var parsed) ? parsed : 0);
+                    match = idv == fieldId.Value;
+                }
+                else
+                {
+                    if (!el.TryGetProperty("field_name", out var fn) || fn.ValueKind != JsonValueKind.String) continue;
+                    var name = fn.GetString()?.ToLowerInvariant() ?? "";
+                    match = nameMatches(name);
+                }
+                if (!match) continue;
+
+                if (el.TryGetProperty("value", out var direct))
+                {
+                    if (direct.ValueKind == JsonValueKind.String) return direct.GetString();
+                    if (direct.ValueKind == JsonValueKind.Number) return direct.GetRawText();
+                }
+                if (el.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var v in vals.EnumerateArray())
+                    {
+                        if (v.ValueKind == JsonValueKind.Object && v.TryGetProperty("value", out var inner))
+                        {
+                            if (inner.ValueKind == JsonValueKind.String) return inner.GetString();
+                            if (inner.ValueKind == JsonValueKind.Number) return inner.GetRawText();
+                        }
+                        else if (v.ValueKind == JsonValueKind.String) return v.GetString();
+                        else if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
+                    }
+                }
+                return null;
             }
         }
         catch (JsonException) { /* ignora json malformado */ }

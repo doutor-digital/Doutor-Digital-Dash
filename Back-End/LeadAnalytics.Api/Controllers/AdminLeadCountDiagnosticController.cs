@@ -82,6 +82,25 @@ public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBas
         var withoutKommoExternal = await inWindow.CountAsync(l => l.ExternalId == 0, ct);
         var fromKommo = await inWindow.CountAsync(l => l.Source == "Kommo" && l.ExternalId != 0 && l.Status != "deleted", ct);
 
+        // Quebra Cadastro × Resgate × Indefinido (mesma lógica do BreakdownsAsync:430-431).
+        // IsCadastro: LeadType null/vazio OU contém "cadastro"/"novo".
+        // IsResgate: LeadType contém "resgate".
+        // Conta só ativos (Status != "deleted") pra bater com o card.
+        var ativos = inWindow.Where(l => l.Status != "deleted");
+        var byLeadType = await ativos
+            .GroupBy(l => l.LeadType ?? "(null)")
+            .Select(g => new { lead_type = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .ToListAsync(ct);
+        var cadastros = await ativos.CountAsync(l =>
+            l.LeadType == null
+            || l.LeadType == ""
+            || EF.Functions.ILike(l.LeadType, "%cadastro%")
+            || EF.Functions.ILike(l.LeadType, "%novo%"), ct);
+        var resgates = await ativos.CountAsync(l =>
+            l.LeadType != null && EF.Functions.ILike(l.LeadType, "%resgate%"), ct);
+        var outros = await ativos.CountAsync() - cadastros - resgates;
+
         // Amostras de leads "suspeitos" — os que provavelmente justificam a divergência.
         var suspeitosBase = inWindow
             .Where(l => l.Status == "deleted" || l.ExternalId == 0 || (l.Source != null && l.Source != "Kommo"));
@@ -118,10 +137,17 @@ public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBas
                 deletados = deleted,
                 sem_external_id_kommo = withoutKommoExternal,
             },
+            tipo_ativos = new
+            {
+                cadastro = cadastros,
+                resgate = resgates,
+                outros,
+                detalhe_lead_type_bruto = byLeadType,
+            },
             by_source = bySource,
             by_status = byStatus,
             suspeitos_amostra = suspeitos,
-            hint = "Compare `kommo_validos` com o número da Kommo. `provavel_diferenca` é o overhead. Amostra mostra quem está sobrando.",
+            hint = "Compare `kommo_validos` com o número da Kommo. `provavel_diferenca` é o overhead. tipo_ativos mostra a quebra Cadastro × Resgate dos ativos.",
         });
     }
 }

@@ -1711,7 +1711,9 @@ public class LeadService(
 
         // scopeQ = filtros de lead SEM a janela de data — reaproveitado para contar
         // agendados pela data de ENTRADA na etapa (e não por criação).
-        var scopeQ = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+        // ExcludeDeleted: tira leads que foram deletados na Kommo (webhook delete só
+        // marca Status="deleted", não apaga a linha). Sem isso, divergia com a Kommo.
+        var scopeQ = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId).ExcludeDeleted();
         if (unitId.HasValue) scopeQ = scopeQ.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) scopeQ = scopeQ.Where(l => l.AttendantId == attendantId.Value);
         if (!string.IsNullOrWhiteSpace(source)) scopeQ = scopeQ.Where(l => l.Source == source);

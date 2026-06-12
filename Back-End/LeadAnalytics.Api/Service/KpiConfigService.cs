@@ -133,6 +133,7 @@ public class KpiConfigService(AppDbContext db)
         // migrados da Cloudia ficam todos amontoados no mês da migração e desalinham
         // do card "Total de Leads".
         var baseQuery = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                      && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
                      && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
@@ -160,7 +161,7 @@ public class KpiConfigService(AppDbContext db)
                 // que entrou em "Agendado" em 09/06 some do KPI de 09/06 (era o bug
                 // que o KpiBreakdownsAsync já corrigiu em 6f29169, mas que faltava
                 // espelhar aqui no source KommoStage usado pelos overrides).
-                var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+                var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
 
@@ -227,7 +228,7 @@ public class KpiConfigService(AppDbContext db)
                 //    lead na Kommo (close enough — KPI agrega por dia).
                 // Excluímos "manual" porque CreatedAt = DateTime.UtcNow do backend, não
                 // confiável p/ agregar por dia ("preenchi semana passada" cairia hoje).
-                var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+                var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
 
@@ -267,7 +268,7 @@ public class KpiConfigService(AppDbContext db)
             if (p.StageIds.Count == 0) return (new(), 0, false);
             var ids = p.StageIds;
 
-            var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+            var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
             var leadIds = await _db.LeadStageHistories.AsNoTracking()
@@ -278,12 +279,12 @@ public class KpiConfigService(AppDbContext db)
                 .Distinct()
                 .ToListAsync(ct);
 
-            q = _db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id));
+            q = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => leadIds.Contains(l.Id));
         }
         else if (sourceType == KpiSourceTypes.RecoveryAttempt)
         {
             // Drill: leads com tentativa de resgate no período (espelha ComputeAsync).
-            var scope = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
+            var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
             var leadIds = await _db.RecoveryAttempts.AsNoTracking()
@@ -293,13 +294,14 @@ public class KpiConfigService(AppDbContext db)
                 .Distinct()
                 .ToListAsync(ct);
 
-            q = _db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id));
+            q = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => leadIds.Contains(l.Id));
         }
         else
         {
             // Demais sources janelam pela DATA REAL de criação do lead (espelha
             // ComputeAsync e DashboardOverview): OriginalCreatedAt ?? CreatedAt.
             q = _db.Leads.AsNoTracking()
+                .ExcludeDeleted()
                 .Where(l => l.TenantId == clinicId
                          && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
                          && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
@@ -390,7 +392,9 @@ public class KpiConfigService(AppDbContext db)
         from = AsUtc(from); to = AsUtc(to);
 
         // Janela pela DATA REAL: OriginalCreatedAt quando setada (Kommo/CSV), CreatedAt como fallback.
+        // ExcludeDeleted: leads marcados como "deleted" pelo webhook não contam.
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                      && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
                      && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
@@ -522,6 +526,7 @@ public class KpiConfigService(AppDbContext db)
         //    stage. Inclui leads agendados pra futuro nesse período e os que já
         //    compareceram. Cadastro/Resgate vem do mesmo critério de classificação do loop.
         var consultasRows = await _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                 && (!unitId.HasValue || l.UnitId == unitId.Value)
                 && l.AppointmentScheduledAt != null
@@ -550,6 +555,7 @@ public class KpiConfigService(AppDbContext db)
         var apptNow = DateTime.UtcNow;
         var apptWindowEnd = apptNow.AddDays(60);
         var apptRows = await _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                 && (!unitId.HasValue || l.UnitId == unitId.Value)
                 && (l.AppointmentScheduledAt != null
@@ -691,6 +697,7 @@ public class KpiConfigService(AppDbContext db)
         // UpdatedAt + CustomFieldsJson juntos. Usar CreatedAt deixa de fora
         // leads antigos cujos campos foram preenchidos recentemente.
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt <= to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
@@ -784,6 +791,7 @@ public class KpiConfigService(AppDbContext db)
         // re-sync jogava todo mundo para "hoje". Com o CreatedAt já corrigido (vem da
         // data real da Kommo), a quebra por período fica correta.
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
@@ -827,6 +835,7 @@ public class KpiConfigService(AppDbContext db)
         var windowEnd = now.AddDays(Math.Clamp(upcomingDays, 1, 60));
 
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
 
@@ -957,6 +966,7 @@ public class KpiConfigService(AppDbContext db)
         var end = now.AddDays(Math.Clamp(days, 1, 60));
 
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                 && l.AppointmentScheduledAt != null
                 && l.AppointmentScheduledAt >= now
@@ -1251,6 +1261,7 @@ public class KpiConfigService(AppDbContext db)
         from = AsUtc(from); to = AsUtc(to);
 
         var q = _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                         && l.UpdatedAt >= from && l.UpdatedAt <= to
                         && l.CustomFieldsJson != null);

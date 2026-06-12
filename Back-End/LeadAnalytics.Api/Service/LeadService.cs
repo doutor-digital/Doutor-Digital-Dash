@@ -1888,19 +1888,18 @@ public class LeadService(
             .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
             .ToListAsync(ct);
         // Reclassificações: lead que já era agendado ANTES do período e só fez
-        // 04↔05 dentro — não é agendamento novo, descontamos do funil. Espelha
-        // a lógica do KpiBreakdownsAsync.Agendados.
+        // 04↔05 dentro — não é agendamento novo, descontamos do funil. Conta por
+        // NÚMERO DE LINHAS no histórico vs no período (espelha KpiBreakdownsAsync).
         var agEntryLeadIds = agEntryRows.Select(x => x.Id).Distinct().ToList();
-        var firstAgEntryByLead = await _db.LeadStageHistories.AsNoTracking()
+        var agHistCountByLead = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
-                     && h.EntrySource != LeadStageHistory.SourceLegacy
                      && agEntryLeadIds.Contains(h.LeadId))
             .GroupBy(h => h.LeadId)
-            .Select(g => new { LeadId = g.Key, FirstAt = g.Min(x => x.CorrectedChangedAt ?? x.ChangedAt) })
-            .ToDictionaryAsync(x => x.LeadId, x => x.FirstAt, ct);
+            .Select(g => new { LeadId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LeadId, x => x.Count, ct);
         var agByType = agEntryRows
             .GroupBy(x => x.Id)
-            .Where(g => !firstAgEntryByLead.TryGetValue(g.Key, out var f) || f >= startUtc)
+            .Where(g => agHistCountByLead.GetValueOrDefault(g.Key, 0) <= g.Count())
             .Select(g => g.First().Type)
             .GroupBy(t => t)
             .ToDictionary(g => g.Key, g => g.Count());

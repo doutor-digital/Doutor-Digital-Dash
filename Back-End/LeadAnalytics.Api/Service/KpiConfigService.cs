@@ -727,26 +727,25 @@ public class KpiConfigService(AppDbContext db)
             })
             .ToListAsync(ct);
 
-        // Primeira ENTRADA EM AGENDADO* por lead em qualquer momento — usado pra
-        // descontar reclassificações: lead que já era agendado antes do período e só
-        // bounceou 04↔05 dentro dele NÃO é agendamento novo. Cobre o caso de bounce
-        // que escapou do filtro da ingestion (ex.: prevStage armazenado como status_id
-        // raw quando o heal canônico não rodou — IsScheduled falha e linha é criada).
+        // Reclassificação: lead já tinha entrada em agendado* ANTES do período. Conta
+        // por NÚMERO DE LINHAS — se o lead tem mais linhas em agendado* no histórico
+        // total do que as linhas que apareceram no período, significa que ele já era
+        // agendado antes. Cobre todos os edge-cases (entrada legacy, prevStage raw, etc.).
         var agLeadIds = agHist.Select(x => x.LeadId).Distinct().ToList();
-        var firstAgendadoByLead = await _db.LeadStageHistories.AsNoTracking()
+        var agHistCountByLead = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
-                && h.EntrySource != LeadStageHistory.SourceLegacy
                 && agLeadIds.Contains(h.LeadId))
             .GroupBy(h => h.LeadId)
-            .Select(g => new { LeadId = g.Key, FirstAt = g.Min(x => x.CorrectedChangedAt ?? x.ChangedAt) })
-            .ToDictionaryAsync(x => x.LeadId, x => x.FirstAt, ct);
+            .Select(g => new { LeadId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LeadId, x => x.Count, ct);
 
         // Um lead pode reentrar em agendado no período — conta uma vez (entrada mais recente).
         foreach (var grp in agHist.GroupBy(x => x.LeadId))
         {
-            // Se a primeira vez que o lead virou agendado foi ANTES do período, é
-            // reclassificação (04↔05 dentro do período não conta como novo agendamento).
-            if (firstAgendadoByLead.TryGetValue(grp.Key, out var firstAt) && firstAt < from)
+            // Se o total de linhas em agendado do lead é MAIOR que as linhas no período,
+            // existe entrada anterior — é reclassificação, não agendamento novo.
+            var leadTotal = agHistCountByLead.GetValueOrDefault(grp.Key, 0);
+            if (leadTotal > grp.Count())
             {
                 ag.Reclassificacoes++;
                 continue;

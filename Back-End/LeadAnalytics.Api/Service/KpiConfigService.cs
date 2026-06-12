@@ -445,11 +445,15 @@ public class KpiConfigService(AppDbContext db)
             // Resgate = lead com "Tentativas de resgastes" preenchido (multiselect das
             // tentativas de recuperação). É o sinal REAL de resgate nessas unidades — a coluna
             // LeadType vem vazia e o antigo match por "tipo" colidia com "Tipo de agendamento"/
-            // "Tipo de fechamento". Casa por nome ("tentativ"+"resgat").
-            var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resgat"))?.Trim();
+            // "Tipo de fechamento". Casa por nome ("tentativ"+"resga" — typo "resgastes").
+            var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resga"))?.Trim();
             var hasResgate = !string.IsNullOrWhiteSpace(tentativasResgate);
             var leadIsResgate = hasResgate || IsResgate(l.LeadType);
-            var leadIsCadastro = !leadIsResgate && IsCadastro(l.LeadType);
+            // Cadastro olha SÓ pro LeadType (e fallback null = considerado cadastro).
+            // Não exclui mais por hasResgate: lead criado hoje conta como Cadastro
+            // de hoje mesmo que vire resgate depois — Resgate roda em outra janela
+            // (data do preenchimento via recovery_attempts), os dois não competem.
+            var leadIsCadastro = IsCadastro(l.LeadType);
 
             var stage = l.CurrentStage ?? "";
             // Agendados NÃO são contados aqui — são contados por data de ENTRADA na

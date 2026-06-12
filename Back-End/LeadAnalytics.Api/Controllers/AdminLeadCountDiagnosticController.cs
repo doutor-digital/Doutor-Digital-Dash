@@ -19,17 +19,38 @@ namespace LeadAnalytics.Api.Controllers;
 public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBase
 {
     [HttpGet("{unitId:int}")]
-    public async Task<IActionResult> Diagnose(
+    public Task<IActionResult> DiagnoseById(
         int unitId,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
+        CancellationToken ct) => DiagnoseInternal(u => u.Id == unitId, $"id={unitId}", dateFrom, dateTo, ct);
+
+    /// <summary>
+    /// Mesmo diagnóstico, mas casa unidade por NOME (substring case-insensitive).
+    /// Ex.: GET /api/admin/lead-count-diagnostic/by-name/imperatriz?dateFrom=...&dateTo=...
+    /// </summary>
+    [HttpGet("by-name/{nameLike}")]
+    public Task<IActionResult> DiagnoseByName(
+        string nameLike,
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo,
         CancellationToken ct)
     {
-        var unit = await db.Units.AsNoTracking()
-            .Where(u => u.Id == unitId)
+        var pattern = $"%{nameLike}%";
+        return DiagnoseInternal(u => EF.Functions.ILike(u.Name, pattern), $"name~={nameLike}", dateFrom, dateTo, ct);
+    }
+
+    private async Task<IActionResult> DiagnoseInternal(
+        System.Linq.Expressions.Expression<Func<Models.Unit, bool>> match,
+        string criterio,
+        DateTime dateFrom, DateTime dateTo, CancellationToken ct)
+    {
+        var unitRow = await db.Units.AsNoTracking()
+            .Where(match)
             .Select(u => new { u.Id, u.ClinicId, u.Name })
             .FirstOrDefaultAsync(ct);
-        if (unit is null) return NotFound(new { error = "unit não encontrada" });
+        if (unitRow is null) return NotFound(new { error = $"unit não encontrada ({criterio})" });
+        var unit = unitRow;
 
         var fromUtc = DateTime.SpecifyKind(dateFrom, DateTimeKind.Utc);
         var toUtc = DateTime.SpecifyKind(dateTo, DateTimeKind.Utc);

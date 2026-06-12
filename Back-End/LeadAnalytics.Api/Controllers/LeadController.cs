@@ -690,7 +690,7 @@ public class WebhooksController(
             return BadRequest(new { error = $"fonte inválida: {sourceType}" });
 
         var (items, total, truncated) = await _kpiService.ComputeLeadsAsync(
-            tenantId.Value, unitId, sourceType, config, from, to, 500, ct);
+            tenantId.Value, unitId, sourceType, config, from, to, 500, ct, body.KpiKey);
 
         return Ok(new KpiLeadsResponseDto { Items = items, Total = total, Truncated = truncated });
     }

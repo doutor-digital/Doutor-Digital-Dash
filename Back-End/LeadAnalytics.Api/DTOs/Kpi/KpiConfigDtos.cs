@@ -149,6 +149,9 @@ public class KpiLeadDto
     [JsonPropertyName("origem_custom")] public string? OrigemCustom { get; set; }
     /// <summary>Valor do tratamento (custom field "valor tratamento").</summary>
     [JsonPropertyName("treatment_value")] public decimal? TreatmentValue { get; set; }
+
+    /// <summary>Lead foi marcado como "não contar" pelo admin neste KPI (kpi_exclusions).</summary>
+    [JsonPropertyName("excluded")] public bool Excluded { get; set; }
 }
 
 public class KpiLeadsResponseDto

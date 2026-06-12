@@ -252,10 +252,25 @@ public class KpiConfigService(AppDbContext db)
     /// </summary>
     public async Task<(List<DTOs.Kpi.KpiLeadDto> Items, int Total, bool Truncated)> ComputeLeadsAsync(
         int clinicId, int? unitId, string sourceType, JsonElement config,
-        DateTime from, DateTime to, int limit = 500, CancellationToken ct = default)
+        DateTime from, DateTime to, int limit = 500, CancellationToken ct = default,
+        string? kpiKey = null)
     {
         const int MaxScan = 5000; // teto de varredura p/ filtro em memória
         from = AsUtc(from); to = AsUtc(to);
+
+        // Lista de leads marcados como "não contar" pelo admin pra esse KPI/unidade.
+        // No drill-down NÃO filtramos eles (admin precisa ver pra desmarcar) — só
+        // setamos Excluded=true no DTO pra UI mostrar diferente.
+        HashSet<int> excludedSet = new();
+        if (!string.IsNullOrWhiteSpace(kpiKey))
+        {
+            var excludedIds = await _db.KpiExclusions.AsNoTracking()
+                .Where(e => e.TenantId == clinicId && e.KpiKey == kpiKey
+                         && (!unitId.HasValue || e.UnitId == unitId.Value))
+                .Select(e => e.LeadId)
+                .ToListAsync(ct);
+            excludedSet = excludedIds.ToHashSet();
+        }
 
         var p = ParseConfig(config);
         var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
@@ -372,6 +387,7 @@ public class KpiConfigService(AppDbContext db)
                 Qualificacao = ExtractFieldByName(cf, n => n.Contains("qualifica")),
                 OrigemCustom = ExtractFieldByName(cf, n => n.Contains("origem")),
                 TreatmentValue = TryParseDecimal(ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"))),
+                Excluded = excludedSet.Contains(l.Id),
             });
 
             if (hits.Count >= limit) { truncated = true; break; }
@@ -585,12 +601,20 @@ public class KpiConfigService(AppDbContext db)
         // ── Agendados: contados por DATA DE ENTRADA na etapa (histórico de etapas),
         //    e não pela data de criação do lead — assim leads antigos agendados dentro
         //    do período aparecem. com/sem pagamento vem da própria etapa (04 vs 05).
+        // Leads marcados como "não contar" pelo admin (kpi_exclusions) ficam de fora.
         var agStages = new[] { LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento };
+        var agExcluded = await _db.KpiExclusions.AsNoTracking()
+            .Where(e => e.TenantId == clinicId && e.KpiKey == "agendados"
+                && (!unitId.HasValue || e.UnitId == unitId.Value))
+            .Select(e => e.LeadId)
+            .ToListAsync(ct);
+        var agExcludedSet = agExcluded.ToHashSet();
         var agHist = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
                 && h.EntrySource != LeadStageHistory.SourceLegacy
                 && h.ChangedAt >= from && h.ChangedAt <= to
                 && h.Lead.TenantId == clinicId
+                && !agExcluded.Contains(h.LeadId)
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
             .Select(h => new { h.LeadId, h.StageLabel, h.ChangedAt, h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson })
             .ToListAsync(ct);

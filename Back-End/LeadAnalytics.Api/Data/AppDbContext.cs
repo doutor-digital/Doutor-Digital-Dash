@@ -45,6 +45,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<Treatment> Treatments { get; set; }
     public DbSet<TreatmentInstallment> TreatmentInstallments { get; set; }
     public DbSet<RecoveryAttempt> RecoveryAttempts { get; set; }
+    public DbSet<KpiExclusion> KpiExclusions { get; set; }
     public DbSet<LeadPaymentReceipt> LeadPaymentReceipts { get; set; }
     public DbSet<WebhookExecution> WebhookExecutions { get; set; }
 
@@ -258,6 +259,20 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(e => new { e.LeadId, e.KommoEventId })
                   .IsUnique()
                   .HasFilter("\"kommo_event_id\" IS NOT NULL");
+        });
+
+        // ─── KpiExclusion ────────────────────────────────────────
+        modelBuilder.Entity<KpiExclusion>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Lead)
+                  .WithMany()
+                  .HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Idempotência: marcar "não contar" 2x no mesmo lead/KPI/unidade não duplica.
+            entity.HasIndex(e => new { e.TenantId, e.UnitId, e.KpiKey, e.LeadId }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.KpiKey });
         });
 
         // ─── LeadPaymentReceipt ──────────────────────────────────

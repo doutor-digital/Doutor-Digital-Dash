@@ -1867,10 +1867,17 @@ public class LeadService(
         // EntrySource != legacy: linhas legadas têm ChangedAt = updated_at (não é a data de
         // entrada na etapa) — eram a causa do "211 no dia". Contamos só webhook/eventos.
         // Dedup por LeadId (não por {Id,Type}): um lead que reentra ou cujo Type mudou conta uma vez.
+        // kpi_exclusions: leads marcados como "não contar" pelo admin no drill-down.
+        var agExcluded = await _db.KpiExclusions.AsNoTracking()
+            .Where(e => e.TenantId == clinicId && e.KpiKey == "agendados"
+                     && (!unitId.HasValue || e.UnitId == unitId.Value))
+            .Select(e => e.LeadId)
+            .ToListAsync(ct);
         var agEntryRows = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
                      && h.EntrySource != LeadStageHistory.SourceLegacy
-                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc)
+                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc
+                     && !agExcluded.Contains(h.LeadId))
             .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
             .ToListAsync(ct);
         var agByType = agEntryRows

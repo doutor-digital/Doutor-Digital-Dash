@@ -428,6 +428,28 @@ public class KpiConfigService(AppDbContext db)
             ? await GetLeadProfileConfigAsync(unitId.Value, ct)
             : new LeadProfileFields();
 
+        // Stages mapeados pra "tratamentos" em Configurações Técnicas (kommo_stage).
+        // Se setado, o breakdown deste card calcula por ENTRADA nessas etapas no período
+        // (mesma semântica do kpi_overrides), em vez do FechouTratamento hardcoded — sem
+        // isso, a unidade que usa "Em Tratamento" como estágio final vê count=19 no card
+        // mas Origem/Fisio/Valor vazios porque o loop abaixo nunca casa o lead.
+        List<int>? tratStageIds = null;
+        if (unitId.HasValue)
+        {
+            var tratCfg = await _db.KpiConfigurations.AsNoTracking()
+                .FirstOrDefaultAsync(k => k.UnitId == unitId.Value && k.KpiKey == "tratamentos", ct);
+            if (tratCfg is { SourceType: KpiSourceTypes.KommoStage }
+                && !string.IsNullOrWhiteSpace(tratCfg.ConfigJson))
+            {
+                try
+                {
+                    var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(tratCfg.ConfigJson));
+                    if (parsed.StageIds.Count > 0) tratStageIds = parsed.StageIds;
+                }
+                catch (JsonException) { /* config inválida — cai pro hardcoded */ }
+            }
+        }
+
         var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
             .Select(l => new
             {
@@ -509,7 +531,9 @@ public class KpiConfigService(AppDbContext db)
             // etapa (histórico), num passo separado abaixo, pra incluir leads antigos
             // agendados dentro do período.
             var isConsulta = stage == LeadStages.EmTratamento || stage == LeadStages.FechouTratamento || stage == LeadStages.NaoFechouTratamento;
-            var isTratamento = stage == LeadStages.FechouTratamento;
+            // Quando a unidade mapeou "tratamentos" pra outras etapas (kpi_overrides),
+            // pulamos o cálculo inline aqui e populamos lá embaixo via LeadStageHistory.
+            var isTratamento = tratStageIds is null && stage == LeadStages.FechouTratamento;
 
             // ── Cadastro
             if (leadIsCadastro)
@@ -550,6 +574,55 @@ public class KpiConfigService(AppDbContext db)
 
             // ── Consultas NÃO contam aqui — vão pela "Data de agendamento" no range,
             //    independente da etapa atual. Query separada logo após o loop.
+        }
+
+        // ── Tratamentos via stages mapeados (kpi_overrides): conta lead que ENTROU em
+        //    uma das etapas configuradas dentro do período, mesma semântica do
+        //    ComputeAsync(KommoStage). Pega Source/CustomFieldsJson/ConsultationValue
+        //    do próprio Lead pra montar os mesmos chips do caminho hardcoded.
+        if (tratStageIds is { Count: > 0 })
+        {
+            var tratHist = await _db.LeadStageHistories.AsNoTracking()
+                .Where(h => tratStageIds.Contains(h.StageId)
+                    && h.EntrySource != LeadStageHistory.SourceLegacy
+                    && h.ChangedAt >= from && h.ChangedAt <= to
+                    && h.Lead!.TenantId == clinicId
+                    && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
+                .Select(h => new {
+                    h.LeadId, h.Lead!.Source, h.Lead.CustomFieldsJson, h.Lead.ConsultationValue,
+                })
+                .ToListAsync(ct);
+
+            // Um lead pode reentrar nas etapas mapeadas no período — conta uma vez.
+            foreach (var grp in tratHist.GroupBy(x => x.LeadId))
+            {
+                var l = grp.First();
+                var cf = l.CustomFieldsJson;
+                var origemCustom = ExtractField(cf, profile.OrigemFieldId, n => n.Contains("origem"));
+                var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
+                           : !string.IsNullOrWhiteSpace(l.Source) ? l.Source!.Trim()
+                           : "—";
+                var fisio = ExtractField(cf, profile.FisioterapeutaFieldId ?? profile.DoctorFieldId,
+                    n => ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
+                      || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
+                var valorTratStr = ExtractField(cf, profile.ValorTratamentoFieldId,
+                    n => n.Contains("valor") && n.Contains("tratamento"));
+                var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
+                var valorConsultaFromField = TryParseDecimal(ExtractField(cf, profile.ValorConsultaFieldId,
+                    n => n.Contains("valor") && n.Contains("consulta")));
+
+                trat.Total++;
+                tratOrigens[origem] = tratOrigens.GetValueOrDefault(origem) + 1;
+                if (!string.IsNullOrWhiteSpace(fisio))
+                    tratFisios[fisio] = tratFisios.GetValueOrDefault(fisio) + 1;
+                var consultaVal = l.ConsultationValue ?? valorConsultaFromField;
+                if (consultaVal.HasValue) trat.ValorConsultaTotal += consultaVal.Value;
+                if (valorTrat > 0) trat.ValorTratamentoTotal += valorTrat;
+                var tipoTrat = ExtractField(cf, profile.TipoTratamentoFieldId,
+                    n => n.Contains("tipo") && n.Contains("tratamento"))?.Trim();
+                if (!string.IsNullOrWhiteSpace(tipoTrat))
+                    tratTipos[tipoTrat] = tratTipos.GetValueOrDefault(tipoTrat) + 1;
+            }
         }
 
         // ── Consultas: leads com Lead.AppointmentScheduledAt dentro do range. Não por

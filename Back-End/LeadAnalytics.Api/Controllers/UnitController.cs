@@ -235,15 +235,17 @@ public class UnitController(
     /// </summary>
     [HttpGet("{id:int}/kommo-pipelines")]
     [ProducesResponseType(typeof(List<KommoPipelineDto>), 200)]
-    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetKommoPipelines(int id, CancellationToken ct)
     {
         var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
         if (unit is null) return NotFound();
 
+        // Unidade sem Kommo configurado é estado válido (CSV-only, em onboarding,
+        // etc) — devolve lista vazia pro front cair no fallback de stageLabel
+        // sem sujar o console com 400.
         if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
-            return BadRequest(new { message = "Unidade sem KommoSubdomain/KommoAccessToken configurados." });
+            return Ok(new List<KommoPipelineDto>());
 
         try
         {
@@ -273,7 +275,8 @@ public class UnitController(
         }
         catch (HttpRequestException ex)
         {
-            return BadRequest(new { message = $"Erro ao consultar Kommo: {ex.Message}" });
+            _logger.LogWarning(ex, "[kommo-pipelines] falha ao consultar Kommo unit={Unit}", id);
+            return Ok(new List<KommoPipelineDto>());
         }
     }
 
@@ -284,15 +287,16 @@ public class UnitController(
     /// </summary>
     [HttpGet("{id:int}/kommo-custom-fields")]
     [ProducesResponseType(typeof(List<KommoCustomFieldDto>), 200)]
-    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetKommoCustomFields(int id, CancellationToken ct)
     {
         var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
         if (unit is null) return NotFound();
 
+        // Mesma lógica do kommo-pipelines: unidade sem Kommo configurado é
+        // estado válido — devolve lista vazia em vez de 400.
         if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
-            return BadRequest(new { message = "Unidade sem KommoSubdomain/KommoAccessToken configurados." });
+            return Ok(new List<KommoCustomFieldDto>());
 
         try
         {
@@ -322,7 +326,8 @@ public class UnitController(
         }
         catch (HttpRequestException ex)
         {
-            return BadRequest(new { message = $"Erro ao consultar Kommo: {ex.Message}" });
+            _logger.LogWarning(ex, "[kommo-custom-fields] falha ao consultar Kommo unit={Unit}", id);
+            return Ok(new List<KommoCustomFieldDto>());
         }
     }
 

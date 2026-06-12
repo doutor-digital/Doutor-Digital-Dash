@@ -25,11 +25,13 @@ namespace LeadAnalytics.Api.Migrations
             // Leads que JÁ passaram por 05_* (têm Consultation com paid_in_advance=true).
             // Eles continuam pagantes mesmo depois de subir o funil — usado pelo
             // KPI drill-down do Agendados pra mostrar o chip "Pagamento antecipado".
+            // Identifiers da tabela leads são PascalCase quoted ("Id"); consultations
+            // usa snake_case via [Column(...)] no model (lead_id / paid_in_advance).
             migrationBuilder.Sql(
                 @"UPDATE leads
                     SET ""HasPayment"" = TRUE
                   WHERE ""HasPayment"" = FALSE
-                    AND id IN (
+                    AND ""Id"" IN (
                       SELECT DISTINCT lead_id FROM consultations WHERE paid_in_advance = TRUE
                     );");
         }

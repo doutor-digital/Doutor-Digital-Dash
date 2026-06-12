@@ -1871,6 +1871,24 @@ public class LeadService(
             .Distinct()
             .CountAsync(ct);
 
+        // No-show por DATA DE ENTRADA no stage (mesmo padrão de Agendados). Antes contava
+        // l.CurrentStage == Faltou dentro de baseQ (filtrado por OriginalCreatedAt), o que
+        // misturava "leads criados no período que ATUALMENTE estão em Faltou" — KPI virava
+        // cumulativo do mês em vez de "entrou em Faltou no dia". Sobrescreve a contagem
+        // cohort-by-creation do funil.
+        var nsEntryRows = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => h.StageLabel == LeadStages.Faltou
+                     && h.EntrySource != LeadStageHistory.SourceLegacy
+                     && h.ChangedAt >= startUtc && h.ChangedAt < endExclUtc)
+            .Join(scopeQ, h => h.LeadId, l => l.Id, (h, l) => new { l.Id, Type = l.LeadType ?? "indefinido" })
+            .ToListAsync(ct);
+        var nsByType = nsEntryRows
+            .GroupBy(x => x.Id)
+            .Select(g => g.First().Type)
+            .GroupBy(t => t)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var noShowTotal = nsByType.Values.Sum();
+
         FunnelGroupDto BuildFunnel(string? type)
         {
             if (type == null)
@@ -1882,7 +1900,7 @@ public class LeadService(
                     Agendados = agendadosTotal,
                     Consultas = funnelRows.Sum(r => r.Consultas),
                     Tratamentos = funnelRows.Sum(r => r.Tratamentos),
-                    NoShow = funnelRows.Sum(r => r.NoShow),
+                    NoShow = noShowTotal,
                 };
             }
             var row = funnelRows.FirstOrDefault(r => r.Type == type);
@@ -1894,7 +1912,7 @@ public class LeadService(
                 Agendados = agByType.GetValueOrDefault(type, 0),
                 Consultas = row?.Consultas ?? 0,
                 Tratamentos = row?.Tratamentos ?? 0,
-                NoShow = row?.NoShow ?? 0,
+                NoShow = nsByType.GetValueOrDefault(type, 0),
             };
         }
 

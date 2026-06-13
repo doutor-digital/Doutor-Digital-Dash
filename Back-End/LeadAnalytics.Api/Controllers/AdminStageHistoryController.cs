@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Models;
 using LeadAnalytics.Api.Service;
@@ -26,7 +27,11 @@ public class AdminStageHistoryController(
     ICurrentUser currentUser,
     ILogger<AdminStageHistoryController> logger) : ControllerBase
 {
-    public record CorrectDateBody(DateTime CorrectedAt, string? Reason);
+    // Corpo em snake_case (corrected_at); sem JsonPropertyName a data não vincula e
+    // a correção viraria 0001-01-01 silenciosamente.
+    public record CorrectDateBody(
+        [property: JsonPropertyName("corrected_at")] DateTime CorrectedAt,
+        [property: JsonPropertyName("reason")] string? Reason);
 
     /// <summary>Mapeia cada stage_label canônica para o KPI key correspondente.</summary>
     private static string? KpiKeyForStage(string stageLabel) => stageLabel switch

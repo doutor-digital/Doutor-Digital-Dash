@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,13 @@ public class AdminKpiExclusionsController(
     AppDbContext db,
     ILogger<AdminKpiExclusionsController> logger) : ControllerBase
 {
-    public record ToggleBody(int UnitId, string KpiKey, int LeadId, string? Reason);
+    // O front-end envia o corpo em snake_case; sem os JsonPropertyName, KpiKey/LeadId
+    // chegam null/0 e o POST devolve 400 ("kpi_key obrigatório").
+    public record ToggleBody(
+        [property: JsonPropertyName("unit_id")] int UnitId,
+        [property: JsonPropertyName("kpi_key")] string KpiKey,
+        [property: JsonPropertyName("lead_id")] int LeadId,
+        [property: JsonPropertyName("reason")] string? Reason);
 
     [HttpGet]
     public async Task<IActionResult> List(

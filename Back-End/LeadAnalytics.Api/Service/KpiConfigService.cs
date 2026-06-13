@@ -130,7 +130,8 @@ public class KpiConfigService(AppDbContext db)
     /// </summary>
     public async Task<(double Value, int Sample, string? Note)> ComputeAsync(
         int clinicId, int? unitId, string sourceType, JsonElement config,
-        DateTime from, DateTime to, string? responsibleUser = null, CancellationToken ct = default)
+        DateTime from, DateTime to, string? responsibleUser = null, string? kpiKey = null,
+        CancellationToken ct = default)
     {
         from = AsUtc(from); to = AsUtc(to);
         // Janela pela DATA REAL de criação do lead (mesma regra do DashboardOverview):
@@ -146,6 +147,22 @@ public class KpiConfigService(AppDbContext db)
         if (unitId.HasValue)
             baseQuery = baseQuery.Where(l => l.UnitId == unitId.Value);
         baseQuery = await ResponsibleUserFilter.ApplyAsync(baseQuery, responsibleUser, ct);
+
+        // Leads marcados como "não contar" pelo admin (kpi_exclusions) saem de QUALQUER
+        // fonte deste KPI — antes só o caminho do funil/breakdown filtrava, e o override
+        // (kpi_overrides) ignorava a exclusão, então o card não diminuía. kpiKey vem null
+        // no preview (ainda não salvo), aí não há o que excluir.
+        var excluded = new List<int>();
+        if (!string.IsNullOrWhiteSpace(kpiKey))
+        {
+            excluded = await _db.KpiExclusions.AsNoTracking()
+                .Where(e => e.TenantId == clinicId && e.KpiKey == kpiKey
+                         && (!unitId.HasValue || e.UnitId == unitId.Value))
+                .Select(e => e.LeadId)
+                .ToListAsync(ct);
+            if (excluded.Count > 0)
+                baseQuery = baseQuery.Where(l => !excluded.Contains(l.Id));
+        }
 
         var sample = await baseQuery.CountAsync(ct);
         var p = ParseConfig(config);
@@ -170,6 +187,7 @@ public class KpiConfigService(AppDbContext db)
                 var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+                if (excluded.Count > 0) scope = scope.Where(l => !excluded.Contains(l.Id));
 
                 // Janela usa a data CORRIGIDA quando o admin ajustou a transição
                 // (ex.: SDR moveu o lead no dia errado), senão a original.
@@ -240,6 +258,7 @@ public class KpiConfigService(AppDbContext db)
                 var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+                if (excluded.Count > 0) scope = scope.Where(l => !excluded.Contains(l.Id));
 
                 var count = await _db.RecoveryAttempts.AsNoTracking()
                     .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")

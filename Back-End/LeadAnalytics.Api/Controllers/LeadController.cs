@@ -584,7 +584,7 @@ public class WebhooksController(
                         var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
                             string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
                         var (value, _, _) = await _kpiService.ComputeAsync(
-                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, HttpContext.RequestAborted);
+                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
                         result.KpiOverrides[cfg.KpiKey] = value;
 
                         // KPIs criados do zero viram cards próprios no dashboard.

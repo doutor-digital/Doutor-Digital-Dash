@@ -1866,6 +1866,23 @@ public class LeadService(
             })
             .ToListAsync(ct);
 
+        // Tratamentos por tipo, descontando os leads marcados como "não contar"
+        // (kpi_exclusions, KpiKey="tratamentos"). Mesmo padrão do agByType/nsByType —
+        // .Where com IN é traduzível com segurança. Sobrescreve funnelRows.Tratamentos,
+        // que conta FechouTratamento sem olhar a exclusão e fazia o card não diminuir.
+        var tratExcluded = await _db.KpiExclusions.AsNoTracking()
+            .Where(e => e.TenantId == clinicId && e.KpiKey == "tratamentos"
+                     && (!unitId.HasValue || e.UnitId == unitId.Value))
+            .Select(e => e.LeadId)
+            .ToListAsync(ct);
+        var tratByType = (await baseQ
+            .Where(l => l.CurrentStage == LeadStages.FechouTratamento)
+            .Where(l => !tratExcluded.Contains(l.Id))
+            .GroupBy(l => l.LeadType ?? "indefinido")
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .ToListAsync(ct))
+            .ToDictionary(x => x.Type, x => x.Count);
+
         // Agendados por DATA DE ENTRADA na etapa (histórico), e não por data de criação
         // do lead — inclui leads antigos agendados dentro do período. Mesmos filtros
         // (scopeQ). Sobrescreve a contagem cohort-by-creation do funil logo abaixo.
@@ -1977,7 +1994,7 @@ public class LeadService(
                     // não a contagem por etapa antiga (que ficou em funnelRows.Consultas).
                     // Alinha com o breakdown do card e com o card de Consultas.
                     Consultas = consultasByTypeMap.Values.Sum(),
-                    Tratamentos = funnelRows.Sum(r => r.Tratamentos),
+                    Tratamentos = tratByType.Values.Sum(),
                     NoShow = noShowTotal,
                 };
             }
@@ -2000,7 +2017,7 @@ public class LeadService(
                 Consultas = type == "cadastro"
                     ? consultasByTypeMap.GetValueOrDefault("cadastro", 0) + consultasByTypeMap.GetValueOrDefault("indefinido", 0)
                     : consultasByTypeMap.GetValueOrDefault(type, 0),
-                Tratamentos = row?.Tratamentos ?? 0,
+                Tratamentos = tratByType.GetValueOrDefault(type, 0),
                 NoShow = nsByType.GetValueOrDefault(type, 0),
             };
         }

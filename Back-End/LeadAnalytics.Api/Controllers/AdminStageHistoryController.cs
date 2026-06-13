@@ -55,6 +55,7 @@ public class AdminStageHistoryController(
         [FromQuery] DateTime dateFrom,
         [FromQuery] DateTime dateTo,
         [FromQuery] string? kpiKey,
+        [FromQuery] string? stageLabel,
         [FromQuery] string? leadName,
         [FromQuery] int limit = 500,
         CancellationToken ct = default)
@@ -89,6 +90,9 @@ public class AdminStageHistoryController(
                 && (h.CorrectedChangedAt ?? h.ChangedAt) <= to);
         if (wantedStages is not null)
             q = q.Where(h => wantedStages.Contains(h.StageLabel));
+        // Filtro por etapa específica (substitui o agrupamento por KPI quando o front manda).
+        if (!string.IsNullOrWhiteSpace(stageLabel))
+            q = q.Where(h => h.StageLabel == stageLabel);
         if (!string.IsNullOrWhiteSpace(leadName))
             q = q.Where(h => EF.Functions.ILike(h.Lead!.Name, $"%{leadName.Trim()}%"));
 

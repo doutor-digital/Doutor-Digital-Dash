@@ -152,6 +152,14 @@ public class KpiLeadDto
 
     /// <summary>Lead foi marcado como "não contar" pelo admin neste KPI (kpi_exclusions).</summary>
     [JsonPropertyName("excluded")] public bool Excluded { get; set; }
+
+    /// <summary>Id da transição de etapa mais recente que casou com a fonte do KPI (LeadStageHistory).
+    /// Permite o front chamar PATCH /api/admin/stage-history/{id}/corrected-date direto do drill-down.
+    /// Só populado para fontes que derivam de stage_history (KommoStage).</summary>
+    [JsonPropertyName("history_id")] public int? HistoryId { get; set; }
+
+    /// <summary>Data efetiva da transição (CorrectedChangedAt ?? ChangedAt) — o que o KPI usa pra contar.</summary>
+    [JsonPropertyName("effective_changed_at")] public DateTime? EffectiveChangedAt { get; set; }
 }
 
 public class KpiLeadsResponseDto

@@ -304,6 +304,11 @@ public class KpiConfigService(AppDbContext db)
         var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
             or KpiSourceTypes.CustomFieldSum or KpiSourceTypes.StageFieldFilter;
 
+        // Quando a fonte vem do stage_history (KommoStage), guardamos pra cada lead a
+        // transição MAIS RECENTE no período — o front usa o id pra abrir o editor de
+        // "corrigir data" direto do drill-down (sem ir pra página de auditoria).
+        Dictionary<int, (int HistoryId, DateTime EffectiveAt)>? historyByLead = null;
+
         IQueryable<LeadAnalytics.Api.Models.Lead> q;
         if (sourceType == KpiSourceTypes.KommoStage)
         {
@@ -314,15 +319,24 @@ public class KpiConfigService(AppDbContext db)
             var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
-            var leadIds = await _db.LeadStageHistories.AsNoTracking()
+            var historyRows = await _db.LeadStageHistories.AsNoTracking()
                 .Where(h => ids.Contains(h.StageId)
                     && h.EntrySource != LeadStageHistory.SourceLegacy
                     && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
                     && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
-                .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
-                .Distinct()
+                .Join(scope, h => h.LeadId, l => l.Id,
+                    (h, l) => new { h.Id, h.LeadId, EffectiveAt = (h.CorrectedChangedAt ?? h.ChangedAt) })
                 .ToListAsync(ct);
 
+            // Lead pode reentrar na etapa dentro do período — pegamos a entrada mais recente
+            // pra ser o "alvo" do botão "corrigir data". Lead errado num mesmo dia é raro;
+            // se a SDR quiser editar uma entrada anterior, a página de auditoria mostra todas.
+            historyByLead = historyRows
+                .GroupBy(r => r.LeadId)
+                .ToDictionary(g => g.Key,
+                    g => g.OrderByDescending(r => r.EffectiveAt).Select(r => (r.Id, r.EffectiveAt)).First());
+
+            var leadIds = historyByLead.Keys.ToList();
             q = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => leadIds.Contains(l.Id));
         }
         else if (sourceType == KpiSourceTypes.RecoveryAttempt)
@@ -390,6 +404,11 @@ public class KpiConfigService(AppDbContext db)
             }
 
             var cf = l.CustomFieldsJson;
+            // Pega a entrada mais recente no stage_history pra essa fonte (só p/ KommoStage)
+            // — é o id que o front passa pro PATCH /corrected-date.
+            var hist = historyByLead != null && historyByLead.TryGetValue(l.Id, out var h)
+                ? ((int?)h.HistoryId, (DateTime?)h.EffectiveAt)
+                : (null, null);
             hits.Add(new DTOs.Kpi.KpiLeadDto
             {
                 Id = l.Id,
@@ -417,6 +436,8 @@ public class KpiConfigService(AppDbContext db)
                 OrigemCustom = ExtractFieldByName(cf, n => n.Contains("origem")),
                 TreatmentValue = TryParseDecimal(ExtractFieldByName(cf, n => n.Contains("valor") && n.Contains("tratamento"))),
                 Excluded = excludedSet.Contains(l.Id),
+                HistoryId = hist.Item1,
+                EffectiveChangedAt = hist.Item2,
             });
 
             if (hits.Count >= limit) { truncated = true; break; }

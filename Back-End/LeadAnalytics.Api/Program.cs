@@ -159,6 +159,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<ContactImportService>();
 builder.Services.AddScoped<CloudiaCsvImportService>();
+builder.Services.AddScoped<KpiReconcileService>();
 builder.Services.AddScoped<CloudiaKommoPatchService>();
 builder.Services.AddSingleton<ICloudiaKommoPatchJobQueue, InMemoryCloudiaKommoPatchJobQueue>();
 builder.Services.AddHostedService<CloudiaKommoPatchJobWorker>();

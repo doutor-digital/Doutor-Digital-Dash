@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Service.Ai;
@@ -41,7 +42,7 @@ public class AiAnalyticsService(
         "valores que não estão nos dados. Se um dado estiver vazio, diga isso explicitamente.";
 
     public async Task<string> AnalyzeUnitAsync(
-        int tenantId, int unitId, DateTime from, DateTime to, CancellationToken ct)
+        int tenantId, int? unitId, DateTime from, DateTime to, CancellationToken ct)
     {
         // Postgres `timestamp with time zone` exige Kind=Utc. As datas que
         // chegam do controller (vindas de "2026-06-05" no JSON) são Unspecified.
@@ -50,29 +51,36 @@ public class AiAnalyticsService(
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("Chave da OpenAI não configurada para esta clínica.");
 
-        var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
-        if (unit is null) throw new InvalidOperationException("Unidade não encontrada.");
+        // unitId nulo = "Todas as unidades": agrega o tenant inteiro.
+        Unit? unit = null;
+        if (unitId is int uid)
+        {
+            unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid, ct);
+            if (unit is null) throw new InvalidOperationException("Unidade não encontrada.");
+        }
+        var unitLabel = unit?.Name ?? "Todas as unidades";
 
         // Indicadores básicos
         var prevFrom = from.AddDays(-(to - from).Days - 1);
         var prevTo = from.AddDays(-1);
 
         // Se a unidade tem etapa de entrada configurada, contamos APENAS leads
-        // que entraram nessa etapa no período (usando LeadStageHistory).
-        // Senão, fallback no count por CreatedAt.
-        var entryStageId = await entryStageConfig.GetAsync(unitId, ct);
+        // que entraram nessa etapa no período (usando LeadStageHistory). Em
+        // "Todas as unidades" não dá pra usar uma etapa só (cada unidade tem a
+        // sua), então cai no fallback por CreatedAt.
+        var entryStageId = unitId is int u0 ? await entryStageConfig.GetAsync(u0, ct) : null;
         var currentTotal = await CountLeadsAsync(tenantId, unitId, from, to, entryStageId, ct);
         var prevTotal = await CountLeadsAsync(tenantId, unitId, prevFrom, prevTo, entryStageId, ct);
 
         var byStage = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.CreatedAt >= from && l.CreatedAt <= to)
             .GroupBy(l => l.CurrentStage)
             .Select(g => new { stage = g.Key, count = g.Count() })
             .ToListAsync(ct);
 
         var byResponsavel = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.CreatedAt >= from && l.CreatedAt <= to
                         && l.AttendantId != null)
             .GroupBy(l => l.AttendantId)
@@ -82,7 +90,7 @@ public class AiAnalyticsService(
             .ToListAsync(ct);
 
         var bySource = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.CreatedAt >= from && l.CreatedAt <= to)
             .GroupBy(l => l.Source)
             .Select(g => new { source = g.Key, count = g.Count() })
@@ -91,7 +99,7 @@ public class AiAnalyticsService(
             .ToListAsync(ct);
 
         var byCampaign = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.CreatedAt >= from && l.CreatedAt <= to)
             .GroupBy(l => l.Campaign)
             .Select(g => new { campaign = g.Key, count = g.Count() })
@@ -101,7 +109,7 @@ public class AiAnalyticsService(
 
         // Distribuição por hora e dia da semana (CreatedAt)
         var rawTimes = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.UnitId == unitId
+            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.CreatedAt >= from && l.CreatedAt <= to)
             .Select(l => l.CreatedAt)
             .ToListAsync(ct);
@@ -124,7 +132,7 @@ public class AiAnalyticsService(
         // (o que o usuário vê no relógio), não em UTC.
         var brOffset = TimeSpan.FromHours(-3);
         var sb = new StringBuilder();
-        sb.AppendLine($"# Dados da unidade {unit.Name}");
+        sb.AppendLine($"# Dados de {unitLabel}");
         sb.AppendLine($"Período analisado (BRT): {from.Add(brOffset):dd/MM/yyyy} → {to.Add(brOffset):dd/MM/yyyy} ({(to - from).Days + 1} dias)");
         sb.AppendLine($"Período anterior (comparativo, BRT): {prevFrom.Add(brOffset):dd/MM/yyyy} → {prevTo.Add(brOffset):dd/MM/yyyy}");
         sb.AppendLine();
@@ -202,10 +210,10 @@ public class AiAnalyticsService(
         }
 
         var facts = sb.ToString();
-        logger.LogInformation("[ai-analytics] unit={Unit} contexto={Bytes}B", unit.Id, facts.Length);
+        logger.LogInformation("[ai-analytics] unit={Unit} contexto={Bytes}B", unit?.Id, facts.Length);
 
         var userPrompt =
-            $"Analise os dados abaixo da unidade **{unit.Name}** e gere o relatório.\n\n" +
+            $"Analise os dados abaixo de **{unitLabel}** e gere o relatório.\n\n" +
             "```\n" + facts + "\n```";
 
         return await openAi.ChatAsync(apiKey, SystemPrompt, userPrompt, ct,
@@ -218,21 +226,22 @@ public class AiAnalyticsService(
     /// é o número que bate com o widget "leads de entrada" da Kommo. Senão,
     /// fallback no CreatedAt (qualquer lead criado no período).
     /// </summary>
-    private async Task<int> CountLeadsAsync(int tenantId, int unitId, DateTime from, DateTime to, int? entryStageId, CancellationToken ct)
+    private async Task<int> CountLeadsAsync(int tenantId, int? unitId, DateTime from, DateTime to, int? entryStageId, CancellationToken ct)
     {
-        if (entryStageId is int stageId)
+        // entryStageId só vem preenchido quando há uma unidade específica.
+        if (entryStageId is int stageId && unitId is int sUid)
         {
             return await db.LeadStageHistories.AsNoTracking()
                 .Where(h => h.StageId == stageId
                             && h.ChangedAt >= from && h.ChangedAt <= to
                             && h.Lead.TenantId == tenantId
-                            && h.Lead.UnitId == unitId)
+                            && h.Lead.UnitId == sUid)
                 .Select(h => h.LeadId)
                 .Distinct()
                 .CountAsync(ct);
         }
         return await db.Leads.AsNoTracking().CountAsync(l =>
-            l.TenantId == tenantId && l.UnitId == unitId
+            l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
             && l.CreatedAt >= from && l.CreatedAt <= to, ct);
     }
 

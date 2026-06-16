@@ -111,15 +111,29 @@ public class AiController(
 
     // ─── ANALYZE ────────────────────────────────────────────────────────────
 
-    public record AnalyzeRequest(int UnitId, DateTime? DateFrom, DateTime? DateTo);
+    // UnitId nulo = "Todas as unidades": agrega o tenant inteiro. Nesse caso o
+    // tenant não dá pra resolver pela unidade, então vem do tenantId (query),
+    // mesmo esquema do /chat.
+    public record AnalyzeRequest(int? UnitId, DateTime? DateFrom, DateTime? DateTo);
     public record AnalyzeResponse(string Markdown, int Tokens, double DurationSec);
 
     [HttpPost("analyze")]
-    public async Task<IActionResult> Analyze([FromBody] AnalyzeRequest body, CancellationToken ct)
+    public async Task<IActionResult> Analyze([FromBody] AnalyzeRequest body, [FromQuery(Name = "tenantId")] int? explicitTenantId, CancellationToken ct)
     {
-        var (err, tenantId) = await tenantGuard.ResolveTenantAsync(body.UnitId, ct);
-        if (err is not null) return err;
-        if (tenantId is null) return Forbid();
+        int tenantId;
+        if (body.UnitId is int uid)
+        {
+            var (err, t) = await tenantGuard.ResolveTenantAsync(uid, ct);
+            if (err is not null) return err;
+            if (t is null) return Forbid();
+            tenantId = t.Value;
+        }
+        else
+        {
+            // Todas as unidades: resolve só pelo tenant (super_admin manda na query).
+            if (ResolveAiTenantId(explicitTenantId) is not int t) return Forbid();
+            tenantId = t;
+        }
 
         // "Total de leads" = leads CRIADOS de 00:00 a 23:59 do dia (BRT).
         // Helper converte o range BR → UTC pra query no Postgres.
@@ -128,7 +142,7 @@ public class AiController(
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            var md = await analytics.AnalyzeUnitAsync(tenantId.Value, body.UnitId, from, to, ct);
+            var md = await analytics.AnalyzeUnitAsync(tenantId, body.UnitId, from, to, ct);
             sw.Stop();
             return Ok(new AnalyzeResponse(md, md.Length / 4, sw.Elapsed.TotalSeconds));
         }
@@ -144,7 +158,7 @@ public class AiController(
         catch (Exception ex)
         {
             // Catch-all pra superficiar a real do erro pro front em vez de 500 cego.
-            logger.LogError(ex, "[ai-analyze] erro inesperado tenant={Tenant} unit={Unit}", tenantId.Value, body.UnitId);
+            logger.LogError(ex, "[ai-analyze] erro inesperado tenant={Tenant} unit={Unit}", tenantId, body.UnitId);
             return StatusCode(500, new
             {
                 error = $"{ex.GetType().Name}: {ex.Message}",

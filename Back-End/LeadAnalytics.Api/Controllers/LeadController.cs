@@ -649,6 +649,15 @@ public class WebhooksController(
         var to = body.DateTo ?? DateTime.UtcNow;
         var from = body.DateFrom ?? to.AddDays(-30);
 
+        // Consultas: o drill lista as consultas cuja DATA DA CONSULTA cai no período
+        // (mesmo conjunto do número do card), e não "quantas a SDR marcou".
+        if (string.IsNullOrWhiteSpace(body.SourceType) && body.KpiKey == "consultas")
+        {
+            var (citems, ctotal, ctrunc) = await _kpiService.ConsultasDoDiaLeadsAsync(
+                tenantId.Value, unitId, from, to, 500, ct);
+            return Ok(new KpiLeadsResponseDto { Items = citems, Total = ctotal, Truncated = ctrunc });
+        }
+
         var sourceType = body.SourceType ?? "";
         var config = body.Config;
         var hasInline = !string.IsNullOrWhiteSpace(body.SourceType)

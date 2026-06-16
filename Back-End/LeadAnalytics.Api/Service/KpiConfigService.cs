@@ -1294,6 +1294,81 @@ public class KpiConfigService(AppDbContext db)
         return await LoadConsultasDoDiaAsync(clinicId, unitId, profile, from, to, ct);
     }
 
+    /// <summary>
+    /// Drill-down do card "Consultas": lista os LEADS cuja DATA DA CONSULTA cai no
+    /// período — o mesmo conjunto que alimenta o número do card (do_dia), pra clicar
+    /// no número e ver exatamente as consultas do dia (não "quantas a SDR marcou").
+    /// </summary>
+    public async Task<(List<DTOs.Kpi.KpiLeadDto> Items, int Total, bool Truncated)> ConsultasDoDiaLeadsAsync(
+        int clinicId, int? unitId, DateTime from, DateTime to, int limit, CancellationToken ct = default)
+    {
+        const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
+        var profile = unitId.HasValue ? await GetLeadProfileConfigAsync(unitId.Value, ct) : new LeadProfileFields();
+
+        var rows = await _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
+            .Where(l => l.TenantId == clinicId
+                && (!unitId.HasValue || l.UnitId == unitId.Value)
+                && (l.AppointmentScheduledAt != null
+                    || (l.CustomFieldsJson != null && profile.AppointmentFieldId != null)))
+            .Select(l => new
+            {
+                l.Id, l.ExternalId, l.Name, l.Phone, l.Source, l.Channel, l.CurrentStage, l.CurrentStageId,
+                l.LeadType, l.HasAppointment, l.HasPayment, l.CreatedAt, l.AppointmentScheduledAt,
+                l.ConsultationValue, l.ClosedTreatment, l.CustomFieldsJson,
+            })
+            .Take(MaxScan)
+            .ToListAsync(ct);
+
+        var inRange = rows
+            .Select(l => new { l, Appt = ResolveApptDate(l.AppointmentScheduledAt, l.CustomFieldsJson, profile) })
+            .Where(x => x.Appt is not null)
+            .Select(x => new { x.l, Appt = AsUtc(x.Appt!.Value) })
+            .Where(x => x.Appt >= from && x.Appt <= to)
+            .OrderBy(x => x.Appt)
+            .ToList();
+
+        var total = inRange.Count;
+        var truncated = total > limit;
+        var items = inRange.Take(limit).Select(x =>
+        {
+            var cf = x.l.CustomFieldsJson;
+            return new DTOs.Kpi.KpiLeadDto
+            {
+                Id = x.l.Id,
+                ExternalId = x.l.ExternalId,
+                Name = x.l.Name,
+                Phone = x.l.Phone,
+                Source = x.l.Source,
+                Channel = x.l.Channel,
+                CurrentStage = x.l.CurrentStage,
+                CurrentStageId = x.l.CurrentStageId,
+                LeadType = x.l.LeadType,
+                HasAppointment = x.l.HasAppointment,
+                HasPayment = x.l.HasPayment,
+                CreatedAt = x.l.CreatedAt,
+                AppointmentAt = x.Appt,
+                ConsultationValue = x.l.ConsultationValue,
+                ClosedTreatment = x.l.ClosedTreatment,
+                MotivoNaoAgendamento = ExtractFieldByName(cf, n => n.Contains("motivo") && n.Contains("agendamento")),
+                TratamentoFechado = ExtractFieldByName(cf, n => n.Contains("tratamento") && n.Contains("fechad")),
+                Qualificacao = ExtractFieldByName(cf, n => n.Contains("qualifica")),
+                OrigemCustom = ExtractFieldByName(cf, n => n.Contains("origem")),
+            };
+        }).ToList();
+
+        return (items, total, truncated);
+    }
+
+    /// <summary>Data da consulta: prefere a coluna sincronizada; cai no CustomFieldsJson.</summary>
+    private DateTime? ResolveApptDate(DateTime? column, string? customFieldsJson, LeadProfileFields profile)
+    {
+        if (column is not null) return column;
+        var s = ExtractField(customFieldsJson, profile.AppointmentFieldId, n => n.Contains("agendamento"));
+        return !string.IsNullOrWhiteSpace(s) && TryParseDate(s, out var d) ? d : null;
+    }
+
     /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
         => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);

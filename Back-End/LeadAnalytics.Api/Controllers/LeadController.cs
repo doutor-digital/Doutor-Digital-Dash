@@ -718,6 +718,27 @@ public class WebhooksController(
     }
 
     /// <summary>
+    /// Consultas cuja DATA DA CONSULTA cai no range (default: hoje) — nome, hora e
+    /// desfecho. Alimenta a faixa "HORÁRIO DE CONSULTA AGORA" no topo do dashboard.
+    /// </summary>
+    [HttpGet("dashboard/consultas-do-dia")]
+    [ProducesResponseType(typeof(List<LeadAnalytics.Api.DTOs.Dashboard.ConsultaDiaItemDto>), 200)]
+    public async Task<IActionResult> ConsultasDoDia(
+        [FromQuery] int? unitId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        CancellationToken ct)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is null) return BadRequest(new { error = "tenant não resolvido" });
+
+        var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
+        var result = await _kpiService.ConsultasDoDiaAsync(tenantId.Value, unitId, from, to, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Métricas de todos os campos customizados dos leads do período (perfil do lead):
     /// preenchimento + distribuição dos valores mais comuns por campo.
     /// </summary>

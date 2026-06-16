@@ -72,6 +72,14 @@ public class ConsultasBreakdownDto
     [JsonPropertyName("cadastro")] public int Cadastro { get; set; }
     [JsonPropertyName("resgate")] public int Resgate { get; set; }
     [JsonPropertyName("valor_total")] public decimal ValorTotal { get; set; }
+    /// <summary>Consultas cuja DATA DA CONSULTA (AppointmentScheduledAt) cai no período
+    /// selecionado — "consultas do dia". Diferente de <see cref="Total"/>, que conta
+    /// quando a SDR MARCOU a consulta (produtividade).</summary>
+    [JsonPropertyName("do_dia")] public int DoDia { get; set; }
+    /// <summary>Desfecho das consultas do dia.</summary>
+    [JsonPropertyName("compareceu")] public int Compareceu { get; set; }
+    [JsonPropertyName("faltou")] public int Faltou { get; set; }
+    [JsonPropertyName("aguardando")] public int Aguardando { get; set; }
     /// <summary>Próximos agendamentos (nome + data/hora) — top 8 por data.</summary>
     [JsonPropertyName("agendamentos")] public List<AgendamentoItemDto> Agendamentos { get; set; } = new();
 }
@@ -81,4 +89,15 @@ public class AgendamentoItemDto
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("when")] public DateTime? When { get; set; }
     [JsonPropertyName("tipo")] public string? Tipo { get; set; }
+}
+
+/// <summary>Item da faixa "consultas de hoje" — inclui hora e desfecho pra UI.</summary>
+public class ConsultaDiaItemDto
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("when")] public DateTime? When { get; set; }
+    [JsonPropertyName("tipo")] public string? Tipo { get; set; }
+    /// <summary>"compareceu" | "faltou" | "aguardando".</summary>
+    [JsonPropertyName("outcome")] public string Outcome { get; set; } = "aguardando";
+    [JsonPropertyName("phone")] public string? Phone { get; set; }
 }

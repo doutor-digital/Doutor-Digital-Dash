@@ -738,6 +738,15 @@ public class KpiConfigService(AppDbContext db)
             });
         }
 
+        // ── Consultas DO DIA: por DATA DA CONSULTA (AppointmentScheduledAt) dentro do
+        //    range selecionado — é o número principal do card. Quebra por desfecho
+        //    (compareceu/faltou/aguardando) lendo a etapa atual / status do lead.
+        var consDia = await LoadConsultasDoDiaAsync(clinicId, unitId, profile, from, to, ct);
+        cons.DoDia = consDia.Count;
+        cons.Compareceu = consDia.Count(x => x.Outcome == "compareceu");
+        cons.Faltou = consDia.Count(x => x.Outcome == "faltou");
+        cons.Aguardando = consDia.Count(x => x.Outcome == "aguardando");
+
         // ── Agendados: contados por DATA DE ENTRADA na etapa (histórico de etapas),
         //    e não pela data de criação do lead — assim leads antigos agendados dentro
         //    do período aparecem. com/sem pagamento vem da própria etapa (04 vs 05).
@@ -1217,6 +1226,72 @@ public class KpiConfigService(AppDbContext db)
         }
         catch (JsonException) { /* ignora */ }
         return null;
+    }
+
+    // ── Consultas DO DIA (por data da consulta) ──────────────────────────────
+    /// <summary>
+    /// Lista as consultas cuja DATA (AppointmentScheduledAt, com fallback no
+    /// CustomFieldsJson) cai em [from, to], já com o desfecho classificado.
+    /// Alimenta tanto o card "Consultas" (números) quanto a faixa de alerta do dia.
+    /// </summary>
+    private async Task<List<DTOs.Dashboard.ConsultaDiaItemDto>> LoadConsultasDoDiaAsync(
+        int clinicId, int? unitId, LeadProfileFields profile, DateTime from, DateTime to, CancellationToken ct)
+    {
+        const int MaxScan = 8000;
+        from = AsUtc(from); to = AsUtc(to);
+        var rows = await _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
+            .Where(l => l.TenantId == clinicId
+                && (!unitId.HasValue || l.UnitId == unitId.Value)
+                && (l.AppointmentScheduledAt != null
+                    || (l.CustomFieldsJson != null && profile.AppointmentFieldId != null)))
+            .Select(l => new { l.Name, l.Phone, l.AppointmentScheduledAt, l.CustomFieldsJson, l.LeadType, l.CurrentStage, l.AttendanceStatus })
+            .Take(MaxScan)
+            .ToListAsync(ct);
+
+        var items = new List<DTOs.Dashboard.ConsultaDiaItemDto>();
+        foreach (var l in rows)
+        {
+            DateTime? appt = l.AppointmentScheduledAt;
+            if (appt is null)
+            {
+                var apptStr = ExtractField(l.CustomFieldsJson, profile.AppointmentFieldId, n => n.Contains("agendamento"));
+                if (!string.IsNullOrWhiteSpace(apptStr) && TryParseDate(apptStr, out var d)) appt = d;
+            }
+            if (appt is null) continue;
+            var apUtc = AsUtc(appt.Value);
+            if (apUtc < from || apUtc > to) continue;
+            items.Add(new DTOs.Dashboard.ConsultaDiaItemDto
+            {
+                Name = l.Name,
+                Phone = l.Phone,
+                When = apUtc,
+                Tipo = !string.IsNullOrEmpty(l.LeadType) && l.LeadType.Contains("resgate", StringComparison.OrdinalIgnoreCase)
+                    ? "resgate" : "cadastro",
+                Outcome = ClassifyConsultaOutcome(l.CurrentStage, l.AttendanceStatus),
+            });
+        }
+        return items.OrderBy(i => i.When).ToList();
+    }
+
+    /// <summary>compareceu / faltou / aguardando — a partir da etapa atual e do AttendanceStatus.</summary>
+    private static string ClassifyConsultaOutcome(string? currentStage, string? attendance)
+    {
+        if (currentStage == LeadStages.Faltou
+            || string.Equals(attendance, LeadStages.AttendedFaltou, StringComparison.OrdinalIgnoreCase))
+            return "faltou";
+        if (string.Equals(attendance, LeadStages.AttendedCompareceu, StringComparison.OrdinalIgnoreCase)
+            || currentStage is LeadStages.EmTratamento or LeadStages.FechouTratamento or LeadStages.NaoFechouTratamento)
+            return "compareceu";
+        return "aguardando";
+    }
+
+    /// <summary>Versão pública pro endpoint da faixa de hoje: carrega o perfil e lista as consultas do dia.</summary>
+    public async Task<List<DTOs.Dashboard.ConsultaDiaItemDto>> ConsultasDoDiaAsync(
+        int clinicId, int? unitId, DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        var profile = unitId.HasValue ? await GetLeadProfileConfigAsync(unitId.Value, ct) : new LeadProfileFields();
+        return await LoadConsultasDoDiaAsync(clinicId, unitId, profile, from, to, ct);
     }
 
     /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>

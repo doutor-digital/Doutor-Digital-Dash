@@ -141,6 +141,7 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
             ClinicId = clinicId,
             Name = name,
             Slug = slug,
+            Segment = Segments.Normalize(dto.Segment),
             Email = dto.Email?.Trim(),
             Cnpj = NormalizeCnpj(dto.Cnpj),
             Phone = dto.Phone?.Trim(),
@@ -171,6 +172,7 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         if (unit is null) return null;
 
         if (!string.IsNullOrWhiteSpace(dto.Name)) unit.Name = dto.Name.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.Segment)) unit.Segment = Segments.Normalize(dto.Segment);
         if (dto.Email is not null) unit.Email = dto.Email.Trim();
         if (dto.Cnpj is not null) unit.Cnpj = NormalizeCnpj(dto.Cnpj);
         if (dto.Phone is not null) unit.Phone = dto.Phone.Trim();
@@ -355,6 +357,7 @@ public class UnitService(AppDbContext db, ILogger<UnitService> logger)
         ClinicId = u.ClinicId,
         Name = u.Name,
         Slug = u.Slug,
+        Segment = u.Segment,
         Email = u.Email,
         Cnpj = u.Cnpj,
         Phone = u.Phone,

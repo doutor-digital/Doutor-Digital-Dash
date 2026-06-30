@@ -120,6 +120,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // Slug compõe a URL do webhook (/webhooks/kommo/{slug}); precisa ser único.
             entity.HasIndex(e => e.Slug).IsUnique();
             entity.Property(e => e.KommoStageMapJson).HasColumnType("jsonb");
+            entity.Property(e => e.Segment).HasMaxLength(32).HasDefaultValue(Service.Segments.Saude);
         });
 
         // ─── KpiConfiguration ────────────────────────────────────

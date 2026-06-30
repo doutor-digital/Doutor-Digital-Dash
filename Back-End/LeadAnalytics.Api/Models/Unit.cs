@@ -20,6 +20,14 @@ public class Unit
     /// <summary>Slug único e estável usado na URL do webhook da Kommo. Ex.: "araguaina".</summary>
     public string? Slug { get; set; }
 
+    /// <summary>
+    /// Segmento de negócio do tenant — define QUAL conjunto de KPIs/dashboard a unidade
+    /// renderiza. <c>"saude"</c> (padrão: clínicas médicas/odonto, ex. Doutor Hérnia) ou
+    /// <c>"juridico"</c> (escritórios de advocacia, ex. Advocacia Magalhães). O layout é o
+    /// mesmo; muda só o conjunto de métricas e a fonte de cálculo. Ver <see cref="Service.Segments"/>.
+    /// </summary>
+    public string Segment { get; set; } = Service.Segments.Saude;
+
     // ─── Cadastro ────────────────────────────────────────────
     public string? Email { get; set; }
     public string? Cnpj { get; set; }

@@ -12,6 +12,10 @@ public class UpdateUnitDto
     [StringLength(120, MinimumLength = 2)]
     public string? Name { get; set; }
 
+    /// <summary>Segmento de negócio: "saude" ou "juridico". Null = não altera.</summary>
+    [StringLength(32)]
+    public string? Segment { get; set; }
+
     [EmailAddress(ErrorMessage = "E-mail inválido.")]
     public string? Email { get; set; }
 

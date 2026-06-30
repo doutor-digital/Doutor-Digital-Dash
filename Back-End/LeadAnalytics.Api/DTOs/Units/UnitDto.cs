@@ -12,6 +12,9 @@ public class UnitDto
     public string Name { get; set; } = null!;
     public string? Slug { get; set; }
 
+    /// <summary>Segmento de negócio: "saude" (clínicas) ou "juridico" (advocacia). Define o conjunto de KPIs.</summary>
+    public string Segment { get; set; } = "saude";
+
     public string? Email { get; set; }
     public string? Cnpj { get; set; }
     public string? Phone { get; set; }

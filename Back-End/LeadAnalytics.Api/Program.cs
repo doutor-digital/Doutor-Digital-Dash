@@ -174,6 +174,8 @@ builder.Services.AddScoped<DuplicateContactService>();
 // ── Insights (CAPI mockado + analytics agregadas) ────────────────────────────
 builder.Services.AddScoped<MetaCapiService>();
 builder.Services.AddScoped<InsightsService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Juridico.JuridicoFieldMapService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Juridico.JuridicoDashboardService>();
 
 // ── Background jobs: delete em lote de contatos duplicados ───────────────────
 builder.Services.AddSingleton<IDuplicateDeleteJobQueue, InMemoryDuplicateDeleteJobQueue>();

@@ -9,6 +9,10 @@ public class CreateUnitDto
     [StringLength(120, MinimumLength = 2)]
     public string Name { get; set; } = null!;
 
+    /// <summary>Segmento de negócio: "saude" (padrão) ou "juridico". Define o conjunto de KPIs do dashboard.</summary>
+    [StringLength(32)]
+    public string? Segment { get; set; }
+
     [EmailAddress(ErrorMessage = "E-mail inválido.")]
     public string? Email { get; set; }
 

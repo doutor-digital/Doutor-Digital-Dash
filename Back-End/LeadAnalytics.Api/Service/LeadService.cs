@@ -1907,9 +1907,13 @@ public class LeadService(
         // Reclassificações: lead que já era agendado ANTES do período e só fez
         // 04↔05 dentro — não é agendamento novo, descontamos do funil. Conta por
         // NÚMERO DE LINHAS no histórico vs no período (espelha KpiBreakdownsAsync).
+        // Só linhas non-legacy no total (igual ao agEntryRows do período): linhas legacy são
+        // snapshots do sync (etapa atual), não entradas reais — se contadas, todo agendamento
+        // novo que também foi sincronizado virava reclassificação falsa e sumia do número.
         var agEntryLeadIds = agEntryRows.Select(x => x.Id).Distinct().ToList();
         var agHistCountByLead = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => agStages.Contains(h.StageLabel)
+                     && h.EntrySource != LeadStageHistory.SourceLegacy
                      && agEntryLeadIds.Contains(h.LeadId))
             .GroupBy(h => h.LeadId)
             .Select(g => new { LeadId = g.Key, Count = g.Count() })

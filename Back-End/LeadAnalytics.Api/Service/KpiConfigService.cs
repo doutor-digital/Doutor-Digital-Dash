@@ -832,13 +832,17 @@ public class KpiConfigService(AppDbContext db)
             })
             .ToListAsync(ct);
 
-        // Reclassificação: lead já tinha entrada em agendado* ANTES do período. Conta
-        // por NÚMERO DE LINHAS — se o lead tem mais linhas em agendado* no histórico
-        // total do que as linhas que apareceram no período, significa que ele já era
-        // agendado antes. Cobre todos os edge-cases (entrada legacy, prevStage raw, etc.).
+        // Reclassificação: lead já tinha entrada REAL em agendado* ANTES do período. Conta
+        // por NÚMERO DE LINHAS — se o lead tem mais linhas em agendado* no histórico total
+        // do que as linhas que apareceram no período, já era agendado antes.
+        // IMPORTANTE: só linhas non-legacy contam aqui, IGUAL ao agHist do período. Linhas
+        // legacy são snapshots do sync (fotografam a etapa ATUAL, não uma entrada de verdade);
+        // se entrassem no total, todo agendamento novo que também foi sincronizado parecia
+        // "já era agendado antes" e virava reclassificação falsa (inflava muito o número).
         var agLeadIds = agHist.Select(x => x.LeadId).Distinct().ToList();
         var agCountQ = _db.LeadStageHistories.AsNoTracking()
-            .Where(h => agLeadIds.Contains(h.LeadId));
+            .Where(h => agLeadIds.Contains(h.LeadId)
+                && h.EntrySource != LeadStageHistory.SourceLegacy);
         agCountQ = agStageIds != null
             ? agCountQ.Where(h => agStageIds.Contains(h.StageId))
             : agCountQ.Where(h => agStages.Contains(h.StageLabel));
@@ -1274,8 +1278,11 @@ public class KpiConfigService(AppDbContext db)
     {
         var leadIds = inPeriodCountByLead.Keys.ToList();
         if (leadIds.Count == 0) return new();
+        // Só linhas non-legacy: linhas legacy são snapshots do sync (etapa atual), não
+        // entradas reais — se contadas, viravam reclassificação falsa (ver KpiBreakdownsAsync).
         var totalByLead = await _db.LeadStageHistories.AsNoTracking()
-            .Where(h => stageIds.Contains(h.StageId) && leadIds.Contains(h.LeadId))
+            .Where(h => stageIds.Contains(h.StageId) && leadIds.Contains(h.LeadId)
+                && h.EntrySource != LeadStageHistory.SourceLegacy)
             .GroupBy(h => h.LeadId)
             .Select(g => new { LeadId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.LeadId, x => x.Count, ct);

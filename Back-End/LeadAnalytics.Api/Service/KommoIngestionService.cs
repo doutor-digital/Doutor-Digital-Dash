@@ -153,11 +153,19 @@ public class KommoIngestionService(
                 lead.CustomFieldsJson = MergeCustomFieldsJson(lead.CustomFieldsJson, ev.CustomFieldsJson);
             if (ev.TagsJson != null) lead.TagsJson = ev.TagsJson;
 
-            // Data REAL de criação (custom field "Data de criação lead" — preenchido pelo
-            // backfill da Cloudia/CSV). Usado pelo dashboard como fonte da verdade quando
-            // o CreatedAt do nosso backend é a "data do 1º sync" (leads antigos da Cloudia).
-            var original = TryExtractOriginalCreatedAt(lead.CustomFieldsJson);
-            if (original.HasValue) lead.OriginalCreatedAt = original;
+            // Data REAL de criação — fonte da verdade do dashboard quando o CreatedAt do nosso
+            // backend é a "data do 1º sync" (leads importados em lote entravam todos no mês do
+            // sync e inflavam o período). Precedência:
+            //  1º) custom field "Data de criação lead" (preenchido pelo backfill Cloudia/CSV —
+            //      traz a data ORIGINAL, ex.: lead de 2025 migrado);
+            //  2º) created_at NATIVO da Kommo (ev.KommoCreatedAtUtc) — melhor que o nosso
+            //      CreatedAt; só preenche quando ainda está vazio, pra não sobrescrever a data
+            //      original vinda do custom field num webhook parcial.
+            var originalFromField = TryExtractOriginalCreatedAt(lead.CustomFieldsJson);
+            if (originalFromField.HasValue)
+                lead.OriginalCreatedAt = originalFromField;
+            else if (ev.KommoCreatedAtUtc.HasValue)
+                lead.OriginalCreatedAt ??= realCreatedAt;
 
             // Data do agendamento da consulta (campo escolhido pelo analista em Configurações
             // → Perfil do Lead → "Data de agendamento"). Alimenta o sino de notificação e o

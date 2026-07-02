@@ -438,6 +438,7 @@ public class KpiConfigService(AppDbContext db)
                 Excluded = excludedSet.Contains(l.Id),
                 HistoryId = hist.Item1,
                 EffectiveChangedAt = hist.Item2,
+                CustomFields = ExtractFilledFields(cf),
             });
 
             if (hits.Count >= limit) { truncated = true; break; }
@@ -489,6 +490,28 @@ public class KpiConfigService(AppDbContext db)
                 {
                     var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(tratCfg.ConfigJson));
                     if (parsed.StageIds.Count > 0) tratStageIds = parsed.StageIds;
+                }
+                catch (JsonException) { /* config inválida — cai pro hardcoded */ }
+            }
+        }
+
+        // Stages mapeados pra "agendados" em Configurações Técnicas (kommo_stage). Quando a
+        // unidade mapeia esse KPI por ETAPA (é o que alimenta o número grande via kpi_overrides
+        // e o drill-down, ambos por StageId), o breakdown TEM que casar pelas mesmas etapas —
+        // senão o card mostra "1" mas os chips (Pagamento/Origem/Tipo) ficam "sem dados" porque
+        // o StageLabel gravado no histórico não é exatamente a constante hardcoded LeadStages.*.
+        List<int>? agStageIds = null;
+        if (unitId.HasValue)
+        {
+            var agCfg = await _db.KpiConfigurations.AsNoTracking()
+                .FirstOrDefaultAsync(k => k.UnitId == unitId.Value && k.KpiKey == "agendados", ct);
+            if (agCfg is { SourceType: KpiSourceTypes.KommoStage }
+                && !string.IsNullOrWhiteSpace(agCfg.ConfigJson))
+            {
+                try
+                {
+                    var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(agCfg.ConfigJson));
+                    if (parsed.StageIds.Count > 0) agStageIds = parsed.StageIds;
                 }
                 catch (JsonException) { /* config inválida — cai pro hardcoded */ }
             }
@@ -758,14 +781,22 @@ public class KpiConfigService(AppDbContext db)
             .Select(e => e.LeadId)
             .ToListAsync(ct);
         var agExcludedSet = agExcluded.ToHashSet();
-        var agHist = await _db.LeadStageHistories.AsNoTracking()
-            .Where(h => agStages.Contains(h.StageLabel)
-                && h.EntrySource != LeadStageHistory.SourceLegacy
+        // Fonte das etapas: se a unidade mapeou "agendados" por StageId (Configurações), casa
+        // por esses ids — igual ao número grande (ComputeAsync) e ao drill-down. Senão, cai
+        // pras etapas hardcoded 04/05 por StageLabel (comportamento legado das demais unidades).
+        // O filtro de etapa é aplicado num .Where separado (evita ternário com dois .Contains
+        // dentro do mesmo lambda, que o EF não traduz de forma confiável).
+        var agHistQ = _db.LeadStageHistories.AsNoTracking()
+            .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
                 && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
                 && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
                 && h.Lead.TenantId == clinicId
                 && !agExcluded.Contains(h.LeadId)
-                && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
+                && (!unitId.HasValue || h.Lead.UnitId == unitId.Value));
+        agHistQ = agStageIds != null
+            ? agHistQ.Where(h => agStageIds.Contains(h.StageId))
+            : agHistQ.Where(h => agStages.Contains(h.StageLabel));
+        var agHist = await agHistQ
             .Select(h => new {
                 h.LeadId, h.StageLabel, ChangedAt = (h.CorrectedChangedAt ?? h.ChangedAt),
                 h.Lead.Source, h.Lead.LeadType, h.Lead.CustomFieldsJson,
@@ -781,9 +812,12 @@ public class KpiConfigService(AppDbContext db)
         // total do que as linhas que apareceram no período, significa que ele já era
         // agendado antes. Cobre todos os edge-cases (entrada legacy, prevStage raw, etc.).
         var agLeadIds = agHist.Select(x => x.LeadId).Distinct().ToList();
-        var agHistCountByLead = await _db.LeadStageHistories.AsNoTracking()
-            .Where(h => agStages.Contains(h.StageLabel)
-                && agLeadIds.Contains(h.LeadId))
+        var agCountQ = _db.LeadStageHistories.AsNoTracking()
+            .Where(h => agLeadIds.Contains(h.LeadId));
+        agCountQ = agStageIds != null
+            ? agCountQ.Where(h => agStageIds.Contains(h.StageId))
+            : agCountQ.Where(h => agStages.Contains(h.StageLabel));
+        var agHistCountByLead = await agCountQ
             .GroupBy(h => h.LeadId)
             .Select(g => new { LeadId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.LeadId, x => x.Count, ct);
@@ -1203,6 +1237,39 @@ public class KpiConfigService(AppDbContext db)
     }
 
     /// <summary>Valor do primeiro campo cujo nome (lowercase) casa com o predicado.</summary>
+    /// <summary>Todos os campos customizados PREENCHIDOS do lead (nome + valor legível), na ordem
+    /// do CustomFieldsJson. Usado no drill-down pra listar "campos preenchidos" do lead.</summary>
+    private static List<DTOs.Kpi.KpiLeadFieldDto> ExtractFilledFields(string? json)
+    {
+        var outList = new List<DTOs.Kpi.KpiLeadFieldDto>();
+        if (string.IsNullOrWhiteSpace(json)) return outList;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return outList;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+                if (!el.TryGetProperty("field_name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+                var name = n.GetString();
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (!el.TryGetProperty("value", out var v)) continue;
+                string? value = v.ValueKind switch
+                {
+                    JsonValueKind.String => v.GetString(),
+                    JsonValueKind.Number => v.GetRawText(),
+                    JsonValueKind.True => "Sim",
+                    JsonValueKind.False => "Não",
+                    _ => null,
+                };
+                if (string.IsNullOrWhiteSpace(value)) continue;
+                outList.Add(new DTOs.Kpi.KpiLeadFieldDto { Name = name.Trim(), Value = value.Trim() });
+            }
+        }
+        catch (JsonException) { /* ignora */ }
+        return outList;
+    }
+
     private static string? ExtractFieldByName(string? json, Func<string, bool> nameMatches)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;

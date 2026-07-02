@@ -160,6 +160,17 @@ public class KpiLeadDto
 
     /// <summary>Data efetiva da transição (CorrectedChangedAt ?? ChangedAt) — o que o KPI usa pra contar.</summary>
     [JsonPropertyName("effective_changed_at")] public DateTime? EffectiveChangedAt { get; set; }
+
+    /// <summary>Todos os campos customizados PREENCHIDOS do lead (nome + valor), pro drill-down
+    /// mostrar "campos preenchidos" sem precisar abrir o lead. Ordem = a do CustomFieldsJson.</summary>
+    [JsonPropertyName("custom_fields")] public List<KpiLeadFieldDto> CustomFields { get; set; } = new();
+}
+
+/// <summary>Par nome/valor de um campo customizado preenchido do lead (drill-down).</summary>
+public class KpiLeadFieldDto
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("value")] public string Value { get; set; } = "";
 }
 
 public class KpiLeadsResponseDto

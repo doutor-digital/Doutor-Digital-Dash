@@ -24,6 +24,7 @@ public class UnitController(
     AppDbContext db,
     KommoSyncService kommoSync,
     KommoApiClient kommoApi,
+    IServiceScopeFactory scopeFactory,
     ILogger<UnitController> logger) : ControllerBase
 {
     private readonly UnitService _unitService = unitService;
@@ -32,6 +33,7 @@ public class UnitController(
     private readonly AppDbContext _db = db;
     private readonly KommoSyncService _kommoSync = kommoSync;
     private readonly KommoApiClient _kommoApi = kommoApi;
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly ILogger<UnitController> _logger = logger;
 
     private static readonly string[] AllowedPhotoExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
@@ -160,6 +162,7 @@ public class UnitController(
     public async Task<IActionResult> SyncFromKommo(
         int id, [FromBody] KommoSyncRequestDto body,
         [FromQuery] bool fast,
+        [FromQuery] bool background,
         CancellationToken ct)
     {
         var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -184,6 +187,41 @@ public class UnitController(
         }
 
         var max = body.MaxLeads.HasValue ? Math.Clamp(body.MaxLeads.Value, 1, 20000) : 5000;
+
+        // Modo background: dispara o sync num escopo próprio e responde NA HORA (202).
+        // Sync deep demora minutos e o gateway do Railway corta requests longos (502).
+        // Rodando fora do request, o sync termina em paz e o dashboard atualiza sozinho
+        // (o front reconsulta depois). Escopo novo porque o do request é descartado ao responder.
+        if (background)
+        {
+            var unitId = unit.Id;
+            var syncToken = token;
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var sp = scope.ServiceProvider;
+                var scopedDb = sp.GetRequiredService<AppDbContext>();
+                var scopedSync = sp.GetRequiredService<KommoSyncService>();
+                var scopedLog = sp.GetRequiredService<ILogger<UnitController>>();
+                using var bgCts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+                try
+                {
+                    var freshUnit = await scopedDb.Units.FirstOrDefaultAsync(u => u.Id == unitId, bgCts.Token);
+                    if (freshUnit is not null)
+                        await scopedSync.SyncAsync(freshUnit, syncToken, max, bgCts.Token, skipRefetch: fast);
+                }
+                catch (Exception ex)
+                {
+                    scopedLog.LogError(ex, "[unit-sync-bg] falha no sync em background unit={Unit}", unitId);
+                }
+            });
+
+            return Accepted(new KommoSyncResponseDto
+            {
+                Success = true,
+                Error = null,
+            });
+        }
 
         // Desacopla o cancelamento do request HTTP — se o cliente do front
         // desconectar (timeout 30s do axios), o sync continua até 10min.

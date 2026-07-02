@@ -615,13 +615,18 @@ public class KpiConfigService(AppDbContext db)
         static bool IsCadastro(string? t) => !string.IsNullOrEmpty(t) && (t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase));
 
         // Fonte da verdade: o campo custom "Tipo de lead" da Kommo (é o que o filtro da
-        // Kommo usa pra dar 197). Casa pelo id mapeado (Configurações → Perfil do Lead) ou
-        // por nome ("tipo"+"lead", ou exatamente "tipo"). Cai pra coluna LeadType (revisão
-        // SDR/CSV) só quando o campo vem vazio.
+        // Kommo usa). Tenta o id mapeado (Configurações → Perfil do Lead); se vier vazio
+        // — id não mapeado, errado ou apontando pro campo errado — casa por NOME
+        // ("tipo"+"lead"), que é consistente entre unidades. Sem esse fallback, uma unidade
+        // com o "Tipo" mapeado pro campo errado zerava o card (lia vazio → caía no LeadType).
+        // Cai pra coluna LeadType (revisão SDR/CSV) só quando o campo vem vazio nos dois.
         string? ResolveTipo(string? cf, string? leadType)
         {
-            var field = ExtractField(cf, profile.TipoFieldId,
-                n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
+            var byId = profile.TipoFieldId.HasValue
+                ? ExtractFieldValue(cf ?? "[]", profile.TipoFieldId, null)?.Trim()
+                : null;
+            var field = !string.IsNullOrWhiteSpace(byId) ? byId
+                : ExtractFieldByName(cf, n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
             return !string.IsNullOrWhiteSpace(field) ? field : leadType;
         }
 
@@ -1575,8 +1580,10 @@ public class KpiConfigService(AppDbContext db)
     // inflar o número). Espelha o ResolveTipo do KpiBreakdownsAsync pro drill bater com o card.
     private static string? ResolveTipoField(string? cf, string? leadType, long? tipoFieldId)
     {
-        var field = ExtractField(cf, tipoFieldId,
-            n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
+        // Id mapeado com fallback por nome — ver ResolveTipo em KpiBreakdownsAsync.
+        var byId = tipoFieldId.HasValue ? ExtractFieldValue(cf ?? "[]", tipoFieldId, null)?.Trim() : null;
+        var field = !string.IsNullOrWhiteSpace(byId) ? byId
+            : ExtractFieldByName(cf, n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
         return !string.IsNullOrWhiteSpace(field) ? field : leadType;
     }
     private static bool IsCadastroTipo(string? t) =>

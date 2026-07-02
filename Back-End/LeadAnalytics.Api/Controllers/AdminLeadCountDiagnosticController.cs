@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LeadAnalytics.Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -101,6 +102,56 @@ public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBas
             l.LeadType != null && EF.Functions.ILike(l.LeadType, "%resgate%"), ct);
         var outros = await ativos.CountAsync() - cadastros - resgates;
 
+        // ── Quebra pelo campo custom "Tipo lead" (o que as SDRs preenchem na Kommo) ──
+        // Responde: "quantos leads têm o campo Tipo lead PREENCHIDO?" e com quais valores.
+        // Também lista TODOS os nomes de campo que contêm "tipo" — pra confirmar o nome
+        // exato do campo (ex.: "Tipo lead" vs "Tipo" vs "Tipo de agendamento").
+        var cfJsons = await ativos.Select(l => l.CustomFieldsJson).ToListAsync(ct);
+        var camposTipoNoNome = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tipoLeadValores = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tipoLeadPreenchido = 0;
+        var tipoLeadEmBranco = 0;
+        foreach (var json in cfJsons)
+        {
+            string? tipoLeadValue = null;
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    using var docd = JsonDocument.Parse(json);
+                    if (docd.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in docd.RootElement.EnumerateArray())
+                        {
+                            if (el.ValueKind != JsonValueKind.Object) continue;
+                            if (!el.TryGetProperty("field_name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+                            var name = n.GetString();
+                            if (string.IsNullOrWhiteSpace(name) || !name.ToLowerInvariant().Contains("tipo")) continue;
+                            string? val = null;
+                            if (el.TryGetProperty("value", out var v))
+                            {
+                                if (v.ValueKind == JsonValueKind.String) val = v.GetString();
+                                else if (v.ValueKind == JsonValueKind.Number) val = v.GetRawText();
+                            }
+                            if (!string.IsNullOrWhiteSpace(val))
+                                camposTipoNoNome[name] = camposTipoNoNome.GetValueOrDefault(name) + 1;
+                            // "Tipo lead" = nome contém "lead", ou é exatamente "tipo".
+                            var lname = name.ToLowerInvariant();
+                            if (lname == "tipo" || lname.Contains("lead")) tipoLeadValue = val;
+                        }
+                    }
+                }
+                catch (JsonException) { /* ignora */ }
+            }
+            if (!string.IsNullOrWhiteSpace(tipoLeadValue))
+            {
+                tipoLeadPreenchido++;
+                var key = tipoLeadValue!.Trim();
+                tipoLeadValores[key] = tipoLeadValores.GetValueOrDefault(key) + 1;
+            }
+            else tipoLeadEmBranco++;
+        }
+
         // Amostras de leads "suspeitos" — os que provavelmente justificam a divergência.
         var suspeitosBase = inWindow
             .Where(l => l.Status == "deleted" || l.ExternalId == 0 || (l.Source != null && l.Source != "Kommo"));
@@ -143,6 +194,18 @@ public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBas
                 resgate = resgates,
                 outros,
                 detalhe_lead_type_bruto = byLeadType,
+            },
+            // Classificação pela COLUNA LeadType (acima) vs pelo CAMPO CUSTOM "Tipo lead" (abaixo).
+            // Compare `tipo_lead_campo.preenchido` com o total e com `tipo_ativos.cadastro`.
+            tipo_lead_campo = new
+            {
+                total_ativos = cadastros + resgates + outros,
+                preenchido = tipoLeadPreenchido,
+                em_branco = tipoLeadEmBranco,
+                valores = tipoLeadValores.OrderByDescending(kv => kv.Value)
+                    .Select(kv => new { valor = kv.Key, count = kv.Value }),
+                campos_com_tipo_no_nome = camposTipoNoNome.OrderByDescending(kv => kv.Value)
+                    .Select(kv => new { field_name = kv.Key, preenchidos = kv.Value }),
             },
             by_source = bySource,
             by_status = byStatus,

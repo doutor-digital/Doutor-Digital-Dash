@@ -191,15 +191,26 @@ public class KpiConfigService(AppDbContext db)
 
                 // Janela usa a data CORRIGIDA quando o admin ajustou a transição
                 // (ex.: SDR moveu o lead no dia errado), senão a original.
-                var count = await _db.LeadStageHistories.AsNoTracking()
+                var entryLeadIds = await _db.LeadStageHistories.AsNoTracking()
                     .Where(h => ids.Contains(h.StageId)
                         && h.EntrySource != LeadStageHistory.SourceLegacy
                         && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
                         && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
                     .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
-                    .Distinct()
-                    .CountAsync(ct);
-                return (count, sample, null);
+                    .ToListAsync(ct);
+                var entryCountByLead = entryLeadIds
+                    .GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
+
+                // Agendados: desconta RECLASSIFICAÇÕES (lead que já era agendado antes do
+                // período e só bounceou 04↔05 dentro) — mesma regra do card/breakdown e do
+                // funil, pra que o número grande bata com os chips. Outros KPIs KommoStage
+                // seguem contando toda entrada no período (comportamento inalterado).
+                if (kpiKey == "agendados")
+                {
+                    var reclass = await LoadReclassifiedLeadIdsAsync(ids, entryCountByLead, ct);
+                    return (entryCountByLead.Keys.Count(id => !reclass.Contains(id)), sample, null);
+                }
+                return (entryCountByLead.Count, sample, null);
             }
 
             case KpiSourceTypes.CustomFieldCount:
@@ -335,6 +346,17 @@ public class KpiConfigService(AppDbContext db)
                 .GroupBy(r => r.LeadId)
                 .ToDictionary(g => g.Key,
                     g => g.OrderByDescending(r => r.EffectiveAt).Select(r => (r.Id, r.EffectiveAt)).First());
+
+            // Agendados: tira as RECLASSIFICAÇÕES da lista (leads que já eram agendados antes
+            // do período) — assim a contagem do drill bate com o número grande e os chips.
+            if (kpiKey == "agendados")
+            {
+                var inPeriodCount = historyRows
+                    .GroupBy(r => r.LeadId).ToDictionary(g => g.Key, g => g.Count());
+                var reclass = await LoadReclassifiedLeadIdsAsync(ids, inPeriodCount, ct);
+                if (reclass.Count > 0)
+                    foreach (var id in reclass) historyByLead.Remove(id);
+            }
 
             var leadIds = historyByLead.Keys.ToList();
             q = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => leadIds.Contains(l.Id));
@@ -791,6 +813,9 @@ public class KpiConfigService(AppDbContext db)
                 && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
                 && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
                 && h.Lead.TenantId == clinicId
+                // ExcludeDeleted: leads deletados na Kommo (Status="deleted") não contam —
+                // igual ao número grande (ComputeAsync) e ao drill. Sem isso o card divergia.
+                && h.Lead.Status != LeadQueryExtensions.StatusDeleted
                 && !agExcluded.Contains(h.LeadId)
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value));
         agHistQ = agStageIds != null
@@ -1237,6 +1262,29 @@ public class KpiConfigService(AppDbContext db)
     }
 
     /// <summary>Valor do primeiro campo cujo nome (lowercase) casa com o predicado.</summary>
+    /// <summary>
+    /// Dado o conjunto de leads que ENTRARAM nas etapas <paramref name="stageIds"/> dentro do
+    /// período (com a contagem de linhas no período por lead em <paramref name="inPeriodCountByLead"/>),
+    /// devolve os leadIds que são RECLASSIFICAÇÃO: já tinham entrado nessas etapas ANTES do
+    /// período (total de linhas no histórico &gt; linhas no período). Espelha a mesma regra do
+    /// KpiBreakdownsAsync/DashboardOverview — usada pra alinhar o número grande e o drill.
+    /// </summary>
+    private async Task<HashSet<int>> LoadReclassifiedLeadIdsAsync(
+        List<int> stageIds, Dictionary<int, int> inPeriodCountByLead, CancellationToken ct)
+    {
+        var leadIds = inPeriodCountByLead.Keys.ToList();
+        if (leadIds.Count == 0) return new();
+        var totalByLead = await _db.LeadStageHistories.AsNoTracking()
+            .Where(h => stageIds.Contains(h.StageId) && leadIds.Contains(h.LeadId))
+            .GroupBy(h => h.LeadId)
+            .Select(g => new { LeadId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LeadId, x => x.Count, ct);
+        var reclass = new HashSet<int>();
+        foreach (var (leadId, inPeriod) in inPeriodCountByLead)
+            if (totalByLead.GetValueOrDefault(leadId, 0) > inPeriod) reclass.Add(leadId);
+        return reclass;
+    }
+
     /// <summary>Todos os campos customizados PREENCHIDOS do lead (nome + valor legível), na ordem
     /// do CustomFieldsJson. Usado no drill-down pra listar "campos preenchidos" do lead.</summary>
     private static List<DTOs.Kpi.KpiLeadFieldDto> ExtractFilledFields(string? json)

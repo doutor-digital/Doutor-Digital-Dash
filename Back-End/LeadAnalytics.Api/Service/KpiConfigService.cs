@@ -311,17 +311,19 @@ public class KpiConfigService(AppDbContext db)
             excludedSet = excludedIds.ToHashSet();
         }
 
-        // Cadastro/Resgate: o drill filtra pelo TIPO do lead (campo "Tipo" mapeado),
-        // espelhando o número do card (KpiBreakdownsAsync). Carrega o mapeamento só quando
-        // precisa, pra não pagar a query nos outros KPIs.
-        var tipoFilter = kpiKey is "cadastro" or "resgate";
-        long? tipoFieldId = null;
-        if (tipoFilter && unitId.HasValue)
-            tipoFieldId = (await GetLeadProfileConfigAsync(unitId.Value, ct)).TipoFieldId;
-
         var p = ParseConfig(config);
         var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
             or KpiSourceTypes.CustomFieldSum or KpiSourceTypes.StageFieldFilter;
+
+        // Cadastro/Resgate: o drill filtra pelo TIPO do lead (campo "Tipo" mapeado),
+        // espelhando o número do card (KpiBreakdownsAsync). Carrega o mapeamento só quando
+        // precisa, pra não pagar a query nos outros KPIs. EXCEÇÃO: quando o Resgate foi mapeado
+        // pra "Campo (contagem por valor)" (fieldBased), o próprio filtro do campo já espelha o
+        // card — aplicar Tipo=resgate por cima derrubaria a lista pro número antigo.
+        var tipoFilter = kpiKey == "cadastro" || (kpiKey == "resgate" && !fieldBased);
+        long? tipoFieldId = null;
+        if (tipoFilter && unitId.HasValue)
+            tipoFieldId = (await GetLeadProfileConfigAsync(unitId.Value, ct)).TipoFieldId;
 
         // Quando a fonte vem do stage_history (KommoStage), guardamos pra cada lead a
         // transição MAIS RECENTE no período — o front usa o id pra abrir o editor de
@@ -556,6 +558,28 @@ public class KpiConfigService(AppDbContext db)
             }
         }
 
+        // Resgate mapeado como "Campo (contagem por valor)" em Configurações Técnicas: em vez
+        // de classificar por Tipo=resgate, o card quebra pelos VALORES do campo (ex.: o campo
+        // "Tentativas de resgastes" → Resgate 1-24h, 2-48h, …). resgateField != null liga esse
+        // modo; senão mantém o comportamento hardcoded (campo "Tipo").
+        ParsedConfig? resgateField = null;
+        if (unitId.HasValue)
+        {
+            var resCfg = await _db.KpiConfigurations.AsNoTracking()
+                .FirstOrDefaultAsync(k => k.UnitId == unitId.Value && k.KpiKey == "resgate", ct);
+            if (resCfg is { SourceType: KpiSourceTypes.CustomFieldCount }
+                && !string.IsNullOrWhiteSpace(resCfg.ConfigJson))
+            {
+                try
+                {
+                    var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(resCfg.ConfigJson));
+                    if (parsed.FieldId is not null || !string.IsNullOrWhiteSpace(parsed.FieldCode))
+                        resgateField = parsed;
+                }
+                catch (JsonException) { /* config inválida — cai pro Tipo hardcoded */ }
+            }
+        }
+
         var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
             .Select(l => new
             {
@@ -656,7 +680,23 @@ public class KpiConfigService(AppDbContext db)
             // classificado SÓ pelo campo Tipo (não usa mais recovery_attempts). Cadastro e
             // Resgate ficam mutuamente exclusivos: IsResgate exige "resgate", IsCadastro pega
             // vazio/"cadastro"/"novo".
-            if (IsResgate(tipoResolved))
+            if (resgateField is not null)
+            {
+                // Fonte = campo customizado: conta o lead se o campo está preenchido (e, quando
+                // há matchValues, se casa) e quebra a distribuição pelos valores do campo —
+                // espelha ComputeAsync(custom_field_count), então número/breakdown/drill batem.
+                var rv = ExtractFieldValue(cf ?? "[]", resgateField.FieldId, resgateField.FieldCode);
+                if (rv is not null &&
+                    (resgateField.MatchValues.Count == 0 ||
+                     resgateField.MatchValues.Any(m => string.Equals(m.Trim(), rv.Trim(), StringComparison.OrdinalIgnoreCase))))
+                {
+                    resgateTotal++;
+                    var key = rv.Trim();
+                    resgateTipos[key] = resgateTipos.GetValueOrDefault(key) + 1;
+                    resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
+                }
+            }
+            else if (IsResgate(tipoResolved))
             {
                 resgateTotal++;
                 var tipoLabel = !string.IsNullOrWhiteSpace(tipoResolved) ? tipoResolved!.Trim() : "Resgate";
@@ -938,7 +978,7 @@ public class KpiConfigService(AppDbContext db)
         var resgate = new DTOs.Dashboard.TipoOrigemBreakdownDto
         {
             Total = resgateTotal,
-            Tipos = Top(resgateTipos, 4),
+            Tipos = Top(resgateTipos, 8),
             Origens = Top(resgateOrigens),
         };
         ag.Origens = Top(agOrigens);

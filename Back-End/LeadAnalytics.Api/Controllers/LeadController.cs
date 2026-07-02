@@ -660,13 +660,27 @@ public class WebhooksController(
 
         // Cadastro/Resgate: o drill lista os leads CRIADOS no período e o service filtra
         // pelo TIPO (campo "Tipo" mapeado) — espelha exatamente o número do card
-        // (KpiBreakdownsAsync). Não depende da fonte configurada no card.
+        // (KpiBreakdownsAsync). EXCEÇÃO: quando o Resgate foi mapeado pra "Campo (contagem por
+        // valor)", o drill segue a fonte configurada (campo) — cai no fluxo padrão abaixo, que
+        // carrega a config salva e filtra pelo campo, batendo com número/breakdown do card.
         if (string.IsNullOrWhiteSpace(body.SourceType) && (body.KpiKey == "cadastro" || body.KpiKey == "resgate"))
         {
-            var (titems, ttotal, ttrunc) = await _kpiService.ComputeLeadsAsync(
-                tenantId.Value, unitId, KpiSourceTypes.CreatedInPeriod,
-                JsonSerializer.Deserialize<JsonElement>("{}"), from, to, 500, ct, body.KpiKey);
-            return Ok(new KpiLeadsResponseDto { Items = titems, Total = ttotal, Truncated = ttrunc });
+            var resgateFieldSourced = false;
+            if (body.KpiKey == "resgate" && unitId.HasValue)
+            {
+                var rc = (await _kpiService.GetForUnitAsync(unitId.Value, ct))
+                    .FirstOrDefault(c => c.KpiKey == "resgate");
+                resgateFieldSourced = rc?.SourceType == KpiSourceTypes.CustomFieldCount
+                    && !string.IsNullOrWhiteSpace(rc.ConfigJson);
+            }
+
+            if (!resgateFieldSourced)
+            {
+                var (titems, ttotal, ttrunc) = await _kpiService.ComputeLeadsAsync(
+                    tenantId.Value, unitId, KpiSourceTypes.CreatedInPeriod,
+                    JsonSerializer.Deserialize<JsonElement>("{}"), from, to, 500, ct, body.KpiKey);
+                return Ok(new KpiLeadsResponseDto { Items = titems, Total = ttotal, Truncated = ttrunc });
+            }
         }
 
         var sourceType = body.SourceType ?? "";

@@ -607,18 +607,22 @@ public class KpiConfigService(AppDbContext db)
         var cons = new DTOs.Dashboard.ConsultasBreakdownDto();
         var consUpcoming = new List<DTOs.Dashboard.AgendamentoItemDto>();
 
+        // Cadastro/Resgate exigem o TIPO EXPLÍCITO. Em branco NÃO é Cadastro — antes
+        // "vazio = cadastro" jogava todo lead sem tipo no balde de Cadastro e inflava o
+        // número (197 marcados vs 330 com os em branco). Espelha o filtro da Kommo
+        // "Tipo de lead: Cadastro".
         static bool IsResgate(string? t) => !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
-        static bool IsCadastro(string? t) => string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
+        static bool IsCadastro(string? t) => !string.IsNullOrEmpty(t) && (t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase));
 
-        // Prefere a coluna LeadType — é a MESMA fonte do número grande do card Cadastro
-        // (LeadService.cadastroTotal), então breakdown/drill batem com ele (197 = 197).
-        // Cai pro custom field "Tipo" mapeado só quando LeadType vem vazio (unidades onde
-        // a coluna não é preenchida). Antes preferia o custom field, o que inflava o
-        // breakdown (197 vs 330) quando os dois discordavam.
+        // Fonte da verdade: o campo custom "Tipo de lead" da Kommo (é o que o filtro da
+        // Kommo usa pra dar 197). Casa pelo id mapeado (Configurações → Perfil do Lead) ou
+        // por nome ("tipo"+"lead", ou exatamente "tipo"). Cai pra coluna LeadType (revisão
+        // SDR/CSV) só quando o campo vem vazio.
         string? ResolveTipo(string? cf, string? leadType)
         {
-            if (!string.IsNullOrWhiteSpace(leadType)) return leadType.Trim();
-            return ExtractField(cf, profile.TipoFieldId, n => n == "tipo")?.Trim();
+            var field = ExtractField(cf, profile.TipoFieldId,
+                n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
+            return !string.IsNullOrWhiteSpace(field) ? field : leadType;
         }
 
         foreach (var l in rows)
@@ -1537,17 +1541,18 @@ public class KpiConfigService(AppDbContext db)
         => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
 
     // ── Classificação Cadastro × Resgate ──────────────────────────────────────────
-    // Fonte da verdade: a coluna LeadType (mesma do número grande do card). Cai pro custom
-    // field "Tipo" mapeado só quando LeadType vem vazio. Cadastro pega vazio/"cadastro"/
-    // "novo"; Resgate exige "resgate". Espelha o ResolveTipo do KpiBreakdownsAsync pra o
-    // drill bater com o número do card.
+    // Fonte da verdade: o campo custom "Tipo de lead" da Kommo (id mapeado ou nome
+    // "tipo"+"lead"/"tipo"). Cai pra coluna LeadType (revisão SDR/CSV) só quando o campo
+    // vem vazio. Cadastro/Resgate EXIGEM tipo explícito — em branco não é Cadastro (evita
+    // inflar o número). Espelha o ResolveTipo do KpiBreakdownsAsync pro drill bater com o card.
     private static string? ResolveTipoField(string? cf, string? leadType, long? tipoFieldId)
     {
-        if (!string.IsNullOrWhiteSpace(leadType)) return leadType.Trim();
-        return ExtractField(cf, tipoFieldId, n => n == "tipo")?.Trim();
+        var field = ExtractField(cf, tipoFieldId,
+            n => n == "tipo" || (n.Contains("tipo") && n.Contains("lead")))?.Trim();
+        return !string.IsNullOrWhiteSpace(field) ? field : leadType;
     }
     private static bool IsCadastroTipo(string? t) =>
-        string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
+        !string.IsNullOrEmpty(t) && (t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase));
     private static bool IsResgateTipo(string? t) =>
         !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
 

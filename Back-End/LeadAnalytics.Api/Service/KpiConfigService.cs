@@ -311,6 +311,14 @@ public class KpiConfigService(AppDbContext db)
             excludedSet = excludedIds.ToHashSet();
         }
 
+        // Cadastro/Resgate: o drill filtra pelo TIPO do lead (campo "Tipo" mapeado),
+        // espelhando o número do card (KpiBreakdownsAsync). Carrega o mapeamento só quando
+        // precisa, pra não pagar a query nos outros KPIs.
+        var tipoFilter = kpiKey is "cadastro" or "resgate";
+        long? tipoFieldId = null;
+        if (tipoFilter && unitId.HasValue)
+            tipoFieldId = (await GetLeadProfileConfigAsync(unitId.Value, ct)).TipoFieldId;
+
         var p = ParseConfig(config);
         var fieldBased = sourceType is KpiSourceTypes.CustomFieldCount
             or KpiSourceTypes.CustomFieldSum or KpiSourceTypes.StageFieldFilter;
@@ -423,6 +431,15 @@ public class KpiConfigService(AppDbContext db)
                 if (sourceType != KpiSourceTypes.CustomFieldSum && p.MatchValues.Count > 0 &&
                     !p.MatchValues.Any(m => string.Equals(m.Trim(), matched.Trim(), StringComparison.OrdinalIgnoreCase)))
                     continue;
+            }
+
+            // Cadastro/Resgate: mantém só os leads do tipo certo (campo "Tipo" mapeado) —
+            // assim a lista e o resumo "por origem" batem com o número do card.
+            if (tipoFilter)
+            {
+                var tipoResolved = ResolveTipoField(l.CustomFieldsJson, l.LeadType, tipoFieldId);
+                if (kpiKey == "cadastro" && !IsCadastroTipo(tipoResolved)) continue;
+                if (kpiKey == "resgate" && !IsResgateTipo(tipoResolved)) continue;
             }
 
             var cf = l.CustomFieldsJson;
@@ -598,21 +615,15 @@ public class KpiConfigService(AppDbContext db)
                 n => n.Contains("valor") && n.Contains("tratamento"));
             var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
 
-            // Resgate = lead com "Tentativas de resgastes" preenchido (multiselect das
-            // tentativas de recuperação). É o sinal REAL de resgate nessas unidades — a coluna
-            // LeadType vem vazia e o antigo match por "tipo" colidia com "Tipo de agendamento"/
-            // "Tipo de fechamento". Casa por nome ("tentativ"+"resga" — typo "resgastes").
-            var tentativasResgate = ExtractField(cf, null, n => n.Contains("tentativ") && n.Contains("resga"))?.Trim();
-            var hasResgate = !string.IsNullOrWhiteSpace(tentativasResgate);
             // Resolve tipo prefere o custom field "Tipo" mapeado (ResolveTipo),
             // que é onde as moças marcam Cadastro/Resgate — LeadType (SQL) raramente
             // está preenchido.
             var tipoResolved = ResolveTipo(cf, l.LeadType);
-            var leadIsResgate = hasResgate || IsResgate(tipoResolved);
-            // Cadastro olha SÓ pro tipo resolvido (e fallback null = considerado cadastro).
-            // Não exclui mais por hasResgate: lead criado hoje conta como Cadastro
-            // de hoje mesmo que vire resgate depois — Resgate roda em outra janela
-            // (data do preenchimento via recovery_attempts), os dois não competem.
+            // Cadastro × Resgate: classificados SÓ pelo tipo resolvido (campo "Tipo" mapeado,
+            // fallback LeadType). Mutuamente exclusivos — IsCadastro pega vazio/"cadastro"/"novo",
+            // IsResgate exige "resgate". A contagem de Resgate é feita logo abaixo, no mesmo loop
+            // (não usa mais recovery_attempts). hasResgate/tentativasResgate ficam só como sinal
+            // auxiliar (não entram na classificação por decisão de produto: fonte = campo Tipo).
             var leadIsCadastro = IsCadastro(tipoResolved);
 
             var stage = l.CurrentStage ?? "";
@@ -639,10 +650,18 @@ public class KpiConfigService(AppDbContext db)
                 cadByOrigem[origem] = row;
             }
 
-            // ── Resgate: NÃO conta aqui. Resgate é lead velho recuperado, então conta pela
-            // DATA DO PREENCHIMENTO de "Tentativas de resgastes" (recovery_attempts, via backfill
-            // de eventos), não por criação do lead. Cálculo logo após o loop. (hasResgate acima
-            // ainda serve pra excluir esses leads do cadastro.)
+            // ── Resgate: leads cujo TIPO (campo "Tipo" mapeado em Configurações → Perfil do
+            // Lead) = resgate. Conta na criação do lead no período, IGUAL ao Cadastro —
+            // classificado SÓ pelo campo Tipo (não usa mais recovery_attempts). Cadastro e
+            // Resgate ficam mutuamente exclusivos: IsResgate exige "resgate", IsCadastro pega
+            // vazio/"cadastro"/"novo".
+            if (IsResgate(tipoResolved))
+            {
+                resgateTotal++;
+                var tipoLabel = !string.IsNullOrWhiteSpace(tipoResolved) ? tipoResolved!.Trim() : "Resgate";
+                resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
+                resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
+            }
 
             // ── Tratamentos
             if (isTratamento)
@@ -911,29 +930,10 @@ public class KpiConfigService(AppDbContext db)
              .Select(kv => new DTOs.Dashboard.ValueCountDto { Value = kv.Key, Count = kv.Value })
              .ToList();
 
-        // ── Resgate: por DATA DO PREENCHIMENTO de "Tentativas de resgastes" (recovery_attempts
-        //    via backfill de eventos), e não por criação do lead — resgate é lead velho
-        //    recuperado. Conta lead DISTINTO no período. Quebra por valor da tentativa (Outcome)
-        //    e por origem (custom field/Source do lead).
-        var resgateRows = await _db.RecoveryAttempts.AsNoTracking()
-            .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
-                && r.CreatedAt >= from && r.CreatedAt <= to
-                && r.Lead!.TenantId == clinicId
-                && (!unitId.HasValue || r.Lead.UnitId == unitId.Value))
-            .Select(r => new { r.LeadId, r.Outcome, r.Lead!.Source, r.Lead.CustomFieldsJson })
-            .ToListAsync(ct);
-        foreach (var grp in resgateRows.GroupBy(x => x.LeadId))
-        {
-            var x = grp.OrderBy(_ => 0).First();
-            resgateTotal++;
-            var tipoLabel = !string.IsNullOrWhiteSpace(x.Outcome) ? x.Outcome!.Trim() : "—";
-            resgateTipos[tipoLabel] = resgateTipos.GetValueOrDefault(tipoLabel) + 1;
-            var oc = ExtractField(x.CustomFieldsJson, profile.OrigemFieldId, n => n.Contains("origem"));
-            var origemR = !string.IsNullOrWhiteSpace(oc) ? oc!.Trim()
-                        : !string.IsNullOrWhiteSpace(x.Source) ? x.Source!.Trim() : "—";
-            resgateOrigens[origemR] = resgateOrigens.GetValueOrDefault(origemR) + 1;
-        }
-
+        // ── Resgate: agregado no loop principal por TIPO=resgate (campo "Tipo" mapeado),
+        //    contando na criação do lead — mesma janela do Cadastro. resgateTotal/resgateTipos/
+        //    resgateOrigens já foram populados acima. Tipos = valores distintos do campo Tipo
+        //    (ex.: "Resgate", "Resgate - ligação"); Origens = origem do lead.
         var resgate = new DTOs.Dashboard.TipoOrigemBreakdownDto
         {
             Total = resgateTotal,
@@ -1494,6 +1494,21 @@ public class KpiConfigService(AppDbContext db)
     /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
         => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
+
+    // ── Classificação Cadastro × Resgate pelo campo "Tipo" mapeado ─────────────────
+    // Fonte da verdade: o custom field "Tipo" (TipoFieldId, mapeado em Configurações →
+    // Perfil do Lead). Fallback: coluna SQL LeadType. Cadastro pega vazio/"cadastro"/"novo";
+    // Resgate exige "resgate". Espelha a lógica do KpiBreakdownsAsync pra o drill bater
+    // com o número do card.
+    private static string? ResolveTipoField(string? cf, string? leadType, long? tipoFieldId)
+    {
+        var custom = ExtractField(cf, tipoFieldId, n => n == "tipo")?.Trim();
+        return !string.IsNullOrWhiteSpace(custom) ? custom : leadType;
+    }
+    private static bool IsCadastroTipo(string? t) =>
+        string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
+    private static bool IsResgateTipo(string? t) =>
+        !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Tenta converter um valor de campo customizado em decimal (aceita "1.500,00" e "1500.00").</summary>
     private static decimal? TryParseDecimal(string? raw)

@@ -658,6 +658,17 @@ public class WebhooksController(
             return Ok(new KpiLeadsResponseDto { Items = citems, Total = ctotal, Truncated = ctrunc });
         }
 
+        // Cadastro/Resgate: o drill lista os leads CRIADOS no período e o service filtra
+        // pelo TIPO (campo "Tipo" mapeado) — espelha exatamente o número do card
+        // (KpiBreakdownsAsync). Não depende da fonte configurada no card.
+        if (string.IsNullOrWhiteSpace(body.SourceType) && (body.KpiKey == "cadastro" || body.KpiKey == "resgate"))
+        {
+            var (titems, ttotal, ttrunc) = await _kpiService.ComputeLeadsAsync(
+                tenantId.Value, unitId, KpiSourceTypes.CreatedInPeriod,
+                JsonSerializer.Deserialize<JsonElement>("{}"), from, to, 500, ct, body.KpiKey);
+            return Ok(new KpiLeadsResponseDto { Items = titems, Total = ttotal, Truncated = ttrunc });
+        }
+
         var sourceType = body.SourceType ?? "";
         var config = body.Config;
         var hasInline = !string.IsNullOrWhiteSpace(body.SourceType)

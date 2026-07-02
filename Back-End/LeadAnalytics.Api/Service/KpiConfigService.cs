@@ -1370,6 +1370,39 @@ public class KpiConfigService(AppDbContext db)
         return outList;
     }
 
+    /// <summary>
+    /// Lê o valor de um campo custom aceitando os DOIS formatos que aparecem no banco:
+    /// (1) `value` no topo — como o sync grava (SerializeCustomFields, com o label do enum
+    /// resolvido); (2) `values[]` (array de {value:…} ou de strings) — formato nativo da
+    /// Kommo que o WEBHOOK grava. Sem o (2), campos de leads ingeridos só por webhook
+    /// (ex.: "Tipo de lead" em Araguaína) apareciam vazios pro dashboard. Multiselect vira
+    /// "A, B, C".
+    /// </summary>
+    private static string? ReadFieldValue(JsonElement el)
+    {
+        if (el.TryGetProperty("value", out var v))
+        {
+            if (v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())) return v.GetString();
+            if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
+        }
+        if (el.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>();
+            foreach (var iv in vals.EnumerateArray())
+            {
+                if (iv.ValueKind == JsonValueKind.Object && iv.TryGetProperty("value", out var inner))
+                {
+                    if (inner.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(inner.GetString())) parts.Add(inner.GetString()!);
+                    else if (inner.ValueKind == JsonValueKind.Number) parts.Add(inner.GetRawText());
+                }
+                else if (iv.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(iv.GetString()))
+                    parts.Add(iv.GetString()!);
+            }
+            if (parts.Count > 0) return string.Join(", ", parts);
+        }
+        return null;
+    }
+
     private static string? ExtractFieldByName(string? json, Func<string, bool> nameMatches)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
@@ -1383,12 +1416,7 @@ public class KpiConfigService(AppDbContext db)
                 if (!el.TryGetProperty("field_name", out var n) || n.ValueKind != JsonValueKind.String) continue;
                 var name = n.GetString();
                 if (string.IsNullOrWhiteSpace(name) || !nameMatches(name.ToLowerInvariant())) continue;
-                if (el.TryGetProperty("value", out var v))
-                {
-                    if (v.ValueKind == JsonValueKind.String) return v.GetString();
-                    if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
-                }
-                return null;
+                return ReadFieldValue(el);
             }
         }
         catch (JsonException) { /* ignora */ }
@@ -1724,13 +1752,7 @@ public class KpiConfigService(AppDbContext db)
                     && string.Equals(fc.GetString(), fieldCode, StringComparison.OrdinalIgnoreCase);
 
                 if (idMatch || codeMatch)
-                {
-                    if (el.TryGetProperty("value", out var val) && val.ValueKind == JsonValueKind.String)
-                        return val.GetString();
-                    if (el.TryGetProperty("value", out var valN) && valN.ValueKind == JsonValueKind.Number)
-                        return valN.GetRawText();
-                    return null;
-                }
+                    return ReadFieldValue(el);
             }
         }
         catch (JsonException) { /* json malformado — ignora */ }

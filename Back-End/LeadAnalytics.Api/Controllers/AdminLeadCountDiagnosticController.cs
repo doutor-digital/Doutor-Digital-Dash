@@ -127,11 +127,26 @@ public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBas
                             if (!el.TryGetProperty("field_name", out var n) || n.ValueKind != JsonValueKind.String) continue;
                             var name = n.GetString();
                             if (string.IsNullOrWhiteSpace(name) || !name.ToLowerInvariant().Contains("tipo")) continue;
+                            // Lê os dois formatos: `value` no topo (sync) e `values[]` (webhook).
                             string? val = null;
                             if (el.TryGetProperty("value", out var v))
                             {
                                 if (v.ValueKind == JsonValueKind.String) val = v.GetString();
                                 else if (v.ValueKind == JsonValueKind.Number) val = v.GetRawText();
+                            }
+                            if (string.IsNullOrWhiteSpace(val)
+                                && el.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var iv in vals.EnumerateArray())
+                                {
+                                    if (iv.ValueKind == JsonValueKind.Object && iv.TryGetProperty("value", out var inner))
+                                    {
+                                        if (inner.ValueKind == JsonValueKind.String) val = inner.GetString();
+                                        else if (inner.ValueKind == JsonValueKind.Number) val = inner.GetRawText();
+                                    }
+                                    else if (iv.ValueKind == JsonValueKind.String) val = iv.GetString();
+                                    if (!string.IsNullOrWhiteSpace(val)) break;
+                                }
                             }
                             if (!string.IsNullOrWhiteSpace(val))
                                 camposTipoNoNome[name] = camposTipoNoNome.GetValueOrDefault(name) + 1;

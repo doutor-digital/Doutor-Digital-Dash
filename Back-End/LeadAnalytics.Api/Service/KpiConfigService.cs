@@ -320,7 +320,10 @@ public class KpiConfigService(AppDbContext db)
         // precisa, pra não pagar a query nos outros KPIs. EXCEÇÃO: quando o Resgate foi mapeado
         // pra "Campo (contagem por valor)" (fieldBased), o próprio filtro do campo já espelha o
         // card — aplicar Tipo=resgate por cima derrubaria a lista pro número antigo.
-        var tipoFilter = kpiKey == "cadastro" || (kpiKey == "resgate" && !fieldBased);
+        // Só o drill CLÁSSICO (CreatedInPeriod) filtra por Tipo. Resgate por campo vem como
+        // RecoveryAttempt (tentativas por data do evento) — não filtra por Tipo.
+        var tipoFilter = (kpiKey == "cadastro" || kpiKey == "resgate")
+                         && sourceType == KpiSourceTypes.CreatedInPeriod;
         long? tipoFieldId = null;
         if (tipoFilter && unitId.HasValue)
             tipoFieldId = (await GetLeadProfileConfigAsync(unitId.Value, ct)).TipoFieldId;
@@ -329,6 +332,10 @@ public class KpiConfigService(AppDbContext db)
         // transição MAIS RECENTE no período — o front usa o id pra abrir o editor de
         // "corrigir data" direto do drill-down (sem ir pra página de auditoria).
         Dictionary<int, (int HistoryId, DateTime EffectiveAt)>? historyByLead = null;
+
+        // Resgate por campo (RecoveryAttempt): valor da tentativa mais recente no período por
+        // lead — usado como MatchedValue do drill.
+        Dictionary<int, string>? attemptValueByLead = null;
 
         IQueryable<LeadAnalytics.Api.Models.Lead> q;
         if (sourceType == KpiSourceTypes.KommoStage)
@@ -377,13 +384,20 @@ public class KpiConfigService(AppDbContext db)
             var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
-            var leadIds = await _db.RecoveryAttempts.AsNoTracking()
+            var attemptRows = await _db.RecoveryAttempts.AsNoTracking()
                 .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
                     && r.CreatedAt >= from && r.CreatedAt <= to)
-                .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
-                .Distinct()
+                .Join(scope, r => r.LeadId, l => l.Id, (r, l) => new { r.LeadId, r.Outcome, r.CreatedAt })
                 .ToListAsync(ct);
 
+            // Valor da tentativa MAIS RECENTE no período por lead — vira o MatchedValue do drill
+            // (ex.: "Resgaste 3 - 72h"), pra o chip/resumo casar com o breakdown do card.
+            attemptValueByLead = attemptRows
+                .GroupBy(a => a.LeadId)
+                .ToDictionary(g => g.Key,
+                    g => g.OrderByDescending(a => a.CreatedAt).Select(a => a.Outcome).First());
+
+            var leadIds = attemptValueByLead.Keys.ToList();
             q = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => leadIds.Contains(l.Id));
         }
         else
@@ -464,7 +478,7 @@ public class KpiConfigService(AppDbContext db)
                 HasAppointment = l.HasAppointment,
                 HasPayment = l.HasPayment,
                 CreatedAt = l.CreatedAt,
-                MatchedValue = matched,
+                MatchedValue = matched ?? attemptValueByLead?.GetValueOrDefault(l.Id),
                 AppointmentAt = l.AppointmentScheduledAt,
                 ConsultationValue = l.ConsultationValue,
                 ClosedTreatment = l.ClosedTreatment,
@@ -689,23 +703,11 @@ public class KpiConfigService(AppDbContext db)
             // classificado SÓ pelo campo Tipo (não usa mais recovery_attempts). Cadastro e
             // Resgate ficam mutuamente exclusivos: IsResgate exige "resgate", IsCadastro pega
             // vazio/"cadastro"/"novo".
-            if (resgateField is not null)
-            {
-                // Fonte = campo customizado: conta o lead se o campo está preenchido (e, quando
-                // há matchValues, se casa) e quebra a distribuição pelos valores do campo —
-                // espelha ComputeAsync(custom_field_count), então número/breakdown/drill batem.
-                var rv = ExtractFieldValue(cf ?? "[]", resgateField.FieldId, resgateField.FieldCode);
-                if (rv is not null &&
-                    (resgateField.MatchValues.Count == 0 ||
-                     resgateField.MatchValues.Any(m => string.Equals(m.Trim(), rv.Trim(), StringComparison.OrdinalIgnoreCase))))
-                {
-                    resgateTotal++;
-                    var key = rv.Trim();
-                    resgateTipos[key] = resgateTipos.GetValueOrDefault(key) + 1;
-                    resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
-                }
-            }
-            else if (IsResgate(tipoResolved))
+            // Fonte = campo (contagem por valor): a contagem NÃO sai daqui — cada tentativa é um
+            // EVENTO de preenchimento do campo (datado pela Kommo em data ≠ criação do lead), então
+            // é computada depois do loop a partir de recovery_attempts. Aqui só corre a
+            // classificação clássica por Tipo=resgate (quando não há fonte de campo).
+            if (resgateField is null && IsResgate(tipoResolved))
             {
                 resgateTotal++;
                 var tipoLabel = !string.IsNullOrWhiteSpace(tipoResolved) ? tipoResolved!.Trim() : "Resgate";
@@ -980,10 +982,54 @@ public class KpiConfigService(AppDbContext db)
              .Select(kv => new DTOs.Dashboard.ValueCountDto { Value = kv.Key, Count = kv.Value })
              .ToList();
 
-        // ── Resgate: agregado no loop principal por TIPO=resgate (campo "Tipo" mapeado),
-        //    contando na criação do lead — mesma janela do Cadastro. resgateTotal/resgateTipos/
-        //    resgateOrigens já foram populados acima. Tipos = valores distintos do campo Tipo
-        //    (ex.: "Resgate", "Resgate - ligação"); Origens = origem do lead.
+        // ── Resgate por CAMPO (contagem por valor): cada tentativa é um evento de preenchimento
+        //    do campo "Tentativas de resgastes", gravado em recovery_attempts (Outcome = valor,
+        //    CreatedAt = data REAL do evento). Contar por criação do lead perdia a maioria
+        //    (resgate = lead velho) — por isso janela pela data do evento aqui. Total = nº de
+        //    tentativas no período; Tipos = distribuição por valor (Resgaste 1-24h, 2-48h, …);
+        //    Origens = origem do lead de cada tentativa.
+        if (resgateField is not null)
+        {
+            var attemptScope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
+            if (unitId.HasValue) attemptScope = attemptScope.Where(l => l.UnitId == unitId.Value);
+
+            var attempts = await _db.RecoveryAttempts.AsNoTracking()
+                .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
+                            && r.CreatedAt >= from && r.CreatedAt <= to)
+                .Join(attemptScope, r => r.LeadId, l => l.Id,
+                    (r, l) => new { r.LeadId, r.Outcome, r.CreatedAt, l.Source, l.CustomFieldsJson })
+                .ToListAsync(ct);
+
+            // Conta LEADS DISTINTOS com tentativa no período (não cada evento) — cada lead entra
+            // pelo valor da tentativa MAIS RECENTE (ex.: já está no "Resgaste 3 - 72h"). Assim
+            // número = soma do breakdown = drill (que também lista leads distintos).
+            resgateTotal = 0;
+            resgateTipos.Clear();
+            resgateOrigens.Clear();
+            foreach (var g in attempts.GroupBy(a => a.LeadId))
+            {
+                var latest = g.OrderByDescending(a => a.CreatedAt).First();
+                var val = latest.Outcome?.Trim();
+                if (string.IsNullOrWhiteSpace(val)) continue;
+                if (resgateField.MatchValues.Count > 0 &&
+                    !resgateField.MatchValues.Any(m => string.Equals(m.Trim(), val, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var origemCustom = ExtractField(latest.CustomFieldsJson, profile.OrigemFieldId, n => n.Contains("origem"));
+                var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
+                           : !string.IsNullOrWhiteSpace(latest.Source) ? latest.Source.Trim()
+                           : "—";
+
+                resgateTotal++;
+                resgateTipos[val] = resgateTipos.GetValueOrDefault(val) + 1;
+                resgateOrigens[origem] = resgateOrigens.GetValueOrDefault(origem) + 1;
+            }
+        }
+
+        // ── Resgate: por padrão agregado no loop principal por TIPO=resgate (campo "Tipo"
+        //    mapeado), contando na criação do lead. Tipos = valores do campo Tipo; Origens =
+        //    origem do lead. (Quando mapeado por campo, os agregados acima foram substituídos
+        //    pela contagem de tentativas de recovery_attempts.)
         var resgate = new DTOs.Dashboard.TipoOrigemBreakdownDto
         {
             Total = resgateTotal,

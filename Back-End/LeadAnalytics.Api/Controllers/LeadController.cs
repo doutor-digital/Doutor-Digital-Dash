@@ -681,6 +681,14 @@ public class WebhooksController(
                     JsonSerializer.Deserialize<JsonElement>("{}"), from, to, 500, ct, body.KpiKey);
                 return Ok(new KpiLeadsResponseDto { Items = titems, Total = ttotal, Truncated = ttrunc });
             }
+
+            // Resgate mapeado por campo: as tentativas moram em recovery_attempts (data do
+            // evento). O drill lista os leads com tentativa no período — espelha a janela do
+            // número/breakdown do card (recovery_attempts), não a data de criação do lead.
+            var (ritems, rtotal, rtrunc) = await _kpiService.ComputeLeadsAsync(
+                tenantId.Value, unitId, KpiSourceTypes.RecoveryAttempt,
+                JsonSerializer.Deserialize<JsonElement>("{}"), from, to, 500, ct, body.KpiKey);
+            return Ok(new KpiLeadsResponseDto { Items = ritems, Total = rtotal, Truncated = rtrunc });
         }
 
         var sourceType = body.SourceType ?? "";

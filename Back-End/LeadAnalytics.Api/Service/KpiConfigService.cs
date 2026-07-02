@@ -586,14 +586,15 @@ public class KpiConfigService(AppDbContext db)
         static bool IsResgate(string? t) => !string.IsNullOrEmpty(t) && t.Contains("resgate", StringComparison.OrdinalIgnoreCase);
         static bool IsCadastro(string? t) => string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);
 
-        // Prefere o custom field "Tipo" mapeado em Configurações → Perfil do Lead
-        // (TipoFieldId). Fallback: Lead.LeadType (coluna SQL — geralmente vazia em
-        // unidades novas). Resolve o caso "o lead tem TIPO preenchido na Kommo mas
-        // o card não classifica como Resgate/Cadastro".
+        // Prefere a coluna LeadType — é a MESMA fonte do número grande do card Cadastro
+        // (LeadService.cadastroTotal), então breakdown/drill batem com ele (197 = 197).
+        // Cai pro custom field "Tipo" mapeado só quando LeadType vem vazio (unidades onde
+        // a coluna não é preenchida). Antes preferia o custom field, o que inflava o
+        // breakdown (197 vs 330) quando os dois discordavam.
         string? ResolveTipo(string? cf, string? leadType)
         {
-            var custom = ExtractField(cf, profile.TipoFieldId, n => n == "tipo")?.Trim();
-            return !string.IsNullOrWhiteSpace(custom) ? custom : leadType;
+            if (!string.IsNullOrWhiteSpace(leadType)) return leadType.Trim();
+            return ExtractField(cf, profile.TipoFieldId, n => n == "tipo")?.Trim();
         }
 
         foreach (var l in rows)
@@ -1495,15 +1496,15 @@ public class KpiConfigService(AppDbContext db)
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
         => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
 
-    // ── Classificação Cadastro × Resgate pelo campo "Tipo" mapeado ─────────────────
-    // Fonte da verdade: o custom field "Tipo" (TipoFieldId, mapeado em Configurações →
-    // Perfil do Lead). Fallback: coluna SQL LeadType. Cadastro pega vazio/"cadastro"/"novo";
-    // Resgate exige "resgate". Espelha a lógica do KpiBreakdownsAsync pra o drill bater
-    // com o número do card.
+    // ── Classificação Cadastro × Resgate ──────────────────────────────────────────
+    // Fonte da verdade: a coluna LeadType (mesma do número grande do card). Cai pro custom
+    // field "Tipo" mapeado só quando LeadType vem vazio. Cadastro pega vazio/"cadastro"/
+    // "novo"; Resgate exige "resgate". Espelha o ResolveTipo do KpiBreakdownsAsync pra o
+    // drill bater com o número do card.
     private static string? ResolveTipoField(string? cf, string? leadType, long? tipoFieldId)
     {
-        var custom = ExtractField(cf, tipoFieldId, n => n == "tipo")?.Trim();
-        return !string.IsNullOrWhiteSpace(custom) ? custom : leadType;
+        if (!string.IsNullOrWhiteSpace(leadType)) return leadType.Trim();
+        return ExtractField(cf, tipoFieldId, n => n == "tipo")?.Trim();
     }
     private static bool IsCadastroTipo(string? t) =>
         string.IsNullOrEmpty(t) || t.Contains("cadastro", StringComparison.OrdinalIgnoreCase) || t.Contains("novo", StringComparison.OrdinalIgnoreCase);

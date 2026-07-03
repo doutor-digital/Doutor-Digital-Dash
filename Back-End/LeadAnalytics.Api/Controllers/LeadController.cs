@@ -5,6 +5,7 @@ using LeadAnalytics.Api.DTOs.Timeline;
 using LeadAnalytics.Api.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace LeadAnalytics.Api.Controllers;
 
@@ -17,6 +18,7 @@ public class WebhooksController(
     ICurrentUser currentUser,
     TenantUnitGuard tenantGuard,
     KpiConfigService kpiService,
+    IMemoryCache cache,
     ILogger<WebhooksController> logger) : ControllerBase
 {
     private readonly LeadService _leadService = leadService;
@@ -24,7 +26,14 @@ public class WebhooksController(
     private readonly ICurrentUser _currentUser = currentUser;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly KpiConfigService _kpiService = kpiService;
+    private readonly IMemoryCache _cache = cache;
     private readonly ILogger<WebhooksController> _logger = logger;
+
+    // Janela curta de cache do dashboard-overview. O front já trata os dados como stale
+    // em 15s e refaz a query a cada 30s (além de refetch on-focus), então ~10s de cache
+    // colapsa as ~20 idas ao banco + o loop de overrides de KPI numa recarga em memória,
+    // sem defasagem perceptível. Chave inclui TODOS os filtros que mudam o resultado.
+    private static readonly TimeSpan DashboardOverviewCacheTtl = TimeSpan.FromSeconds(10);
 
     [HttpGet]
     public async Task<IActionResult> GetAllLeads([FromQuery] int? unitId = null, CancellationToken ct = default)
@@ -566,6 +575,12 @@ public class WebhooksController(
         if ((dateTo - dateFrom).TotalDays > 3 * 365)
             return BadRequest(new { error = "intervalo máximo permitido é 3 anos" });
 
+        // Cache curto: recargas dentro de ~10s (refetch periódico, on-focus, múltiplos
+        // usuários da mesma unidade) devolvem a resposta pronta sem tocar no banco.
+        var cacheKey = $"dash-ov:{clinicId}:{unitId}:{dateFrom.Ticks}:{dateTo.Ticks}:{attendantId}:{source}:{responsibleUser}";
+        if (_cache.TryGetValue(cacheKey, out DashboardOverviewDto? cached) && cached is not null)
+            return Ok(cached);
+
         try
         {
             var result = await _leadService.GetDashboardOverviewAsync(
@@ -622,6 +637,7 @@ public class WebhooksController(
                     .OrderBy(k => k.SortOrder).ThenBy(k => k.Label).ToList();
             }
 
+            _cache.Set(cacheKey, result, DashboardOverviewCacheTtl);
             return Ok(result);
         }
         catch (ArgumentException ex)
@@ -755,7 +771,12 @@ public class WebhooksController(
 
         var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
+        var cacheKey = $"dash-bd:{tenantId.Value}:{unitId}:{from.Ticks}:{to.Ticks}";
+        if (_cache.TryGetValue(cacheKey, out LeadAnalytics.Api.DTOs.Dashboard.KpiBreakdownsDto? cached) && cached is not null)
+            return Ok(cached);
+
         var result = await _kpiService.KpiBreakdownsAsync(tenantId.Value, unitId, from, to, ct);
+        _cache.Set(cacheKey, result, DashboardOverviewCacheTtl);
         return Ok(result);
     }
 
@@ -798,15 +819,21 @@ public class WebhooksController(
 
         var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
+        var cacheKey = $"dash-cfs:{tenantId.Value}:{unitId}:{from.Ticks}:{to.Ticks}";
+        if (_cache.TryGetValue(cacheKey, out CustomFieldsSummaryResponseDto? cached) && cached is not null)
+            return Ok(cached);
+
         var (total, fields, truncated) = await _kpiService.CustomFieldsSummaryAsync(
             tenantId.Value, unitId, from, to, 8, ct);
 
-        return Ok(new CustomFieldsSummaryResponseDto
+        var response = new CustomFieldsSummaryResponseDto
         {
             TotalLeads = total,
             Fields = fields,
             Truncated = truncated,
-        });
+        };
+        _cache.Set(cacheKey, response, DashboardOverviewCacheTtl);
+        return Ok(response);
     }
 
     /// <summary>
@@ -828,9 +855,14 @@ public class WebhooksController(
 
         var (from, to) = ResolveDashboardRange(dateFrom, dateTo);
 
+        var cacheKey = $"dash-cfx:{tenantId.Value}:{unitId}:{from.Ticks}:{to.Ticks}";
+        if (_cache.TryGetValue(cacheKey, out LeadAnalytics.Api.DTOs.Dashboard.CustomFieldsCrossAnalysisDto? cached) && cached is not null)
+            return Ok(cached);
+
         var result = await _kpiService.CustomFieldsCrossAnalysisAsync(
             tenantId.Value, unitId, from, to, 12, ct);
 
+        _cache.Set(cacheKey, result, DashboardOverviewCacheTtl);
         return Ok(result);
     }
 

@@ -656,12 +656,20 @@ public class KpiConfigService(AppDbContext db)
 
             var motivo = ExtractField(cf, profile.MotivoNaoAgendamentoFieldId,
                 n => n.Contains("motivo") && n.Contains("agendamento"))?.Trim();
+            // Fechou (fisio): fisioterapeuta responsável PELO FECHAMENTO — NÃO o
+            // "Responsável agendamento" (SDR). Fallback por nome casa fisio/doutor ou
+            // "responsável ... fechamento"; a cláusula de "agendamento" foi removida de
+            // propósito porque estava roubando o nome do SDR do agendamento.
             var fisio = ExtractField(cf, profile.FisioterapeutaFieldId ?? profile.DoctorFieldId,
-                n => ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
-                  || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
+                n => n.Contains("fisio") || n.Contains("doutor")
+                  || ((n.Contains("responsável") || n.Contains("responsavel")) && (n.Contains("fechamento") || n.Contains("fechou"))))?.Trim();
             var valorTratStr = ExtractField(cf, profile.ValorTratamentoFieldId,
                 n => n.Contains("valor") && n.Contains("tratamento"));
             var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;
+            // Valor da consulta: ConsultationValue (SQL) costuma vir 0/null; cai pro
+            // campo custom "Valor consulta" mapeado (mesmo fallback do caminho kpi_overrides).
+            var valorConsultaFromField = TryParseDecimal(ExtractField(cf, profile.ValorConsultaFieldId,
+                n => n.Contains("valor") && n.Contains("consulta")));
 
             // Resolve tipo prefere o custom field "Tipo" mapeado (ResolveTipo),
             // que é onde as moças marcam Cadastro/Resgate — LeadType (SQL) raramente
@@ -722,7 +730,8 @@ public class KpiConfigService(AppDbContext db)
                 tratOrigens[origem] = tratOrigens.GetValueOrDefault(origem) + 1;
                 if (!string.IsNullOrWhiteSpace(fisio))
                     tratFisios[fisio] = tratFisios.GetValueOrDefault(fisio) + 1;
-                if (l.ConsultationValue.HasValue) trat.ValorConsultaTotal += l.ConsultationValue.Value;
+                var consultaVal = l.ConsultationValue ?? valorConsultaFromField;
+                if (consultaVal.HasValue) trat.ValorConsultaTotal += consultaVal.Value;
                 if (valorTrat > 0) trat.ValorTratamentoTotal += valorTrat;
                 // Tipo de tratamento (custom field "Tipo de tratamento" mapeado em
                 // Configurações; fallback por nome "tipo" + "tratamento").
@@ -770,9 +779,11 @@ public class KpiConfigService(AppDbContext db)
                 var origem = !string.IsNullOrWhiteSpace(origemCustom) ? origemCustom.Trim()
                            : !string.IsNullOrWhiteSpace(l.Source) ? l.Source!.Trim()
                            : "—";
+                // Fechou (fisio): fisioterapeuta do FECHAMENTO, não o "Responsável
+                // agendamento" (SDR). Mesma correção do caminho inline acima.
                 var fisio = ExtractField(cf, profile.FisioterapeutaFieldId ?? profile.DoctorFieldId,
-                    n => ((n.Contains("responsável") || n.Contains("responsavel")) && n.Contains("agendamento"))
-                      || n.Contains("fisio") || n.Contains("doutor"))?.Trim();
+                    n => n.Contains("fisio") || n.Contains("doutor")
+                      || ((n.Contains("responsável") || n.Contains("responsavel")) && (n.Contains("fechamento") || n.Contains("fechou"))))?.Trim();
                 var valorTratStr = ExtractField(cf, profile.ValorTratamentoFieldId,
                     n => n.Contains("valor") && n.Contains("tratamento"));
                 var valorTrat = TryParseDecimal(valorTratStr) ?? 0m;

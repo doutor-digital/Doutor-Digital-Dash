@@ -1978,18 +1978,15 @@ public class KpiConfigService(AppDbContext db)
             if (!string.IsNullOrWhiteSpace(resp))
                 responsavel[resp.Trim()] = responsavel.GetValueOrDefault(resp.Trim()) + 1;
 
-            // Qualificação do lead
-            var qual = ExtractFieldByName(cf, n => n.Contains("qualifica"));
-            if (!string.IsNullOrWhiteSpace(qual))
-                qualificacao[qual.Trim()] = qualificacao.GetValueOrDefault(qual.Trim()) + 1;
+            // Qualificação: NÃO é contada aqui. Este scan janela por UpdatedAt (poluído pelo
+            // sync). A qualificação é calculada logo abaixo por QualificationFilledAt — a data
+            // real em que a SDR preencheu/mudou o campo.
 
             // ── Cruzamentos × desfecho ──
             if (!string.IsNullOrWhiteSpace(resp))
                 BumpOutcome(atendenteOutcome, resp.Trim(), agendou, compareceu, fechou, faltou);
             if (!string.IsNullOrWhiteSpace(orig))
                 BumpOutcome(origemOutcome, orig.Trim(), agendou, compareceu, fechou, faltou);
-            if (!string.IsNullOrWhiteSpace(qual))
-                BumpOutcome(qualificacaoOutcome, qual.Trim(), agendou, compareceu, fechou, faltou);
 
             // Motivo do não agendamento × Atendente (par)
             if (!string.IsNullOrWhiteSpace(motivo) && !string.IsNullOrWhiteSpace(resp))
@@ -1997,6 +1994,34 @@ public class KpiConfigService(AppDbContext db)
                 var pairKey = $"{resp.Trim()}|||{motivo.Trim()}";
                 motivoByAtendente[pairKey] = motivoByAtendente.GetValueOrDefault(pairKey) + 1;
             }
+        }
+
+        // ── Qualificação: janela pela DATA DE PREENCHIMENTO do campo (QualificationFilledAt) ──
+        // Fora do scan por UpdatedAt: o que interessa é "quantos leads a SDR qualificou no dia",
+        // não quando o lead foi criado nem quando o sync tocou o registro. Lê a coluna
+        // Lead.Qualification (snapshot do campo), carimbada no KommoIngestionService.
+        var qualScope = _db.Leads.AsNoTracking().ExcludeDeleted()
+            .Where(l => l.TenantId == clinicId
+                     && l.Qualification != null
+                     && l.QualificationFilledAt >= from && l.QualificationFilledAt <= to);
+        if (unitId.HasValue)
+            qualScope = qualScope.Where(l => l.UnitId == unitId.Value);
+        var qualRows = await qualScope
+            .Select(l => new { l.Qualification, l.CurrentStage, l.AttendanceStatus })
+            .ToListAsync(ct);
+        foreach (var l in qualRows)
+        {
+            var key = l.Qualification!.Trim();
+            if (key.Length == 0) continue;
+            qualificacao[key] = qualificacao.GetValueOrDefault(key) + 1;
+
+            var stage = l.CurrentStage ?? "";
+            var att = l.AttendanceStatus;
+            BumpOutcome(qualificacaoOutcome, key,
+                LeadStages.HasAppointmentRecord(stage),
+                att == LeadStages.AttendedCompareceu,
+                stage == LeadStages.FechouTratamento || stage == LeadStages.EmTratamento,
+                stage == LeadStages.Faltou || att == LeadStages.AttendedFaltou);
         }
 
         return new DTOs.Dashboard.CustomFieldsCrossAnalysisDto

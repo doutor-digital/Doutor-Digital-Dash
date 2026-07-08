@@ -97,6 +97,21 @@ public class Lead
     /// </summary>
     public DateTime? AppointmentScheduledAtFilledAt { get; set; }
 
+    /// <summary>
+    /// Valor atual do custom field "Qualificação do lead" na Kommo (ex.: Frio/Morno/Quente).
+    /// Snapshot em coluna própria pra o KPI de qualificação não precisar parsear o
+    /// <see cref="CustomFieldsJson"/> e pra detectar mudança de valor (dispara o carimbo
+    /// de <see cref="QualificationFilledAt"/>). Setado no KommoIngestionService.
+    /// </summary>
+    public string? Qualification { get; set; }
+
+    /// <summary>
+    /// Quando o campo Qualificação foi PREENCHIDO/mudou de valor pela última vez. O widget
+    /// "Qualificação dos Leads" conta por esta data (produtividade da SDR no dia em que ela
+    /// qualifica), não pela criação do lead nem pelo UpdatedAt (que o sync bumpa em massa).
+    /// </summary>
+    public DateTime? QualificationFilledAt { get; set; }
+
     // enum (sem_interacao|sem_continuidade|plano_saude|terceiros|sem_condicoes|
     //       vai_se_organizar|busca_laudo|interesse_pilates|interesse_liberacao|
     //       mora_outra_cidade|sem_interesse|clicou_engano|outro_tratamento|

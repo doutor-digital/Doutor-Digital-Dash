@@ -52,6 +52,7 @@ public class KommoStageBackfillJob : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var backfill = scope.ServiceProvider.GetRequiredService<KommoStageHistoryBackfillService>();
         var resgateBackfill = scope.ServiceProvider.GetRequiredService<ResgateAttemptBackfillService>();
+        var qualifBackfill = scope.ServiceProvider.GetRequiredService<QualificationBackfillService>();
 
         var unitIds = await db.Units.AsNoTracking()
             .Where(u => u.IsActive
@@ -97,6 +98,16 @@ public class KommoStageBackfillJob : BackgroundService
                     _logger.LogInformation(
                         "[resgate-backfill] unit={Unit} ok: {Inserted} tentativas de {Scanned} eventos (capTeto={Cap})",
                         id, rr.Inserted, rr.EventsScanned, rr.HitCap);
+
+                // Qualificação (mudança do campo "Qualificação do lead") — data real de preenchimento.
+                var rq = await qualifBackfill.BackfillUnitAsync(unit, MaxPagesPerUnit, ct);
+                totalInserted += rq.Inserted;
+                if (rq.Error is not null)
+                    _logger.LogWarning("[qualif-backfill] unit={Unit} falhou: {Err}", id, rq.Error);
+                else
+                    _logger.LogInformation(
+                        "[qualif-backfill] unit={Unit} ok: {Updated} leads de {Scanned} eventos (capTeto={Cap})",
+                        id, rq.Inserted, rq.EventsScanned, rq.HitCap);
             }
             catch (Exception ex)
             {

@@ -183,6 +183,22 @@ public class KommoIngestionService(
                 lead.AppointmentScheduledAtFilledAt = ev.KommoModifiedAtUtc ?? now;
             }
 
+            // Qualificação do lead (campo select escolhido em Configurações → Perfil do Lead →
+            // "Qualificação", ex.: Frio/Morno/Quente). Contamos a qualificação pela data em que
+            // a SDR PREENCHE/muda o campo (produtividade do dia), não pela criação do lead.
+            // Fallback por nome ("qualifica") quando o id não foi mapeado.
+            var qualifValue = ExtractFieldRaw(
+                lead.CustomFieldsJson, profileFields.QualificacaoFieldId,
+                n => n.Contains("qualifica"))?.Trim();
+            if (!string.IsNullOrWhiteSpace(qualifValue) && qualifValue != lead.Qualification)
+            {
+                // Valor MUDOU (incluindo de null → valor) — atualiza e registra QUANDO foi
+                // preenchido. Webhook parcial que não traz o campo lê o valor já mesclado do
+                // CustomFieldsJson, então não re-carimba (valor inalterado).
+                lead.Qualification = qualifValue;
+                lead.QualificationFilledAt = ev.KommoModifiedAtUtc ?? now;
+            }
+
             // Valor da consulta (campo escolhido em Configurações → "Valor da consulta").
             // Alimenta o card Consultas → Valor total. Não sobrescreve um valor já preenchido
             // manualmente na Revisão comercial — só seta quando o SQL está nulo, evitando

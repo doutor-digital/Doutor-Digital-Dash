@@ -18,6 +18,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<Lead> Leads { get; set; }
     public DbSet<Unit> Units { get; set; }
     public DbSet<KpiConfiguration> KpiConfigurations { get; set; }
+    public DbSet<SavedFilter> SavedFilters { get; set; }
     public DbSet<Attendant> Attendants { get; set; }
     public DbSet<LeadAssignment> LeadAssignments { get; set; }
     public DbSet<LeadStageHistory> LeadStageHistories { get; set; }
@@ -137,6 +138,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                   .WithMany()
                   .HasForeignKey(e => e.UnitId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── SavedFilter (filtros dinâmicos globais do topo do dashboard) ─
+        modelBuilder.Entity<SavedFilter>(entity =>
+        {
+            entity.ToTable("saved_filters");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(120);
+            entity.Property(e => e.FilterJson).HasColumnType("jsonb");
+            entity.HasIndex(e => e.SortOrder);
         });
 
         // ─── AdAccount (Central de Integrações: Meta/Google Ads) ─

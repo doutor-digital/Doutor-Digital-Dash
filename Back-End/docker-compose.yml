@@ -33,9 +33,11 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       TZ: "America/Sao_Paulo"
 
-      # `postgres` é o alias de rede da stack postgres já rodando na VPS.
+      # POSTGRES_HOST é o alias de rede do banco na overlay. Default `postgres`
+      # (PG14 compartilhado); em produção aponta para `kommodb_db` — o PG18
+      # dedicado do dashboard, que tem os dados recuperados da Railway.
       ConnectionStrings__DefaultConnection: >-
-        Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Maximum Pool Size=30;Timeout=15
+        Host=${POSTGRES_HOST:-postgres};Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Maximum Pool Size=30;Timeout=15
 
       # Sobrepõem os valores do appsettings.json, que está versionado e não deve
       # carregar segredo de produção.

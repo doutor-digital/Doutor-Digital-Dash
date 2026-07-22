@@ -23,7 +23,9 @@
       "Bash(sudo docker images dd-api-test --format \"{{.Repository}}:{{.Tag}} {{.Size}}\")",
       "Bash(openssl rand *)",
       "Bash(gh run *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(npm ci *)",
+      "Bash(pnpm -v)"
     ],
     "additionalDirectories": [
       "/home/joaoof/Downloads/Doutor-Digital-Dash/Back-End"

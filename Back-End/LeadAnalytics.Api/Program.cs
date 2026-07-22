@@ -122,7 +122,7 @@ else
     builder.Services.AddDistributedMemoryCache();
 }
 
-// ── Log viewer em memória (buffer circular dos últimos 5000 logs) ──
+// ── Log viewer em memória (buffer circular dos últimos 5000 logs) — console /logs ──
 builder.Services.AddSingleton<InMemoryLogStore>(_ => new InMemoryLogStore(capacity: 5000));
 builder.Services.AddSingleton<ILoggerProvider>(sp => new InMemoryLoggerProvider(
     sp.GetRequiredService<InMemoryLogStore>(),
@@ -152,7 +152,6 @@ builder.Services.AddHttpClient<GoogleAuthService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<LoginSessionService>();
-builder.Services.AddScoped<AdminLogService>();
 builder.Services.AddHttpClient<GeoIpService>(c =>
 {
     c.Timeout = TimeSpan.FromSeconds(5);

@@ -1,0 +1,78 @@
+{
+  "name": "DD · Kommo Sync Incremental (30min)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "cronExpression", "expression": "13,43 * * * *" } ] }
+      },
+      "id": "sched-inc",
+      "name": "A cada 30min (:13/:43)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://ddapi_api:8080/internal/sync/kommo/units",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" } ] },
+        "options": {}
+      },
+      "id": "get-units",
+      "name": "GET unidades",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items", "options": {} },
+      "id": "split",
+      "name": "Uma por unidade",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [620, 300]
+    },
+    {
+      "parameters": { "options": {} },
+      "id": "loop",
+      "name": "Loop (1 por vez)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://ddapi_api:8080/internal/sync/kommo/units/{{ $json.unitId }}",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [ { "name": "maxLeads", "value": "500" } ] },
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" } ] },
+        "options": {}
+      },
+      "id": "sync-unit",
+      "name": "POST sync unidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 380]
+    },
+    {
+      "parameters": { "amount": 2 },
+      "id": "wait",
+      "name": "Espera 2s (rate-limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1240, 380]
+    }
+  ],
+  "connections": {
+    "A cada 30min (:13/:43)": { "main": [[{ "node": "GET unidades", "type": "main", "index": 0 }]] },
+    "GET unidades": { "main": [[{ "node": "Uma por unidade", "type": "main", "index": 0 }]] },
+    "Uma por unidade": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] },
+    "Loop (1 por vez)": { "main": [ [], [{ "node": "POST sync unidade", "type": "main", "index": 0 }] ] },
+    "POST sync unidade": { "main": [[{ "node": "Espera 2s (rate-limit)", "type": "main", "index": 0 }]] },
+    "Espera 2s (rate-limit)": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "active": false
+}

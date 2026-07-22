@@ -137,6 +137,9 @@ builder.Services.AddScoped<AttendantService>();
 builder.Services.AddScoped<IRelatorioService, RelatorioService>();
 builder.Services.AddSingleton<IPdfRelatorioService, PdfRelatorioService>();
 builder.Services.AddScoped<SyncN8N>();
+builder.Services.AddScoped<AlertsService>();
+builder.Services.AddScoped<ScheduledSyncService>();
+builder.Services.AddScoped<InternalApiKeyGuard>();
 builder.Services.AddScoped<DailyRelatoryService>();
 builder.Services.AddScoped<LeadAttributionService>();
 builder.Services.AddScoped<MetaWebhookService>();
@@ -201,11 +204,7 @@ builder.Services.AddScoped<ContactsBulkDeleteJobStore>();
 builder.Services.AddHostedService<ContactsBulkDeleteJobWorker>();
 
 // ── Background jobs ──────────────────────────────────────────────────────────
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPreenchimentoPendenteJob>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AlertaPagamentoAtrasadoJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.RecalculoKpisJob>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoSyncPeriodicJob>();
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoNightlySyncJob>();
 builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.KommoStageBackfillJob>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<TenantUnitGuard>();
@@ -249,7 +248,6 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.IAdsProvider>(
     sp => sp.GetRequiredService<LeadAnalytics.Api.Service.Ads.MetaAdsProvider>());
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.IAdsProvider>(
     sp => sp.GetRequiredService<LeadAnalytics.Api.Service.Ads.GoogleAdsProvider>());
-builder.Services.AddHostedService<LeadAnalytics.Api.Jobs.AdsSpendSyncJob>();
 
 builder.Services.AddCors(options =>
 {

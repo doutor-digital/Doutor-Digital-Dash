@@ -1,0 +1,76 @@
+{
+  "name": "DD · Ads Spend Sync (6h)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "cronExpression", "expression": "17 */6 * * *" } ] }
+      },
+      "id": "sched-ads",
+      "name": "A cada 6h (:17)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://ddapi_api:8080/internal/sync/ads/accounts",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" } ] },
+        "options": {}
+      },
+      "id": "get-accounts",
+      "name": "GET contas Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items", "options": {} },
+      "id": "split",
+      "name": "Uma por conta",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [620, 300]
+    },
+    {
+      "parameters": { "options": {} },
+      "id": "loop",
+      "name": "Loop (1 por vez)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://ddapi_api:8080/internal/sync/ads/accounts/{{ $json.accountId }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" } ] },
+        "options": { "timeout": 120000 }
+      },
+      "id": "sync-acct",
+      "name": "POST sync conta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 380]
+    },
+    {
+      "parameters": { "amount": 1 },
+      "id": "wait",
+      "name": "Espera 1s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1240, 380]
+    }
+  ],
+  "connections": {
+    "A cada 6h (:17)": { "main": [[{ "node": "GET contas Ads", "type": "main", "index": 0 }]] },
+    "GET contas Ads": { "main": [[{ "node": "Uma por conta", "type": "main", "index": 0 }]] },
+    "Uma por conta": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] },
+    "Loop (1 por vez)": { "main": [ [], [{ "node": "POST sync conta", "type": "main", "index": 0 }] ] },
+    "POST sync conta": { "main": [[{ "node": "Espera 1s", "type": "main", "index": 0 }]] },
+    "Espera 1s": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "active": false
+}

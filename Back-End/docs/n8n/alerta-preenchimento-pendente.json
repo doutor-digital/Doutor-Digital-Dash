@@ -1,0 +1,90 @@
+{
+  "name": "DD · Alerta Preenchimento Pendente",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "23 * * * *" }
+          ]
+        }
+      },
+      "id": "schedule-pending",
+      "name": "A cada hora (min 23)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://ddapi_api:8080/internal/alerts/pending-fills",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "hours", "value": "24" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-pending",
+      "name": "GET pending-fills",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-pending",
+      "name": "Tem pendência?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "split-pending",
+      "name": "Um por tratamento",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [920, 220]
+    },
+    {
+      "parameters": {},
+      "id": "notify-pending",
+      "name": "→ Notificar gestor (configure seu canal)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1140, 220]
+    }
+  ],
+  "connections": {
+    "A cada hora (min 23)": { "main": [[{ "node": "GET pending-fills", "type": "main", "index": 0 }]] },
+    "GET pending-fills": { "main": [[{ "node": "Tem pendência?", "type": "main", "index": 0 }]] },
+    "Tem pendência?": { "main": [[{ "node": "Um por tratamento", "type": "main", "index": 0 }], []] },
+    "Um por tratamento": { "main": [[{ "node": "→ Notificar gestor (configure seu canal)", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "active": false
+}

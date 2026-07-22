@@ -29,6 +29,25 @@ public class CampaignDailySpend
 
     public string Currency { get; set; } = "BRL";
 
+    // ── Métricas de entrega (vêm do insights junto com o gasto) ──────────────
+    // Guardamos os contadores CRUS. CTR/CPC/CPM são derivados na hora de exibir
+    // (razões não somam: a média de CTRs ≠ CTR do total), então não persistimos.
+
+    /// <summary>Impressões no dia.</summary>
+    public long Impressions { get; set; }
+
+    /// <summary>Cliques no dia.</summary>
+    public long Clicks { get; set; }
+
+    /// <summary>Alcance (pessoas únicas). Não é somável entre dias — use com cuidado.</summary>
+    public long Reach { get; set; }
+
+    /// <summary>
+    /// Conversas de WhatsApp iniciadas (action <c>messaging_conversation_started_7d</c>).
+    /// É o "lead" na visão do Meta — o lead real é o que chega no Kommo.
+    /// </summary>
+    public int Conversations { get; set; }
+
     /// <summary>Quando este registro foi sincronizado por último.</summary>
     public DateTime SyncedAt { get; set; }
 }

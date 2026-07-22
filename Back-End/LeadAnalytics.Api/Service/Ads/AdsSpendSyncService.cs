@@ -134,6 +134,10 @@ public class AdsSpendSyncService(
                 row.Spend = r.Spend;
                 row.CampaignName = r.CampaignName;
                 if (!string.IsNullOrWhiteSpace(r.Currency)) row.Currency = r.Currency;
+                row.Impressions = r.Impressions;
+                row.Clicks = r.Clicks;
+                row.Reach = r.Reach;
+                row.Conversations = r.Conversations;
                 row.SyncedAt = now;
             }
             else
@@ -148,6 +152,10 @@ public class AdsSpendSyncService(
                     Date = r.Date,
                     Spend = r.Spend,
                     Currency = string.IsNullOrWhiteSpace(r.Currency) ? "BRL" : r.Currency!,
+                    Impressions = r.Impressions,
+                    Clicks = r.Clicks,
+                    Reach = r.Reach,
+                    Conversations = r.Conversations,
                     SyncedAt = now,
                 });
             }

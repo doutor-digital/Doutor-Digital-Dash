@@ -24,6 +24,13 @@ public class AdsSpendIngestRow
     public decimal Spend { get; set; }
     /// <summary>Moeda ISO (BRL, USD…). Se vazio, mantém a existente / default BRL.</summary>
     public string? Currency { get; set; }
+
+    // Métricas de entrega — opcionais (payloads antigos continuam válidos).
+    public long Impressions { get; set; }
+    public long Clicks { get; set; }
+    public long Reach { get; set; }
+    /// <summary>Conversas de WhatsApp iniciadas no dia.</summary>
+    public int Conversations { get; set; }
 }
 
 /// <summary>Resultado da ingestão de uma conta.</summary>

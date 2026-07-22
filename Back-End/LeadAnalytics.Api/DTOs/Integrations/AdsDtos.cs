@@ -32,4 +32,11 @@ public class AdsSpendItemDto
     [JsonPropertyName("campaign_name")] public string? CampaignName { get; set; }
     public decimal Spend { get; set; }
     public string Currency { get; set; } = "BRL";
+
+    // Contadores somados no período. CTR/CPC/CPM são derivados no front a partir
+    // destes (razão de somas, não soma de razões).
+    public long Impressions { get; set; }
+    public long Clicks { get; set; }
+    /// <summary>Conversas de WhatsApp iniciadas — o "lead" na visão do Meta.</summary>
+    public long Conversations { get; set; }
 }

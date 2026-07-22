@@ -218,6 +218,9 @@ public class IntegrationsController(
                 CampaignName = g.Key.CampaignName,
                 Currency = g.Key.Currency,
                 Spend = g.Sum(x => x.Spend),
+                Impressions = g.Sum(x => x.Impressions),
+                Clicks = g.Sum(x => x.Clicks),
+                Conversations = g.Sum(x => (long)x.Conversations),
             })
             .OrderByDescending(x => x.Spend)
             .ToListAsync(ct);

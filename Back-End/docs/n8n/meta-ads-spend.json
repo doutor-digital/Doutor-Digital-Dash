@@ -60,7 +60,7 @@
           "queryParameters": {
             "parameter": [
               { "name": "level", "value": "campaign" },
-              { "name": "fields", "value": "campaign_id,campaign_name,spend" },
+              { "name": "fields", "value": "campaign_id,campaign_name,spend,impressions,clicks,reach,actions" },
               { "name": "time_increment", "value": "1" },
               { "name": "date_preset", "value": "last_30d" },
               { "name": "limit", "value": "500" }
@@ -76,7 +76,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta o payload que a API espera. A conta atual vem do Loop;\n// as linhas de gasto vêm da resposta do Graph.\nconst acct = $('Loop (1 por vez)').item.json;\nconst insights = $json.data ?? [];\n\nconst rows = insights.map((r) => ({\n  campaignId: String(r.campaign_id ?? ''),\n  campaignName: r.campaign_name ?? null,\n  date: r.date_start,               // time_increment=1 => 1 linha por dia\n  spend: Number(r.spend ?? 0),\n  currency: acct.currency ?? null,\n}));\n\nreturn [{\n  json: {\n    provider: 'meta',\n    externalAccountId: String(acct.account_id),\n    rows,\n  },\n}];"
+        "jsCode": "// Monta o payload que a API espera. A conta atual vem do Loop;\n// as linhas de gasto vêm da resposta do Graph.\nconst acct = $('Loop (1 por vez)').item.json;\nconst insights = $json.data ?? [];\n\n// 'actions' é uma lista de {action_type, value}. A conversa de WhatsApp aparece\n// como messaging_conversation_started_7d — é o 'lead' na visão do Meta.\nfunction conversas(r) {\n  const acts = Array.isArray(r.actions) ? r.actions : [];\n  const hit = acts.find((a) =>\n    String(a.action_type ?? '').startsWith('messaging_conversation_started'),\n  );\n  return hit ? Math.round(Number(hit.value ?? 0)) : 0;\n}\n\nconst rows = insights.map((r) => ({\n  campaignId: String(r.campaign_id ?? ''),\n  campaignName: r.campaign_name ?? null,\n  date: r.date_start,               // time_increment=1 => 1 linha por dia\n  spend: Number(r.spend ?? 0),\n  currency: acct.currency ?? null,\n  impressions: Number(r.impressions ?? 0),\n  clicks: Number(r.clicks ?? 0),\n  reach: Number(r.reach ?? 0),\n  conversations: conversas(r),\n}));\n\nreturn [{\n  json: {\n    provider: 'meta',\n    externalAccountId: String(acct.account_id),\n    rows,\n  },\n}];"
       },
       "id": "shape",
       "name": "Monta payload da API",

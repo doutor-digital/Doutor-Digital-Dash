@@ -110,4 +110,50 @@ public class PartnersController(AppDbContext db, ICurrentUser currentUser) : Con
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Vitrine PÚBLICA de parceiros (sem login) — alimenta o painel externo em
+    /// <c>parceiros.doutordigitalconsultoria.com</c>, usado para apresentar a base
+    /// de parceiros a novos clientes.
+    ///
+    /// Expõe de propósito APENAS dados de identificação (nome, cidade, segmento,
+    /// logo) e números GLOBAIS agregados. Faturamento e volume de leads por parceiro
+    /// são confidenciais de cada cliente e nunca saem por aqui.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("public")]
+    public async Task<IActionResult> PublicShowcase(CancellationToken ct)
+    {
+        var units = await _db.Units
+            .AsNoTracking()
+            .Where(u => u.IsActive)
+            .OrderBy(u => u.Name)
+            .Select(u => new
+            {
+                name = u.Name,
+                city = u.City,
+                state = u.State,
+                segment = u.Segment,
+                logo = u.PhotoUrl,
+            })
+            .ToListAsync(ct);
+
+        // Número global — prova social, não identifica nenhum parceiro.
+        var totalLeads = await _db.Leads.AsNoTracking().CountAsync(ct);
+
+        return Ok(new
+        {
+            partners = units,
+            totals = new
+            {
+                partners = units.Count,
+                states = units
+                    .Where(u => !string.IsNullOrWhiteSpace(u.state))
+                    .Select(u => u.state!)
+                    .Distinct()
+                    .Count(),
+                leads = totalLeads,
+            },
+        });
+    }
 }

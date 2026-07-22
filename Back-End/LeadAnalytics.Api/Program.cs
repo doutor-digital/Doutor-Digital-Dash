@@ -350,6 +350,12 @@ app.UseMiddleware<ReadOnlyRoleMiddleware>();
 
 app.UseMiddleware<AuditLogMiddleware>();
 
+// Healthcheck do container. O rolling update do Swarm só mata o container antigo
+// depois que o novo responder 200 aqui — é o que sustenta o deploy sem downtime.
+// Anônimo de propósito: o AuditLogMiddleware já ignora /health.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+   .AllowAnonymous();
+
 app.MapControllers();
 
 app.Run();

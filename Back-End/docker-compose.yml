@@ -1,0 +1,100 @@
+# Stack da API (LeadAnalytics) na VPS.
+#
+# A VPS roda Docker Swarm, não `docker compose` puro — este arquivo é aplicado com:
+#
+#   set -a && . .env && set +a
+#   docker stack deploy -c docker-compose.yml --with-registry-auth --prune ddapi
+#
+# Por que Swarm e não `docker compose up -d`: o compose derruba o container antigo
+# ANTES de subir o novo (janela de 502). O Swarm, com `order: start-first` +
+# healthcheck, só mata o antigo depois que o novo responde em /health. É isso que
+# entrega deploy sem sair do ar.
+#
+# Depende de infra que já existe na VPS: Traefik (TLS/Let's Encrypt) e o Postgres
+# da stack `postgres`, ambos na rede overlay `portainer-next`.
+#
+# ATENÇÃO — o registro DNS (A) de ${API_DOMAIN} precisa apontar para a VPS ANTES
+# do primeiro deploy. Se o Traefik pedir certificado de um domínio que não resolve,
+# o Let's Encrypt contabiliza a falha e o rate limit trava novas tentativas.
+
+version: "3.8"
+
+networks:
+  portainer-next:
+    external: true
+
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER}/doutordigital-api:${IMAGE_TAG:-latest}
+    networks: [portainer-next]
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+      TZ: "America/Sao_Paulo"
+
+      # `postgres` é o alias de rede da stack postgres já rodando na VPS.
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Maximum Pool Size=30;Timeout=15
+
+      # Sobrepõem os valores do appsettings.json, que está versionado e não deve
+      # carregar segredo de produção.
+      Jwt__Secret: "${JWT_SECRET}"
+      LogsAuth__Password: "${LOGS_AUTH_PASSWORD}"
+      Resend__ApiKey: "${RESEND_API_KEY}"
+      App__FrontendUrl: "https://${DASHBOARD_DOMAIN}"
+
+    # O Swarm usa isto para decidir se o container novo "pegou". start_period
+    # generoso porque o Migrate() no boot pode demorar em migration pesada.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+    # Janela para as requisições em voo terminarem antes do SIGKILL.
+    stop_grace_period: 30s
+
+    deploy:
+      # 1 réplica de propósito: os jobs de fundo (KommoSyncPeriodicJob,
+      # AlertaPagamentoAtrasadoJob, ...) são IHostedService sem lock distribuído.
+      # Com 2 réplicas fixas eles rodariam em duplicata.
+      replicas: 1
+
+      update_config:
+        order: start-first      # sobe o novo, valida, só então mata o antigo
+        failure_action: rollback
+        delay: 10s
+        monitor: 90s
+
+      rollback_config:
+        order: start-first
+        failure_action: pause
+
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=portainer-next
+        - traefik.http.routers.ddapi.rule=Host(`${API_DOMAIN}`)
+        - traefik.http.routers.ddapi.entrypoints=websecure
+        - traefik.http.routers.ddapi.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.ddapi.service=ddapi
+        - traefik.http.services.ddapi.loadbalancer.server.port=8080
+
+    # Sem isto o json-file cresce até encher o disco da VPS.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

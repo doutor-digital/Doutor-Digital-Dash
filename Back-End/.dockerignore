@@ -1,0 +1,17 @@
+# Tudo que não entra no contexto de build (menos upload, menos cache invalidado).
+**/bin/
+**/obj/
+.git
+.github
+.vs
+.vscode
+.claude
+docs
+reference
+scripts
+*.md
+.env
+.env.*
+docker-compose.yml
+Dockerfile
+.dockerignore

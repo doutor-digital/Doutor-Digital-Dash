@@ -1,16 +1,19 @@
 name: deploy-api
 
+# O projeto vive em Back-End/, mas o Actions só lê workflows da raiz do repo.
+# Por isso o arquivo fica aqui e o build aponta o context para ./Back-End.
 on:
   push:
     branches: [main]
+    paths:
+      - "Back-End/**"
+      - ".github/workflows/deploy.yml"
     paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "reference/**"
+      - "Back-End/**/*.md"
+      - "Back-End/docs/**"
+      - "Back-End/reference/**"
   workflow_dispatch:
 
-# Um deploy por vez. cancel-in-progress fica FALSO de propósito: abortar um
-# `stack deploy` no meio deixa o serviço num rolling update pela metade.
 concurrency:
   group: deploy-api
   cancel-in-progress: false
@@ -31,7 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # O GHCR só aceita path em minúsculas e o owner pode ter maiúscula.
       - name: Owner em minúsculas
         id: owner
         run: echo "lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
@@ -46,7 +48,7 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./Back-End
           push: true
           tags: |
             ghcr.io/${{ steps.owner.outputs.lc }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -60,16 +62,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # O compose é versionado no repo e copiado a cada deploy — a VPS nunca
-      # fica com uma versão do arquivo diferente da que está no git.
+      # source com o prefixo Back-End/; strip_components remove esse nível para
+      # o arquivo cair como docker-compose.yml direto em REMOTE_DIR.
       - name: Copia o docker-compose.yml para a VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: docker-compose.yml
+          source: Back-End/docker-compose.yml
           target: ${{ env.REMOTE_DIR }}
+          strip_components: 1
 
       - name: Rolling update sem downtime
         uses: appleboy/ssh-action@v1.2.0
@@ -85,14 +88,11 @@ jobs:
             set -euo pipefail
             cd ${{ env.REMOTE_DIR }}
 
-            # Credencial de leitura do GHCR. Precisa ser um PAT de vida longa:
-            # o --with-registry-auth grava a credencial no swarm, e um token
-            # efêmero de job expiraria, quebrando o pull num restart futuro.
+            # Credencial de leitura do GHCR (PAT read:packages de vida longa: o
+            # --with-registry-auth grava a credencial no swarm p/ pulls futuros).
             echo "${{ secrets.GHCR_PULL_TOKEN }}" \
               | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-            # .env vive só na VPS (segredos fora do git). IMAGE_TAG vem do CI e
-            # tem precedência sobre o valor do arquivo.
             set -a
             . ./.env
             set +a
@@ -105,37 +105,30 @@ jobs:
               --prune \
               ${{ env.STACK_NAME }}
 
-            # `stack deploy` retorna na hora; sem esperar a convergência o CI
-            # ficaria verde mesmo com o rollout falhando e revertendo.
             SVC=${{ env.STACK_NAME }}_api
             for _ in $(seq 1 60); do
               STATE=$(docker service inspect "$SVC" \
                 --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}completed{{end}}')
               case "$STATE" in
                 completed)
-                  echo "✓ rollout concluído"
-                  exit 0 ;;
+                  echo "✓ rollout concluído"; exit 0 ;;
                 rollback_started|rollback_completed|paused|rollback_paused)
-                  echo "✗ rollout falhou (estado: $STATE) — o Swarm reverteu para a versão anterior"
+                  echo "✗ rollout falhou (estado: $STATE) — Swarm reverteu"
                   docker service ps "$SVC" --no-trunc | head -20
                   exit 1 ;;
               esac
               sleep 5
             done
-
             echo "✗ timeout esperando a convergência"
             docker service ps "$SVC" --no-trunc | head -20
             exit 1
 
-      # Confirma de fora que o Traefik está entregando a versão nova.
       - name: Smoke test público
         run: |
           for i in $(seq 1 10); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" \
               "https://${{ vars.API_DOMAIN }}/health" --max-time 10 || echo 000)
             [ "$CODE" = "200" ] && { echo "✓ /health respondeu 200"; exit 0; }
-            echo "tentativa $i: HTTP $CODE"
-            sleep 6
+            echo "tentativa $i: HTTP $CODE"; sleep 6
           done
-          echo "✗ /health não respondeu 200"
-          exit 1
+          echo "✗ /health não respondeu 200"; exit 1

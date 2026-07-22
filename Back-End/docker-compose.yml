@@ -39,12 +39,29 @@ services:
       ConnectionStrings__DefaultConnection: >-
         Host=${POSTGRES_HOST:-postgres};Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Maximum Pool Size=30;Timeout=15
 
+      # Cache distribuído. Redis próprio na VPS (stack kommodb) — o Redis antigo
+      # era da Railway e morre junto com ela. Sem isto o app cai p/ cache em memória.
+      ConnectionStrings__Redis: "${REDIS_CONNECTION:-kommodb_redis:6379,abortConnect=False}"
+
       # Sobrepõem os valores do appsettings.json, que está versionado e não deve
       # carregar segredo de produção.
       Jwt__Secret: "${JWT_SECRET}"
-      LogsAuth__Password: "${LOGS_AUTH_PASSWORD}"
-      Resend__ApiKey: "${RESEND_API_KEY}"
       App__FrontendUrl: "https://${DASHBOARD_DOMAIN}"
+
+      # Chave do painel de configuração (ConfigurationController lê Admin:ApiKey).
+      Admin__ApiKey: "${ADMIN_API_KEY}"
+
+      # Login do Google (GoogleAuthService lê a env var crua GOOGLE_CLIENT_ID).
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+
+      # Resend: o ResendClient lê a env var crua primeiro, com fallback no appsettings.
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      Resend__ApiKey: "${RESEND_API_KEY}"
+
+      # Visualizador de logs (/logs).
+      LogsAuth__Username: "${LOGS_AUTH_USERNAME:-admin}"
+      LogsAuth__Password: "${LOGS_AUTH_PASSWORD}"
+      LogsAuth__SessionTtlMinutes: "${LOGS_AUTH_TTL:-120}"
 
     # O Swarm usa isto para decidir se o container novo "pegou". start_period
     # generoso porque o Migrate() no boot pode demorar em migration pesada.

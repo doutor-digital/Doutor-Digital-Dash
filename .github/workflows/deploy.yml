@@ -5,13 +5,14 @@ name: deploy-api
 on:
   push:
     branches: [main]
+    # GitHub não aceita paths + paths-ignore no mesmo evento; negação com "!"
+    # faz o mesmo (padrões negativos depois do positivo excluem).
     paths:
       - "Back-End/**"
+      - "!Back-End/**/*.md"
+      - "!Back-End/docs/**"
+      - "!Back-End/reference/**"
       - ".github/workflows/deploy.yml"
-    paths-ignore:
-      - "Back-End/**/*.md"
-      - "Back-End/docs/**"
-      - "Back-End/reference/**"
   workflow_dispatch:
 
 concurrency:

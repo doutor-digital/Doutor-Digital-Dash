@@ -16,7 +16,17 @@
       "Bash(DATABASE_URL='postgresql://postgres:MWaBJnGrmPkcyaPXbzXtyGzTLVFlDDMd@crossover.proxy.rlwy.net:44184/railway' node count.js)",
       "Bash(DATABASE_URL='postgresql://postgres:MWaBJnGrmPkcyaPXbzXtyGzTLVFlDDMd@crossover.proxy.rlwy.net:44184/railway' node count2.js)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code} %{ssl_verify_result}\\\\n\" https://api.doutordigitalconsultoria.com/health --max-time 10)",
+      "Bash(curl -sSI https://api.doutordigitalconsultoria.com/ --max-time 10)",
+      "Bash(echo \"=== .env tracked? ===\"; git ls-files --error-unmatch .env 2>&1 | head -2; echo \"=== conteudo \\(mascarado\\) ===\"; sed -E 's/=.*/=<oculto>/' .env)",
+      "Bash(sudo docker images dd-api-test --format \"{{.Repository}}:{{.Tag}} {{.Size}}\")",
+      "Bash(openssl rand *)",
+      "Bash(gh run *)",
+      "Bash(gh api *)"
+    ],
+    "additionalDirectories": [
+      "/home/joaoof/Downloads/Doutor-Digital-Dash/Back-End"
     ]
   }
 }

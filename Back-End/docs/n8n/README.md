@@ -37,6 +37,44 @@ Cada `POST` sincroniza **um** item e responde rápido — nada de request gigant
 Workflows: `kommo-sync-incremental.json`, `kommo-sync-noturno.json`, `ads-spend-sync.json`.
 O padrão do loop é `SplitOut → Loop Over Items (batch 1) → POST → Wait → volta pro Loop`.
 
+## Meta Ads: gasto real (n8n puxa do Graph, API grava)
+
+`meta-ads-spend.json` — o **n8n autentica no Meta** (1 token de System User do
+Business Manager, que enxerga todas as contas) e puxa o gasto direto do Graph;
+a API só **recebe e grava**. Assim não é preciso implementar o cliente do Graph
+em C# (o `MetaAdsProvider` continua stub e sai de cena nesse caminho).
+
+Fluxo: `cron 6h → GET /me/adaccounts → 1 conta por vez → GET act_<id>/insights
+(level=campaign, time_increment=1, last_30d) → Code monta o payload →
+POST /internal/ads/spend`.
+
+O endpoint `POST /internal/ads/spend` faz upsert em `CampaignDailySpend`
+(a mesma tabela que o dashboard lê), por conta+campanha+dia. Payload:
+
+```json
+{ "provider": "meta", "externalAccountId": "123456789",
+  "rows": [ { "campaignId": "23851", "campaignName": "…",
+              "date": "2026-07-20", "spend": 123.45, "currency": "BRL" } ] }
+```
+
+### ⚠️ Passo obrigatório: mapear a conta → unidade
+A API resolve a conta por **`Provider` + `ExternalAccountId`**. Para cada conta
+do Meta, precisa existir uma linha em `AdAccounts` com:
+- `Provider = "meta"`
+- `ExternalAccountId` = o **`account_id` numérico** do Meta (sem o prefixo `act_`)
+- `UnitId` / `ClinicId` = a unidade a que o gasto pertence
+
+Sem esse mapeamento a API responde `{"matched": false}` (HTTP 200, não quebra o
+loop) e **nada é gravado** — é assim que você descobre quais contas faltam mapear.
+
+### O que preencher no workflow
+- `COLE_SEU_TOKEN_META` (2 nós) → token de System User com `ads_read`.
+- `COLE_SUA_ADMIN_API_KEY` (1 nó) → `ADMIN_API_KEY` da VPS.
+- Versão do Graph fixada em `v21.0` — suba quando quiser.
+
+> Segurança: o token está como query param para o import funcionar direto. O ideal
+> depois é trocar por uma credencial do n8n (Header Auth) e remover da URL.
+
 ## URL: rede interna do Swarm (já configurada nos JSONs)
 
 Na VPS o n8n e a API estão na **mesma overlay `portainer-next`**, então os HTTP

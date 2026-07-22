@@ -1,0 +1,121 @@
+{
+  "name": "DD · Meta Ads Spend (Graph → API)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "cronExpression", "expression": "23 */6 * * *" } ] }
+      },
+      "id": "sched-meta",
+      "name": "A cada 6h (:23)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v21.0/me/adaccounts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "account_id,name,currency" },
+            { "name": "limit", "value": "200" },
+            { "name": "access_token", "value": "COLE_SEU_TOKEN_META" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-adaccounts",
+      "name": "Meta: lista contas do BM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "data", "options": {} },
+      "id": "split-accts",
+      "name": "Uma por conta",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": { "options": {} },
+      "id": "loop",
+      "name": "Loop (1 por vez)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/act_{{ $json.account_id }}/insights",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "level", "value": "campaign" },
+            { "name": "fields", "value": "campaign_id,campaign_name,spend" },
+            { "name": "time_increment", "value": "1" },
+            { "name": "date_preset", "value": "last_30d" },
+            { "name": "limit", "value": "500" },
+            { "name": "access_token", "value": "COLE_SEU_TOKEN_META" }
+          ]
+        },
+        "options": { "timeout": 120000 }
+      },
+      "id": "get-insights",
+      "name": "Meta: gasto por campanha/dia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o payload que a API espera. A conta atual vem do Loop;\n// as linhas de gasto vêm da resposta do Graph.\nconst acct = $('Loop (1 por vez)').item.json;\nconst insights = $json.data ?? [];\n\nconst rows = insights.map((r) => ({\n  campaignId: String(r.campaign_id ?? ''),\n  campaignName: r.campaign_name ?? null,\n  date: r.date_start,               // time_increment=1 => 1 linha por dia\n  spend: Number(r.spend ?? 0),\n  currency: acct.currency ?? null,\n}));\n\nreturn [{\n  json: {\n    provider: 'meta',\n    externalAccountId: String(acct.account_id),\n    rows,\n  },\n}];"
+      },
+      "id": "shape",
+      "name": "Monta payload da API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ddapi_api:8080/internal/ads/spend",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [ { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" } ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "post-spend",
+      "name": "POST gasto p/ API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1420, 380]
+    },
+    {
+      "parameters": { "amount": 1 },
+      "id": "wait",
+      "name": "Espera 1s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1620, 380]
+    }
+  ],
+  "connections": {
+    "A cada 6h (:23)": { "main": [[{ "node": "Meta: lista contas do BM", "type": "main", "index": 0 }]] },
+    "Meta: lista contas do BM": { "main": [[{ "node": "Uma por conta", "type": "main", "index": 0 }]] },
+    "Uma por conta": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] },
+    "Loop (1 por vez)": { "main": [ [], [{ "node": "Meta: gasto por campanha/dia", "type": "main", "index": 0 }] ] },
+    "Meta: gasto por campanha/dia": { "main": [[{ "node": "Monta payload da API", "type": "main", "index": 0 }]] },
+    "Monta payload da API": { "main": [[{ "node": "POST gasto p/ API", "type": "main", "index": 0 }]] },
+    "POST gasto p/ API": { "main": [[{ "node": "Espera 1s", "type": "main", "index": 0 }]] },
+    "Espera 1s": { "main": [[{ "node": "Loop (1 por vez)", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "active": false
+}

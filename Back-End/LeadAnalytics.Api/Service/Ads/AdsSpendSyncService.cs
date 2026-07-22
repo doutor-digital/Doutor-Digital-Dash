@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.DTOs.Ads;
 using LeadAnalytics.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,5 +84,66 @@ public class AdsSpendSyncService(
         acct.UpdatedAt = now;
         await _db.SaveChangesAsync(ct);
         return rows.Count;
+    }
+
+    /// <summary>
+    /// Ingestão do gasto vindo PRONTO do n8n (que puxou do Graph). A API não
+    /// chama o provedor aqui — só resolve a conta pelo ExternalAccountId e faz
+    /// upsert em CampaignDailySpend, igual ao <see cref="SyncAsync"/>.
+    /// </summary>
+    public async Task<AdsSpendIngestResult> IngestDailySpendAsync(AdsSpendIngestRequest req, CancellationToken ct)
+    {
+        var acct = await _db.AdAccounts.FirstOrDefaultAsync(
+            a => a.Provider == req.Provider && a.ExternalAccountId == req.ExternalAccountId, ct);
+
+        if (acct is null)
+            return new AdsSpendIngestResult { Matched = false, ExternalAccountId = req.ExternalAccountId };
+
+        if (req.Rows.Count == 0)
+            return new AdsSpendIngestResult { Matched = true, AccountId = acct.Id, ExternalAccountId = req.ExternalAccountId, Upserted = 0 };
+
+        var minDate = req.Rows.Min(r => r.Date);
+        var maxDate = req.Rows.Max(r => r.Date);
+
+        var existing = await _db.CampaignDailySpends
+            .Where(s => s.AdAccountId == acct.Id && s.Date >= minDate && s.Date <= maxDate)
+            .ToListAsync(ct);
+        var map = existing.ToDictionary(s => (s.CampaignId, s.Date));
+
+        var now = DateTime.UtcNow;
+        var upserted = 0;
+        foreach (var r in req.Rows)
+        {
+            if (map.TryGetValue((r.CampaignId, r.Date), out var row))
+            {
+                row.Spend = r.Spend;
+                row.CampaignName = r.CampaignName;
+                if (!string.IsNullOrWhiteSpace(r.Currency)) row.Currency = r.Currency;
+                row.SyncedAt = now;
+            }
+            else
+            {
+                _db.CampaignDailySpends.Add(new CampaignDailySpend
+                {
+                    ClinicId = acct.ClinicId,
+                    AdAccountId = acct.Id,
+                    Provider = acct.Provider,
+                    CampaignId = r.CampaignId,
+                    CampaignName = r.CampaignName,
+                    Date = r.Date,
+                    Spend = r.Spend,
+                    Currency = string.IsNullOrWhiteSpace(r.Currency) ? "BRL" : r.Currency!,
+                    SyncedAt = now,
+                });
+            }
+            upserted++;
+        }
+
+        acct.LastSyncAt = now;
+        acct.LastSyncNote = $"n8n ingest: {upserted} linha(s)";
+        acct.UpdatedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        return new AdsSpendIngestResult { Matched = true, AccountId = acct.Id, ExternalAccountId = req.ExternalAccountId, Upserted = upserted };
     }
 }

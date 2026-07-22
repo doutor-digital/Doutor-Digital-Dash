@@ -19,7 +19,7 @@
         "node": "me",
         "edge": "adaccounts",
         "options": {
-          "queryParametersUi": {
+          "queryParameters": {
             "parameter": [
               { "name": "fields", "value": "account_id,name,currency" },
               { "name": "limit", "value": "200" }
@@ -57,7 +57,7 @@
         "node": "=act_{{ $json.account_id }}",
         "edge": "insights",
         "options": {
-          "queryParametersUi": {
+          "queryParameters": {
             "parameter": [
               { "name": "level", "value": "campaign" },
               { "name": "fields", "value": "campaign_id,campaign_name,spend" },

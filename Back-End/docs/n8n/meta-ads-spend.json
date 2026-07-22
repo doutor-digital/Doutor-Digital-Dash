@@ -13,21 +13,24 @@
     },
     {
       "parameters": {
-        "url": "https://graph.facebook.com/v21.0/me/adaccounts",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "fields", "value": "account_id,name,currency" },
-            { "name": "limit", "value": "200" },
-            { "name": "access_token", "value": "COLE_SEU_TOKEN_META" }
-          ]
-        },
-        "options": {}
+        "hostUrl": "graph.facebook.com",
+        "httpRequestMethod": "GET",
+        "graphApiVersion": "v21.0",
+        "node": "me",
+        "edge": "adaccounts",
+        "options": {
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "fields", "value": "account_id,name,currency" },
+              { "name": "limit", "value": "200" }
+            ]
+          }
+        }
       },
       "id": "get-adaccounts",
       "name": "Meta: lista contas do BM",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
       "position": [400, 300]
     },
     {
@@ -48,24 +51,27 @@
     },
     {
       "parameters": {
-        "url": "=https://graph.facebook.com/v21.0/act_{{ $json.account_id }}/insights",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "level", "value": "campaign" },
-            { "name": "fields", "value": "campaign_id,campaign_name,spend" },
-            { "name": "time_increment", "value": "1" },
-            { "name": "date_preset", "value": "last_30d" },
-            { "name": "limit", "value": "500" },
-            { "name": "access_token", "value": "COLE_SEU_TOKEN_META" }
-          ]
-        },
-        "options": { "timeout": 120000 }
+        "hostUrl": "graph.facebook.com",
+        "httpRequestMethod": "GET",
+        "graphApiVersion": "v21.0",
+        "node": "=act_{{ $json.account_id }}",
+        "edge": "insights",
+        "options": {
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "level", "value": "campaign" },
+              { "name": "fields", "value": "campaign_id,campaign_name,spend" },
+              { "name": "time_increment", "value": "1" },
+              { "name": "date_preset", "value": "last_30d" },
+              { "name": "limit", "value": "500" }
+            ]
+          }
+        }
       },
       "id": "get-insights",
       "name": "Meta: gasto por campanha/dia",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
       "position": [1020, 380]
     },
     {

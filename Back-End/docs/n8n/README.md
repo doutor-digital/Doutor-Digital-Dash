@@ -68,12 +68,24 @@ Sem esse mapeamento a API responde `{"matched": false}` (HTTP 200, não quebra o
 loop) e **nada é gravado** — é assim que você descobre quais contas faltam mapear.
 
 ### O que preencher no workflow
-- `COLE_SEU_TOKEN_META` (2 nós) → token de System User com `ads_read`.
-- `COLE_SUA_ADMIN_API_KEY` (1 nó) → `ADMIN_API_KEY` da VPS.
-- Versão do Graph fixada em `v21.0` — suba quando quiser.
+Os 2 nós do Meta usam o **nó nativo `Facebook Graph API`**, então o token NÃO fica
+no JSON — vai numa **credencial** do n8n:
 
-> Segurança: o token está como query param para o import funcionar direto. O ideal
-> depois é trocar por uma credencial do n8n (Header Auth) e remover da URL.
+1. n8n → **Credentials → New → "Facebook Graph API"** → cola o token de System
+   User (`ads_read`) → salva (ex.: nome "Meta System User").
+2. Abra os nós **"Meta: lista contas do BM"** e **"Meta: gasto por campanha/dia"**
+   e **selecione essa credencial** em cada um (credencial nunca vem no import).
+3. No nó **"POST gasto p/ API"**, troque `COLE_SUA_ADMIN_API_KEY` pela
+   `ADMIN_API_KEY` da VPS.
+
+Config dos nós do Meta (já vem preenchida, confira após importar):
+
+| | Node | Edge | Query |
+|---|---|---|---|
+| Listar contas | `me` | `adaccounts` | `fields=account_id,name,currency`, `limit=200` |
+| Gasto | `act_{{ $json.account_id }}` | `insights` | `level=campaign`, `fields=campaign_id,campaign_name,spend`, `time_increment=1`, `date_preset=last_30d` |
+
+Versão do Graph fixada em `v21.0` — suba quando quiser.
 
 ## URL: rede interna do Swarm (já configurada nos JSONs)
 

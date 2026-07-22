@@ -59,83 +59,68 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    # Roda no self-hosted runner instalado na VPS: conexão de saída p/ o GitHub,
+    # sem depender de SSH de entrada (a Hostinger dropa IPs de runner hospedado).
+    # O deploy é local — docker stack deploy direto no daemon do host.
+    runs-on: [self-hosted, linux, vps]
     steps:
       - uses: actions/checkout@v4
 
-      # source com o prefixo Back-End/; strip_components remove esse nível para
-      # o arquivo cair como docker-compose.yml direto em REMOTE_DIR.
-      - name: Copia o docker-compose.yml para a VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: Back-End/docker-compose.yml
-          target: ${{ env.REMOTE_DIR }}
-          strip_components: 1
-
       - name: Rolling update sem downtime
-        uses: appleboy/ssh-action@v1.2.0
         env:
           IMAGE_TAG: ${{ needs.build.outputs.tag }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: IMAGE_TAG
-          script_stop: true
-          # Script ASCII puro de proposito: acentos/emoji se corrompem no
-          # transporte do ssh-action e quebram o parser do bash remoto.
-          script: |
-            set -eu
-            cd ${{ env.REMOTE_DIR }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+        run: |
+          set -eu
 
-            # Credencial de leitura do GHCR (PAT read:packages de vida longa: o
-            # --with-registry-auth grava a credencial no swarm p/ pulls futuros).
-            echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # O compose versionado é a fonte da verdade: copia p/ o dir da stack.
+          cp Back-End/docker-compose.yml ${{ env.REMOTE_DIR }}/docker-compose.yml
+          cd ${{ env.REMOTE_DIR }}
 
-            # O IMAGE_TAG vem do CI (o SHA). Guarda antes de carregar o .env,
-            # senao o IMAGE_TAG=latest do arquivo sobrescreve o SHA.
-            CI_TAG="$IMAGE_TAG"
-            set -a
-            . ./.env
-            set +a
-            IMAGE_TAG="$CI_TAG"
-            export IMAGE_TAG
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            echo "deploying $IMAGE_TAG"
-            docker stack deploy -c docker-compose.yml --with-registry-auth --prune ${{ env.STACK_NAME }}
+          # IMAGE_TAG vem do build (SHA). Guarda antes do .env p/ o latest do
+          # arquivo não sobrescrever.
+          CI_TAG="$IMAGE_TAG"
+          set -a
+          . ./.env
+          set +a
+          IMAGE_TAG="$CI_TAG"
+          export IMAGE_TAG
 
-            SVC=${{ env.STACK_NAME }}_api
-            n=0
-            while [ "$n" -lt 60 ]; do
-              STATE=$(docker service inspect "$SVC" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}completed{{end}}')
-              echo "state: $STATE"
-              if [ "$STATE" = "completed" ]; then
-                echo "rollout OK"
-                exit 0
-              fi
-              case "$STATE" in
-                rollback_*|paused)
-                  echo "rollout FAILED ($STATE) - swarm reverteu"
-                  docker service ps "$SVC" --no-trunc | head -20
-                  exit 1
-                  ;;
-              esac
-              n=$((n + 1))
-              sleep 5
-            done
-            echo "timeout esperando convergencia"
-            docker service ps "$SVC" --no-trunc | head -20
-            exit 1
+          echo "deploying $IMAGE_TAG"
+          docker stack deploy -c docker-compose.yml --with-registry-auth --prune ${{ env.STACK_NAME }}
 
-      - name: Smoke test público
+          SVC=${{ env.STACK_NAME }}_api
+          n=0
+          while [ "$n" -lt 60 ]; do
+            STATE=$(docker service inspect "$SVC" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}completed{{end}}')
+            echo "state: $STATE"
+            if [ "$STATE" = "completed" ]; then
+              echo "rollout OK"
+              exit 0
+            fi
+            case "$STATE" in
+              rollback_*|paused)
+                echo "rollout FAILED ($STATE) - swarm reverteu"
+                docker service ps "$SVC" --no-trunc | head -20
+                exit 1
+                ;;
+            esac
+            n=$((n + 1))
+            sleep 5
+          done
+          echo "timeout esperando convergencia"
+          docker service ps "$SVC" --no-trunc | head -20
+          exit 1
+
+      - name: Smoke test publico
         run: |
           for i in $(seq 1 10); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" \
               "https://${{ vars.API_DOMAIN }}/health" --max-time 10 || echo 000)
-            [ "$CODE" = "200" ] && { echo "✓ /health respondeu 200"; exit 0; }
+            [ "$CODE" = "200" ] && { echo "health respondeu 200"; exit 0; }
             echo "tentativa $i: HTTP $CODE"; sleep 6
           done
-          echo "✗ /health não respondeu 200"; exit 1
+          echo "health nao respondeu 200"; exit 1

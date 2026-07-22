@@ -47,7 +47,7 @@ services:
     # O Swarm usa isto para decidir se o container novo "pegou". start_period
     # generoso porque o Migrate() no boot pode demorar em migration pesada.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 5

@@ -91,10 +91,25 @@ public class AdsSpendSyncService(
     /// chama o provedor aqui — só resolve a conta pelo ExternalAccountId e faz
     /// upsert em CampaignDailySpend, igual ao <see cref="SyncAsync"/>.
     /// </summary>
+    /// <summary>
+    /// Normaliza o id externo: o Graph devolve o <c>account_id</c> numérico, mas é
+    /// comum cadastrarem com o prefixo <c>act_</c>. Compara sem o prefixo pros dois
+    /// formatos casarem.
+    /// </summary>
+    private static string NormalizeExternalId(string? id)
+    {
+        var s = (id ?? string.Empty).Trim();
+        return s.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? s[4..] : s;
+    }
+
     public async Task<AdsSpendIngestResult> IngestDailySpendAsync(AdsSpendIngestRequest req, CancellationToken ct)
     {
-        var acct = await _db.AdAccounts.FirstOrDefaultAsync(
-            a => a.Provider == req.Provider && a.ExternalAccountId == req.ExternalAccountId, ct);
+        var target = NormalizeExternalId(req.ExternalAccountId);
+
+        var candidates = await _db.AdAccounts
+            .Where(a => a.Provider == req.Provider)
+            .ToListAsync(ct);
+        var acct = candidates.FirstOrDefault(a => NormalizeExternalId(a.ExternalAccountId) == target);
 
         if (acct is null)
             return new AdsSpendIngestResult { Matched = false, ExternalAccountId = req.ExternalAccountId };

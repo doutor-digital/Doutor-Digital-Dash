@@ -114,3 +114,33 @@ JSONs já estão em horário de Brasília — em especial o noturno em `17 3 * *
    VPS. Ideal: criar uma credencial **Header Auth** (`X-Admin-Key`) e reusar nos nós.
 4. Nos de alerta, ligue o nó `→ Notificar` ao canal (Resend/e-mail, WhatsApp, Slack…).
 5. Teste com **Execute Workflow** e só então **ative**.
+
+## Doutor Hérnia (API Spine) — histórico da agenda
+
+`spine-agenda-historico.json` — cron diário 03:17, sem passar pela API .NET.
+
+O sistema clínico do Doutor Hérnia **não guarda histórico e só aceita consultas
+de até 100 dias**. Passado esse prazo, a agenda de um mês antigo some — não dá
+para perguntar depois. Este workflow existe para preservar esse dado.
+
+**Como funciona:** janela móvel de 7 dias, uma requisição por categoria
+(`POST /api/schedules/search` com `idCategory` 1/2/3), normalização e
+`append or update` numa planilha, casando por `idSchedule`.
+
+Dois detalhes que parecem arbitrários e não são:
+
+- **Por que 7 dias e não 1:** o status muda depois. Um horário `AGENDADO` hoje
+  vira `ATENDIDO` ou `DESMARCADO` amanhã. Reprocessar a semana corrige as linhas
+  já gravadas — daí o `append or update` em vez de `append`.
+- **Por que uma chamada por categoria:** a resposta de `/schedules/search` **não
+  traz** o campo de categoria. A única forma de distinguir avaliação de sessão é
+  pedir filtrado por `idCategory` e carimbar a resposta.
+
+O nó de normalização converte `dateAttendance` de UTC para o horário local
+(UTC−3). Não é cosmético: há consultas às 00:15 UTC que são 21h15 do **dia
+anterior** em Imperatriz.
+
+**Antes de ativar:** preencher `documentId` com o ID da planilha do Google e
+conferir a credencial *Header Auth* (`Authorization: Bearer <token do Spine>`).
+O workflow falha alto se algum dia a janela passar de 100 linhas por categoria —
+melhor quebrar do que truncar em silêncio.

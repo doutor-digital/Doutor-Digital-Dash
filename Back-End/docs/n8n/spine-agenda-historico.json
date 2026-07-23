@@ -1,0 +1,112 @@
+{
+  "name": "Doutor Hérnia — histórico da agenda (planilha)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3,
+              "triggerAtMinute": 17
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "spine-hist-trigger",
+      "name": "Todo dia 03:17"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Janela móvel de 7 dias, uma linha por categoria de agenda.\n//\n// Por que 7 dias e não 1: o status muda depois. Um horário que hoje é AGENDADO\n// vira ATENDIDO ou DESMARCADO amanhã, e a API do Doutor Hérnia não guarda esse\n// histórico. Reprocessar os últimos 7 dias todo dia corrige as linhas antigas\n// (o append-or-update casa por idSchedule) sem estourar as 100 linhas por página.\n//\n// Por que uma requisição por categoria: a resposta de /schedules/search NÃO traz\n// o campo de categoria. A única forma de saber se é avaliação ou sessão é pedir\n// filtrado por idCategory e carimbar a resposta.\n\nconst hoje = new Date();\nconst iso = (d) => d.toISOString().slice(0, 10);\nconst endDate = iso(hoje);\nconst initialDate = iso(new Date(hoje.getTime() - 7 * 86400000));\n\nconst categorias = [\n  { idCategory: 1, categoria: 'AVALIACAO' },\n  { idCategory: 2, categoria: 'SESSAO' },\n  { idCategory: 3, categoria: 'RETORNO' },\n];\n\nreturn categorias.map((c) => ({\n  json: { ...c, initialDate, endDate },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [208, 0],
+      "id": "spine-hist-janela",
+      "name": "Janela de 7 dias"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app-api-prod.doutorhernia.com.br/api/schedules/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ initialDate: $json.initialDate, endDate: $json.endDate, idCategory: $json.idCategory, pagination: { page: 1, rowsPerPage: 100 } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [416, 0],
+      "id": "spine-hist-http",
+      "name": "Agenda do Doutor Hérnia",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "paxZSApfYZKZFzmG",
+          "name": "Token de integração - Doutor Hérnia"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Achata as respostas (uma por categoria) em uma linha por agendamento.\n//\n// Converte dateAttendance de UTC para o horário de Imperatriz (UTC-3). Isso NÃO é\n// cosmético: existem consultas às 00:15/00:30 UTC que são 21h15/21h30 do dia\n// ANTERIOR no local. Agrupar pelo UTC cru joga a linha no dia errado.\n\nconst LOCAL_OFFSET_H = -3; // Imperatriz/MA — sem horário de verão desde 2019\nconst capturadoEm = new Date().toISOString();\nconst saida = [];\nconst pedidos = $('Janela de 7 dias').all();\n\nitems.forEach((item, i) => {\n  const categoria = pedidos[i]?.json?.categoria ?? 'DESCONHECIDA';\n  const pagina = item.json?.data;\n  const linhas = pagina?.data ?? [];\n\n  if ((pagina?.totalPages ?? 1) > 1) {\n    // Guarda-rail: 7 dias cabem em 100 linhas hoje (~350 agendamentos/mês). Se a\n    // unidade crescer, isso passa a truncar em silêncio — melhor falhar alto.\n    throw new Error(\n      `Categoria ${categoria}: ${pagina.total} agendamentos em ${pagina.totalPages} páginas. ` +\n      `Reduza a janela ou implemente paginação.`,\n    );\n  }\n\n  for (const r of linhas) {\n    const utc = new Date(r.dateAttendance);\n    const local = new Date(utc.getTime() + LOCAL_OFFSET_H * 3600000);\n\n    saida.push({\n      json: {\n        idSchedule: r.idSchedule,\n        idTreatment: r.idTreatment ?? '',\n        categoria,\n        paciente: (r.clientName ?? '').trim(),\n        dia: local.toISOString().slice(0, 10),\n        hora: local.toISOString().slice(11, 16),\n        dataHoraUtc: r.dateAttendance,\n        idStatus: r.idStatus,\n        status: r.statusName,\n        compareceu: r.idStatus === 42 ? 'SIM' : r.idStatus === 40 ? 'NAO' : '',\n        profissional: (r.physicalTherapist ?? '').trim(),\n        modificadoEm: r.modified ?? '',\n        modificadoPor: r.modifiedBy ?? '',\n        capturadoEm,\n      },\n    });\n  }\n});\n\nreturn saida;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [624, 0],
+      "id": "spine-hist-normaliza",
+      "name": "Normaliza (UTC → local)"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "COLE_AQUI_O_ID_DA_PLANILHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agenda",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": ["idSchedule"],
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [832, 0],
+      "id": "spine-hist-sheets",
+      "name": "Planilha (append ou update)"
+    }
+  ],
+  "connections": {
+    "Todo dia 03:17": {
+      "main": [[{ "node": "Janela de 7 dias", "type": "main", "index": 0 }]]
+    },
+    "Janela de 7 dias": {
+      "main": [[{ "node": "Agenda do Doutor Hérnia", "type": "main", "index": 0 }]]
+    },
+    "Agenda do Doutor Hérnia": {
+      "main": [[{ "node": "Normaliza (UTC → local)", "type": "main", "index": 0 }]]
+    },
+    "Normaliza (UTC → local)": {
+      "main": [[{ "node": "Planilha (append ou update)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

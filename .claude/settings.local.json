@@ -82,7 +82,24 @@
       "Bash(cp missing_ids.txt backfill/out/ids.txt)",
       "Bash(tar czf *)",
       "Bash(timeout 180 scp -i ~/.ssh/doutordigital_vps -o StrictHostKeyChecking=no backfill.tgz root@89.116.214.130:/root/)",
-      "Bash(curl -sg -H 'Authorization: Bearer __CMDSUB_OUTPUT__' https://araguainadoutorhernia.kommo.com/api/v4/webhooks)"
+      "Bash(curl -sg -H 'Authorization: Bearer __CMDSUB_OUTPUT__' https://araguainadoutorhernia.kommo.com/api/v4/webhooks)",
+      "Bash(timeout 300 dotnet restore)",
+      "Bash(ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5232 timeout 45 dotnet run --no-build -c Debug)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5232/health)",
+      "Bash(curl -s http://localhost:5232/swagger/v1/swagger.json)",
+      "Bash(curl -s -L -o /dev/null -w \"%{http_code} -> %{url_effective}\\\\n\" http://localhost:5232/docs)",
+      "Bash(grep -iA6 \"Failed to generate Operation\\\\|InvalidOperationException\\\\|inner exception\\\\|ReconcileTratamentos\" /tmp/claude-1000/-home-joaoof-Downloads-Doutor-Digital-Dash-Back-End/2a56e95a-cd24-48ab-bbb7-3f2f80a98338/scratchpad/apirun.log)",
+      "Bash(pkill -f \"dotnet.*LeadAnalytics\")",
+      "Bash(pkill -f \"dotnet run\")",
+      "Bash(ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5232 timeout 60 dotnet run --no-build -c Debug)",
+      "Bash(echo \"started $!\")",
+      "Bash(ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5232 timeout 70 dotnet run --no-build -c Debug --project LeadAnalytics.Api/LeadAnalytics.Api.csproj)",
+      "Bash(pkill -f \"LeadAnalytics\")",
+      "Bash(ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5232 dotnet bin/Debug/net10.0/LeadAnalytics.Api.dll)",
+      "Bash(curl -s http://localhost:5232/docs)",
+      "Bash(fuser -k 5232/tcp)",
+      "Bash(curl -s -L http://localhost:5232/docs)"
     ],
     "additionalDirectories": [
       "/home/joaoof/Downloads/Doutor-Digital-Dash/Back-End"

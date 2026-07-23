@@ -34,7 +34,7 @@ public class AdminKpiReconcileController(
     public async Task<IActionResult> ReconcileTratamentos(
         [FromQuery] int unitId,
         [FromQuery] bool dryRun = true,
-        [FromForm] IFormFile? file = null,
+        IFormFile? file = null,
         CancellationToken ct = default)
     {
         var (err, tenantId) = await ResolveAsync(unitId, ct);
@@ -53,7 +53,7 @@ public class AdminKpiReconcileController(
     public async Task<IActionResult> ReconcileAgendados(
         [FromQuery] int unitId,
         [FromQuery] bool dryRun = true,
-        [FromForm] IFormFile? file = null,
+        IFormFile? file = null,
         CancellationToken ct = default)
     {
         var (err, tenantId) = await ResolveAsync(unitId, ct);
@@ -72,7 +72,7 @@ public class AdminKpiReconcileController(
     public async Task<IActionResult> ReconcileCompareceu(
         [FromQuery] int unitId,
         [FromQuery] bool dryRun = true,
-        [FromForm] IFormFile? file = null,
+        IFormFile? file = null,
         CancellationToken ct = default)
     {
         var (err, tenantId) = await ResolveAsync(unitId, ct);

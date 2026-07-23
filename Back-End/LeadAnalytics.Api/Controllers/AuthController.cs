@@ -20,6 +20,12 @@ public class AuthController(
     private readonly LoginSessionService _loginSessions = loginSessions;
     private readonly ICurrentUser _currentUser = currentUser;
 
+    /// <summary>Autentica por e-mail e senha e devolve o JWT.</summary>
+    /// <remarks>
+    /// Ponto de partida da API: envie as credenciais, copie o <c>accessToken</c> da resposta
+    /// e clique em <b>Authorize</b> (Bearer) para liberar as rotas protegidas. A resposta também
+    /// traz a unidade selecionada e as unidades disponíveis para o usuário.
+    /// </remarks>
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

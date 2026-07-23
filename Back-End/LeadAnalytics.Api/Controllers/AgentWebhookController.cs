@@ -54,6 +54,12 @@ public class AgentWebhookController(
         PropertyNameCaseInsensitive = true,
     };
 
+    /// <summary>Recebe do agente de IA (agente-Dt) a conversa de uma unidade e registra mensagens/métricas.</summary>
+    /// <remarks>
+    /// Endpoint público (sem JWT). URL <c>/webhooks/agent/{slug}</c>. Corpo em JSON com a conversa
+    /// (mensagens, identificação do contato). Slug inexistente retorna 200 com <c>success:false</c>.
+    /// </remarks>
+    /// <param name="slug">Slug público da unidade.</param>
     [HttpPost("{slug}")]
     [Consumes("application/json")]
     public async Task<IActionResult> Receive(string slug, CancellationToken ct)

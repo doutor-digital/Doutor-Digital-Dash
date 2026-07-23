@@ -44,6 +44,13 @@ public class KommoWebhookController(
     private readonly WebhookExecutionLogger _execLogger = execLogger;
     private readonly ILogger<KommoWebhookController> _logger = logger;
 
+    /// <summary>Recebe o webhook do Kommo de uma unidade (identificada pelo <paramref name="slug"/>).</summary>
+    /// <remarks>
+    /// Endpoint público (sem JWT) — a URL <c>/webhooks/kommo/{slug}</c> é colada na automação do Kommo.
+    /// O corpo chega como <c>application/x-www-form-urlencoded</c> em notação de colchetes (não JSON).
+    /// Responde 2xx rápido; slug inexistente ou unidade inativa retorna 200 com <c>success:false</c>.
+    /// </remarks>
+    /// <param name="slug">Slug público da unidade.</param>
     [HttpPost("{slug}")]
     [Consumes("application/x-www-form-urlencoded")]
     public async Task<IActionResult> Receive(string slug, CancellationToken ct)

@@ -285,7 +285,7 @@ public class AiController(
 
     [HttpPost("transcribe")]
     [RequestSizeLimit(25 * 1024 * 1024)] // 25MB — limite do endpoint
-    public async Task<IActionResult> Transcribe([FromForm] IFormFile? audio, [FromQuery(Name = "tenantId")] int? explicitTenantId, CancellationToken ct)
+    public async Task<IActionResult> Transcribe(IFormFile? audio, [FromQuery(Name = "tenantId")] int? explicitTenantId, CancellationToken ct)
     {
         if (audio is null || audio.Length == 0) return BadRequest(new { error = "Áudio vazio." });
         if (ResolveAiTenantId(explicitTenantId) is not int tenantId) return Forbid();

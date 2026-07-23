@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using QuestPDF.Infrastructure;
+using Scalar.AspNetCore;
 
 QuestPDF.Settings.License = LicenseType.Community;
 
@@ -42,8 +43,23 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo
     {
-        Title = "LeadAnalytics API",
+        Title = "Doutor Digital API",
         Version = "v1",
+        Description =
+            "API do painel Doutor Digital — analytics de leads, funil e agenda para clínicas e "
+            + "escritórios.\n\n"
+            + "**Motor de dados:** o Kommo é a fonte da verdade. Leads chegam por webhook "
+            + "(`/webhooks/kommo/{slug}`) e são reconciliados por sync incremental (30 min) e noturno. "
+            + "A Spine expõe agenda e avaliações; o agente-Dt registra conversas de IA.\n\n"
+            + "**Autenticação:** JWT Bearer. Faça `POST /api/auth/login`, copie o `accessToken` e "
+            + "clique em **Authorize** para testar as rotas protegidas.\n\n"
+            + "**Multi-tenant:** cada unidade tem um `slug` público (webhooks) e um `unitId` interno. "
+            + "Papéis: `super_admin`, `analista`, `gestor`, `trafego_pago` (somente-leitura).",
+        Contact = new Microsoft.OpenApi.OpenApiContact
+        {
+            Name = "Doutor Digital",
+            Email = "doutordigitalconsultoria@gmail.com",
+        },
     });
 
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
@@ -55,6 +71,12 @@ builder.Services.AddSwaggerGen(options =>
     });
 
     options.DocumentFilter<AuthorizeOperationFilter>();
+
+    // Puxa os resumos /// dos controllers/actions para as descrições da doc.
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
 });
 
 builder.Services
@@ -351,6 +373,17 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
     c.RoutePrefix = "swagger";
+});
+
+// Referência interativa (Scalar) — UI moderna sobre o mesmo contrato OpenAPI do Swashbuckle.
+// Acesse em /docs. Anônima de propósito: é só a documentação; as rotas continuam protegidas.
+app.MapScalarApiReference("/docs", options =>
+{
+    options
+        .WithTitle("Doutor Digital API")
+        .WithTheme(ScalarTheme.Purple)
+        .WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json")
+        .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl);
 });
 
 app.UseStaticFiles();

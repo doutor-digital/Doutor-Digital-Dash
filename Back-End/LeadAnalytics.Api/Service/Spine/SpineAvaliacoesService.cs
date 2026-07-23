@@ -40,23 +40,40 @@ public class SpineAvaliacoesService(
         (SpineApiClient.ScheduleStatus.Agendado,      "Agendado",       "pendente"),
     ];
 
-    public async Task<SpineAvaliacoesDto?> GetAsync(
-        int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default)
+    /// <summary>Card de Avaliações (idCategory=1). Atalho para o caso mais comum.</summary>
+    public Task<SpineAvaliacoesDto?> GetAsync(
+        int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default) =>
+        GetPorCategoriasAsync(unitId, de, ate, [SpineApiClient.ScheduleCategory.Avaliacao], ct);
+
+    /// <summary>
+    /// Mesmo cálculo do card de avaliações, para QUALQUER conjunto de categorias.
+    /// Serve sessões (adesão ao tratamento), retornos etc. sem duplicar lógica.
+    /// A agenda não devolve a categoria por linha, então puxa uma por categoria e
+    /// junta, dedup por idSchedule (um horário pode aparecer em duas por engano).
+    /// </summary>
+    public async Task<SpineAvaliacoesDto?> GetPorCategoriasAsync(
+        int unitId, DateOnly de, DateOnly ate, int[] idCategorias, CancellationToken ct = default)
     {
-        var cacheKey = $"spine:avaliacoes:{unitId}:{de:yyyyMMdd}:{ate:yyyyMMdd}";
+        var chaveCat = string.Join("-", idCategorias.OrderBy(x => x));
+        var cacheKey = $"spine:cat:{unitId}:{chaveCat}:{de:yyyyMMdd}:{ate:yyyyMMdd}";
         if (_cache.TryGetValue<SpineAvaliacoesDto>(cacheKey, out var hit) && hit is not null)
             return hit;
 
         var token = await _tokens.GetTokenAsync(unitId, ct);
         if (token is null) return null;
 
-        var rows = await _client.SearchSchedulesAsync(
-            token, de, ate, SpineApiClient.ScheduleCategory.Avaliacao, ct);
+        var vistos = new HashSet<long>();
+        var rows = new List<SpineSchedule>();
+        foreach (var idCat in idCategorias)
+        {
+            var parte = await _client.SearchSchedulesAsync(token, de, ate, idCat, ct);
+            foreach (var r in parte)
+                if (vistos.Add(r.IdSchedule)) rows.Add(r);
+        }
 
         var dto = Montar(de, ate, rows);
-
         _cache.Set(cacheKey, dto, TimeSpan.FromSeconds(_options.CacheSeconds));
-        _logger.LogDebug("Spine avaliações {UnitId} {De}→{Ate}: {N} registros", unitId, de, ate, rows.Count);
+        _logger.LogDebug("Spine cat {Cats} {UnitId} {De}→{Ate}: {N} registros", chaveCat, unitId, de, ate, rows.Count);
         return dto;
     }
 

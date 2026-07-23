@@ -355,6 +355,59 @@ public class SpineController(
         return Ok(new { unitId, capturandoDesde = meta, serie });
     }
 
+    /// <summary>
+    /// Adesão ao tratamento: sessões (idCategory=2) realizadas vs desmarcadas no
+    /// período. Mesma estrutura do card de avaliações — a "taxa" aqui é a adesão.
+    /// </summary>
+    [HttpGet("sessoes")]
+    public Task<IActionResult> Sessoes(
+        [FromQuery] int unitId, [FromQuery] DateOnly? de, [FromQuery] DateOnly? ate,
+        CancellationToken ct = default) =>
+        PorCategorias(unitId, de, ate, [SpineApiClient.ScheduleCategory.Sessao], ct);
+
+    /// <summary>
+    /// Retornos: RETORNO (3), RETORNO COM EXAMES (6) e RETORNO PÓS-TRATAMENTO (7)
+    /// somados. Inclui o "retorno com exames" do fluxo de aguardando exames.
+    /// </summary>
+    [HttpGet("retornos")]
+    public Task<IActionResult> Retornos(
+        [FromQuery] int unitId, [FromQuery] DateOnly? de, [FromQuery] DateOnly? ate,
+        CancellationToken ct = default) =>
+        PorCategorias(unitId, de, ate, [
+            SpineApiClient.ScheduleCategory.Retorno,
+            SpineApiClient.ScheduleCategory.RetornoComExames,
+            SpineApiClient.ScheduleCategory.RetornoAposTratamento], ct);
+
+    private async Task<IActionResult> PorCategorias(
+        int unitId, DateOnly? de, DateOnly? ate, int[] cats, CancellationToken ct)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? fim.AddDays(-30);
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+        if (fim.DayNumber - inicio.DayNumber > SpineApiClient.MaxDiasJanela)
+            return BadRequest(new ProblemDetails
+            {
+                Title = $"A API do Doutor Hérnia aceita no máximo {SpineApiClient.MaxDiasJanela} dias por consulta.",
+                Status = 400,
+            });
+
+        try
+        {
+            var dto = await _avaliacoes.GetPorCategoriasAsync(unitId, inicio, fim, cats, ct);
+            if (dto is null) return SemToken(unitId);
+            return Ok(dto);
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao consultar categorias {Cats} (unidade {UnitId})", cats, unitId);
+            return BadGateway(ex);
+        }
+    }
+
     /// <summary>Healthcheck da API do Doutor Hérnia — útil pra Central de Integrações.</summary>
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken ct = default)

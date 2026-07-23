@@ -155,6 +155,25 @@ public class SpineApiClient
     }
 
     /// <summary>
+    /// Valida um token fazendo a consulta mais barata possível (1 dia de agenda).
+    /// Usado no onboarding: distingue token válido de 401 (revogado) e 403 (módulo
+    /// não liberado), devolvendo o motivo em vez de estourar.
+    /// </summary>
+    public async Task<(bool Ok, string? Motivo)> ValidateTokenAsync(string token, CancellationToken ct = default)
+    {
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        try
+        {
+            await SearchSchedulesAsync(token, hoje, hoje, ScheduleCategory.Avaliacao, ct);
+            return (true, null);
+        }
+        catch (SpineApiException ex)
+        {
+            return (false, ex.Motivo);
+        }
+    }
+
+    /// <summary>
     /// Busca clientes por nome (parcial, case-insensitive). A agenda só traz o nome
     /// do paciente como texto — é por aqui que se resolve nome → idClient para abrir
     /// a ficha. Mín. 2 caracteres; devolve a lista resumida.

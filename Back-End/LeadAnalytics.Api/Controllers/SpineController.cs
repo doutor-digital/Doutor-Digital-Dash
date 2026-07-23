@@ -17,6 +17,7 @@ public class SpineController(
     SpineAvaliacoesService avaliacoes,
     SpineAgendaService agenda,
     SpinePacienteService pacientes,
+    SpineTokenStore tokens,
     SpineApiClient client,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
@@ -24,9 +25,66 @@ public class SpineController(
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineAgendaService _agenda = agenda;
     private readonly SpinePacienteService _pacientes = pacientes;
+    private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
+
+    // ─── Onboarding self-service do token (Central de Integrações) ───────────
+
+    public record SalvarTokenBody(string Token);
+
+    /// <summary>Status da integração da unidade: configurado? quando? prévia mascarada + online.</summary>
+    [HttpGet("config")]
+    public async Task<IActionResult> ConfigStatus([FromQuery] int unitId, CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var (configurado, atualizado, previa) = await _tokens.GetStatusAsync(unitId, ct);
+        return Ok(new { unitId, configurado, atualizadoEm = atualizado, previa });
+    }
+
+    /// <summary>
+    /// Grava o token da unidade e valida na hora contra a API do Doutor Hérnia.
+    /// O token é cifrado antes de persistir. Rejeita antes de salvar se for inválido,
+    /// pra unidade não achar que conectou quando o token está errado/revogado.
+    /// </summary>
+    [HttpPut("config")]
+    public async Task<IActionResult> SalvarToken(
+        [FromQuery] int unitId, [FromBody] SalvarTokenBody body, CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var token = body?.Token?.Trim();
+        if (string.IsNullOrWhiteSpace(token) || token.Length < 20)
+            return BadRequest(new ProblemDetails { Title = "Token inválido ou muito curto.", Status = 400 });
+
+        var (ok, motivo) = await _client.ValidateTokenAsync(token, ct);
+        if (!ok)
+            return BadRequest(new ProblemDetails
+            {
+                Title = "O Doutor Hérnia recusou esse token.",
+                Detail = motivo,
+                Status = 400,
+            });
+
+        await _tokens.SaveTokenAsync(unitId, token, ct);
+        var (_, atualizado, previa) = await _tokens.GetStatusAsync(unitId, ct);
+        return Ok(new { unitId, configurado = true, atualizadoEm = atualizado, previa });
+    }
+
+    /// <summary>Remove o token da unidade (desconecta).</summary>
+    [HttpDelete("config")]
+    public async Task<IActionResult> RemoverToken([FromQuery] int unitId, CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var removido = await _tokens.DeleteTokenAsync(unitId, ct);
+        return Ok(new { unitId, removido });
+    }
 
     /// <summary>
     /// Card de avaliações: agendadas, comparecimento real, faltas e desmarques na janela.

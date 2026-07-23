@@ -144,3 +144,41 @@ anterior** em Imperatriz.
 conferir a credencial *Header Auth* (`Authorization: Bearer <token do Spine>`).
 O workflow falha alto se algum dia a janela passar de 100 linhas por categoria —
 melhor quebrar do que truncar em silêncio.
+
+## Doutor Hérnia — horários livres (tool da Sofia)
+
+`spine-horarios-livres.json` — webhook que o agente-dt (LangGraph) chama como
+tool para descobrir horários vagos antes de oferecer agendamento.
+
+A API do Doutor Hérnia só devolve horário **ocupado**; não existe rota de
+disponibilidade (testadas 6, todas 404). Horário livre é sempre calculado:
+
+```
+livres = expediente da unidade
+       − (AGENDADO + CONFIRMADO + ATENDIDO)   ← só estes ocupam
+       − bloqueios fixos (almoço, folga)
+```
+
+**A pegadinha que este workflow resolve:** DESMARCADO (57) e REMARCADO (41) NÃO
+ocupam — devolvem o horário. Tratá-los como ocupados esconderia vaga da Sofia.
+Validado contra a agenda real: um slot desmarcado volta a aparecer como livre.
+
+**Regra da unidade fica no node "Calcula horários livres"**, editável sem
+redeploy: `EXPEDIENTE` (por dia da semana), `BLOQUEIOS` (almoço etc.) e
+`PASSO_MIN`. Os valores atuais (07h–19h, passo 30 min) foram medidos na agenda
+da Imperatriz; **almoço e sábado são suposição — confirmar com a clínica**.
+
+Contrato da tool (o que a Sofia envia e recebe):
+
+```
+POST /webhook/spine-horarios-livres
+  { "data": "2026-07-28", "duracaoMin": 30, "idCategoria": 1 }
+→ { "data": "...", "fechado": false,
+    "livres": ["07:00","07:30", ...],
+    "ocupados": ["14:00"],
+    "resumo": "21 horários livres em 2026-07-28: 07:00, 07:30, ..." }
+```
+
+O campo `resumo` já vem em linguagem natural para a Sofia repassar direto.
+`idCategoria` default 1 (avaliação); `duracaoMin` default 30. Antes de ativar,
+apontar a credencial Header Auth do token do Spine.

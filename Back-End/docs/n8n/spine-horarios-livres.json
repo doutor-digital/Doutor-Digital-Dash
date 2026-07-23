@@ -1,0 +1,90 @@
+{
+  "name": "Doutor Hérnia — horários livres (tool da Sofia)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "spine-horarios-livres",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "hl-webhook",
+      "name": "Chamada da Sofia (LangGraph)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Entrada da tool, vinda do agente (LangGraph):\n//   { \"data\": \"2026-07-28\",         // dia desejado (obrigatório)\n//     \"duracaoMin\": 30,              // duração do atendimento (default 30)\n//     \"idCategoria\": 1 }             // 1=avaliação (default). null = agenda toda\n//\n// Só monta o corpo da consulta ao Spine. A API é UTC e o endDate é EXCLUSIVO,\n// então pede-se o dia seguinte e recorta-se depois pelo dia local.\n\nconst body = $json.body ?? $json;\nconst data = body.data;\nif (!data || !/^\\d{4}-\\d{2}-\\d{2}$/.test(data)) {\n  throw new Error('Campo \"data\" (YYYY-MM-DD) é obrigatório.');\n}\n\nconst d = new Date(data + 'T00:00:00Z');\nconst prox = new Date(d.getTime() + 86400000);\nconst iso = (x) => x.toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    data,\n    duracaoMin: Number(body.duracaoMin) || 30,\n    idCategoria: body.idCategoria ?? 1,\n    initialDate: data,\n    endDate: iso(prox),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "hl-parse",
+      "name": "Lê o pedido"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app-api-prod.doutorhernia.com.br/api/schedules/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ initialDate: $json.initialDate, endDate: $json.endDate, idCategory: $json.idCategoria, pagination: { page: 1, rowsPerPage: 100 } }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [440, 0],
+      "id": "hl-http",
+      "name": "Agenda ocupada do Spine",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "paxZSApfYZKZFzmG",
+          "name": "Token de integração - Doutor Hérnia"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ─── REGRA DE NEGÓCIO DA UNIDADE — CONFIRA COM A CLÍNICA ──────────────────\n// Estes três blocos NÃO vêm da API do Doutor Hérnia (ela só devolve horário\n// OCUPADO). São regra da unidade e ficam aqui, editáveis sem redeploy.\n//\n// Valores atuais medidos na agenda da Imperatriz: atendimentos entre 07h e 19h,\n// em passos de 30 min. Almoço e sábado são SUPOSIÇÃO — ajuste.\nconst EXPEDIENTE = {\n  // 0=dom 1=seg ... 6=sáb. Horas em formato \"HH:MM\". Dia ausente = fechado.\n  1: [['07:00', '19:00']],\n  2: [['07:00', '19:00']],\n  3: [['07:00', '19:00']],\n  4: [['07:00', '19:00']],\n  5: [['07:00', '19:00']],\n  6: [['07:00', '12:00']], // sábado — CONFIRMAR se atende\n};\nconst BLOQUEIOS = [\n  ['11:00', '12:00'], // almoço — CONFIRMAR horário\n];\nconst PASSO_MIN = 30;\n// ─────────────────────────────────────────────────────────────────────────\n\n// Só estes três status realmente OCUPAM o horário. Desmarcado (57) e\n// remarcado (41) DEVOLVEM o slot — tratá-los como ocupados esconderia horário\n// livre da Sofia. Atendido (42) é passado, mas continua bloqueando aquele\n// minuto para efeito de agenda.\nconst OCUPA = new Set([37, 38, 42]);\n\nconst pedido = $('Lê o pedido').first().json;\nconst data = pedido.data;\nconst duracaoMin = pedido.duracaoMin;\n\nconst OFFSET_H = -3; // Imperatriz, UTC-3, sem horário de verão\nconst toMin = (hhmm) => {\n  const [h, m] = hhmm.split(':').map(Number);\n  return h * 60 + m;\n};\nconst fromMin = (min) =>\n  `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;\n\n// Dia da semana da data pedida (meio-dia UTC evita virar o dia por fuso).\nconst dow = new Date(data + 'T12:00:00Z').getUTCDay();\nconst janelas = EXPEDIENTE[dow] || [];\nif (janelas.length === 0) {\n  return [{ json: { data, duracaoMin, fechado: true, livres: [], ocupados: [] } }];\n}\n\n// Minutos ocupados pela agenda real (converte UTC → local e recorta pelo dia).\nconst ocupados = [];\nfor (const it of items) {\n  const r = it.json;\n  if (!r.dateAttendance || !OCUPA.has(r.idStatus)) continue;\n  const utc = new Date(r.dateAttendance);\n  const local = new Date(utc.getTime() + OFFSET_H * 3600000);\n  if (local.toISOString().slice(0, 10) !== data) continue;\n  const ini = local.getUTCHours() * 60 + local.getUTCMinutes();\n  ocupados.push({ ini, fim: ini + duracaoMin, hora: fromMin(ini), paciente: (r.clientName || '').trim() });\n}\nocupados.sort((a, b) => a.ini - b.ini);\n\n// Um candidato colide se sobrepõe agenda ocupada ou um bloqueio fixo.\nconst blocos = BLOQUEIOS.map(([a, b]) => ({ ini: toMin(a), fim: toMin(b) }));\nconst colide = (ini, fim) =>\n  ocupados.some((o) => ini < o.fim && fim > o.ini) ||\n  blocos.some((b) => ini < b.fim && fim > b.ini);\n\n// Varre o expediente em passos de PASSO_MIN e coleta os que cabem.\nconst livres = [];\nfor (const [aberto, fechado] of janelas) {\n  const fimJan = toMin(fechado);\n  for (let t = toMin(aberto); t + duracaoMin <= fimJan; t += PASSO_MIN) {\n    if (!colide(t, t + duracaoMin)) livres.push(fromMin(t));\n  }\n}\n\nreturn [{\n  json: {\n    data,\n    duracaoMin,\n    fechado: false,\n    livres,\n    ocupados: ocupados.map((o) => o.hora),\n    resumo: livres.length\n      ? `${livres.length} horários livres em ${data}: ${livres.join(', ')}`\n      : `Sem horários livres em ${data}.`,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "hl-calc",
+      "name": "Calcula horários livres"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0],
+      "id": "hl-resp",
+      "name": "Responde para a Sofia"
+    }
+  ],
+  "connections": {
+    "Chamada da Sofia (LangGraph)": {
+      "main": [[{ "node": "Lê o pedido", "type": "main", "index": 0 }]]
+    },
+    "Lê o pedido": {
+      "main": [[{ "node": "Agenda ocupada do Spine", "type": "main", "index": 0 }]]
+    },
+    "Agenda ocupada do Spine": {
+      "main": [[{ "node": "Calcula horários livres", "type": "main", "index": 0 }]]
+    },
+    "Calcula horários livres": {
+      "main": [[{ "node": "Responde para a Sofia", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

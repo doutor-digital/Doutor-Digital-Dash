@@ -16,12 +16,14 @@ namespace LeadAnalytics.Api.Controllers;
 public class SpineController(
     SpineAvaliacoesService avaliacoes,
     SpineAgendaService agenda,
+    SpinePacienteService pacientes,
     SpineApiClient client,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
 {
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineAgendaService _agenda = agenda;
+    private readonly SpinePacienteService _pacientes = pacientes;
     private readonly SpineApiClient _client = client;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
@@ -135,6 +137,77 @@ public class SpineController(
             });
         }
     }
+
+    /// <summary>
+    /// Ficha do paciente a partir do NOME (o que o calendário tem ao clicar num
+    /// horário). Resolve nome → cadastro: 1 exato devolve a ficha completa com
+    /// histórico; nome duplicado devolve candidatos para escolher; nenhum devolve
+    /// vazio. Não é 404 quando não acha — devolve 200 com detalhe null.
+    /// </summary>
+    [HttpGet("paciente")]
+    public async Task<IActionResult> PacientePorNome(
+        [FromQuery] int unitId,
+        [FromQuery] string nome,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        if (string.IsNullOrWhiteSpace(nome) || nome.Trim().Length < 2)
+            return BadRequest(new ProblemDetails { Title = "Informe um nome com ao menos 2 caracteres.", Status = 400 });
+
+        try
+        {
+            var dto = await _pacientes.PorNomeAsync(unitId, nome, ct);
+            if (dto is null) return SemToken(unitId);
+            return Ok(dto);
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao resolver paciente '{Nome}' (unidade {UnitId})", nome, unitId);
+            return BadGateway(ex);
+        }
+    }
+
+    /// <summary>Ficha do paciente pelo idClient (quando o usuário escolheu um candidato).</summary>
+    [HttpGet("paciente/{idClient:long}")]
+    public async Task<IActionResult> PacientePorId(
+        [FromQuery] int unitId,
+        long idClient,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        try
+        {
+            var token = await _pacientes.PorIdAsync(unitId, idClient, ct);
+            if (token is null)
+                return NotFound(new ProblemDetails { Title = "Paciente não encontrado.", Status = 404 });
+            return Ok(token);
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao buscar paciente {IdClient} (unidade {UnitId})", idClient, unitId);
+            return BadGateway(ex);
+        }
+    }
+
+    private IActionResult SemToken(int unitId) =>
+        StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+        {
+            Title = "Integração com o Doutor Hérnia não configurada para esta unidade.",
+            Detail = $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.",
+            Status = 503,
+        });
+
+    private IActionResult BadGateway(SpineApiException ex) =>
+        StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+        {
+            Title = "Doutor Hérnia recusou a consulta.",
+            Detail = ex.Motivo,
+            Status = 502,
+        });
 
     /// <summary>Healthcheck da API do Doutor Hérnia — útil pra Central de Integrações.</summary>
     [HttpGet("status")]

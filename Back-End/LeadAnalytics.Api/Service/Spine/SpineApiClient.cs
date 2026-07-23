@@ -154,7 +154,61 @@ public class SpineApiClient
             .ToList();
     }
 
+    /// <summary>
+    /// Busca clientes por nome (parcial, case-insensitive). A agenda só traz o nome
+    /// do paciente como texto — é por aqui que se resolve nome → idClient para abrir
+    /// a ficha. Mín. 2 caracteres; devolve a lista resumida.
+    /// </summary>
+    public async Task<IReadOnlyList<SpineClientRow>> SearchClientsByNameAsync(
+        string token, string name, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["pagination"] = new { page = 1, rowsPerPage = MaxRowsPerPage },
+        };
+        var env = await PostAsync<SpineSearchEnvelope<SpineClientRow>>("/api/clients/search", body, token, ct);
+        return env?.Data?.Data ?? [];
+    }
+
+    /// <summary>
+    /// Ficha completa do paciente pelo id, com histórico de agendamentos embutido
+    /// (<c>schedules[]</c>). É a rota mais rica do token — traz protocolo e situação
+    /// de cada sessão sem depender do módulo Tratamentos (bloqueado por permissão).
+    /// Retorna null quando o id não existe ({"success":false,"data":null}).
+    /// </summary>
+    public async Task<SpineClientDetail?> GetClientAsync(string token, long idClient, CancellationToken ct = default)
+    {
+        var env = await GetAsync<SpineDetailEnvelope<SpineClientDetail>>($"/api/clients/{idClient}", token, ct);
+        return env?.Data?.Data;
+    }
+
     private string Base => _options.BaseUrl.TrimEnd('/');
+
+    private async Task<T?> GetAsync<T>(string path, string token, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"{Base}{path}");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var res = await _http.SendAsync(req, ct);
+        var payload = await res.Content.ReadAsStringAsync(ct);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var motivo = res.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized => "token inválido, ausente ou revogado",
+                HttpStatusCode.Forbidden => "módulo não liberado no token desta unidade",
+                HttpStatusCode.NotFound => "recurso não encontrado",
+                _ => "erro na API Spine",
+            };
+            _logger.LogWarning("Spine GET {Path} → {Status} ({Motivo}): {Payload}",
+                path, (int)res.StatusCode, motivo, Truncate(payload, 300));
+            throw new SpineApiException(res.StatusCode, motivo, Truncate(payload, 300));
+        }
+
+        return JsonSerializer.Deserialize<T>(payload, JsonOpts);
+    }
 
     private async Task<T?> PostAsync<T>(string path, object body, string token, CancellationToken ct)
     {
@@ -213,6 +267,60 @@ public class SpineSearchPage<T>
     [JsonPropertyName("page")] public int? Page { get; set; }
     [JsonPropertyName("rowsPerPage")] public int? RowsPerPage { get; set; }
     [JsonPropertyName("totalPages")] public int? TotalPages { get; set; }
+}
+
+/// <summary>Envelope de GET por id: {"status":"success","data":{"data":{…}}}.</summary>
+public class SpineDetailEnvelope<T>
+{
+    [JsonPropertyName("status")] public string? Status { get; set; }
+    [JsonPropertyName("data")] public SpineDetailWrap<T>? Data { get; set; }
+}
+
+public class SpineDetailWrap<T>
+{
+    [JsonPropertyName("data")] public T? Data { get; set; }
+}
+
+/// <summary>Linha resumida de /api/clients/search.</summary>
+public class SpineClientRow
+{
+    [JsonPropertyName("idClient")] public long IdClient { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("whatsapp")] public string? Whatsapp { get; set; }
+    [JsonPropertyName("addressCity")] public string? AddressCity { get; set; }
+    [JsonPropertyName("addressUf")] public string? AddressUf { get; set; }
+    [JsonPropertyName("sourceName")] public string? SourceName { get; set; }
+    [JsonPropertyName("statusName")] public string? StatusName { get; set; }
+    [JsonPropertyName("created")] public DateTime? Created { get; set; }
+}
+
+/// <summary>Ficha de /api/clients/{id}, com agenda embutida.</summary>
+public class SpineClientDetail
+{
+    [JsonPropertyName("idClient")] public long IdClient { get; set; }
+    [JsonPropertyName("source")] public string? Source { get; set; }
+    [JsonPropertyName("status")] public string? Status { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("birthdate")] public DateTime? Birthdate { get; set; }
+    [JsonPropertyName("gender")] public string? Gender { get; set; }
+    [JsonPropertyName("address")] public string? Address { get; set; }
+    [JsonPropertyName("addressNumber")] public string? AddressNumber { get; set; }
+    [JsonPropertyName("addressCity")] public string? AddressCity { get; set; }
+    [JsonPropertyName("addressUf")] public string? AddressUf { get; set; }
+    [JsonPropertyName("email")] public string? Email { get; set; }
+    [JsonPropertyName("whatsapp")] public string? Whatsapp { get; set; }
+    [JsonPropertyName("schedules")] public List<SpineClientSchedule>? Schedules { get; set; }
+}
+
+/// <summary>Item do histórico embutido na ficha (traz a categoria/protocolo por extenso).</summary>
+public class SpineClientSchedule
+{
+    [JsonPropertyName("idSchedule")] public long IdSchedule { get; set; }
+    [JsonPropertyName("dateAttendance")] public DateTime? DateAttendance { get; set; }
+    [JsonPropertyName("category")] public string? Category { get; set; }
+    [JsonPropertyName("physicalTherapist")] public string? PhysicalTherapist { get; set; }
+    [JsonPropertyName("idStatus")] public int IdStatus { get; set; }
+    [JsonPropertyName("statusName")] public string? StatusName { get; set; }
 }
 
 /// <summary>

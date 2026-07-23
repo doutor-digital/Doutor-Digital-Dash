@@ -165,8 +165,10 @@ Validado contra a agenda real: um slot desmarcado volta a aparecer como livre.
 
 **Regra da unidade fica no node "Calcula horários livres"**, editável sem
 redeploy: `EXPEDIENTE` (por dia da semana), `BLOQUEIOS` (almoço etc.) e
-`PASSO_MIN`. Os valores atuais (07h–19h, passo 30 min) foram medidos na agenda
-da Imperatriz; **almoço e sábado são suposição — confirmar com a clínica**.
+`PASSO_MIN`. Expediente medido e confirmado: seg–sex 07h–18h, sábado 07h–12h (só manhã),
+domingo fechado. **Almoço fica VAZIO até a clínica passar os horários** — o dado
+real mostra 12h como o horário mais cheio, então bloquear no chute esconderia o
+pico. Quando vier, é uma linha em `BLOQUEIOS`, sem redeploy.
 
 Contrato da tool (o que a Sofia envia e recebe):
 

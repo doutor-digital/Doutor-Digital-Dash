@@ -15,11 +15,13 @@ namespace LeadAnalytics.Api.Controllers;
 [Route("api/spine")]
 public class SpineController(
     SpineAvaliacoesService avaliacoes,
+    SpineAgendaService agenda,
     SpineApiClient client,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
 {
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
+    private readonly SpineAgendaService _agenda = agenda;
     private readonly SpineApiClient _client = client;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
@@ -71,6 +73,60 @@ public class SpineController(
             // Repassa o motivo em vez de 500 genérico: 401 (token revogado) e 403
             // (módulo não liberado) são situações operacionais, não bug de código.
             _logger.LogWarning(ex, "Falha ao consultar avaliações no Spine (unidade {UnitId})", unitId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Doutor Hérnia recusou a consulta.",
+                Detail = ex.Motivo,
+                Status = 502,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Agenda da clínica no período, para a visão de calendário. Devolve todos os
+    /// horários com categoria, profissional e situação, já em horário local.
+    /// Padrão: a semana corrente. Janela máxima: 99 dias.
+    /// </summary>
+    [HttpGet("agenda")]
+    public async Task<IActionResult> Agenda(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? hoje.AddDays(-(int)hoje.DayOfWeek + 1);
+        var fim = ate ?? inicio.AddDays(5);
+
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+
+        if (fim.DayNumber - inicio.DayNumber > SpineApiClient.MaxDiasJanela)
+            return BadRequest(new ProblemDetails
+            {
+                Title = $"A API do Doutor Hérnia aceita no máximo {SpineApiClient.MaxDiasJanela} dias por consulta.",
+                Status = 400,
+            });
+
+        try
+        {
+            var dto = await _agenda.GetAsync(unitId, inicio, fim, ct);
+            if (dto is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+                {
+                    Title = "Integração com o Doutor Hérnia não configurada para esta unidade.",
+                    Detail = $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.",
+                    Status = 503,
+                });
+
+            return Ok(dto);
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao consultar agenda no Spine (unidade {UnitId})", unitId);
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
                 Title = "Doutor Hérnia recusou a consulta.",

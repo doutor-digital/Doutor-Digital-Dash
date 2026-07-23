@@ -234,6 +234,7 @@ builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Spine.SpineApiClient>((
 });
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineTokenStore>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineAvaliacoesService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineAgendaService>();
 
 // ── I.A. (OpenAI GPT-4o-mini + Whisper) ──────────────────────────────────────
 builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ai.OpenAiClient>(c =>

@@ -223,6 +223,18 @@ builder.Services.AddHttpClient<KommoApiClient>(c =>
 });
 builder.Services.AddSingleton<WebhookExecutionLogger>();
 
+// ── Doutor Hérnia / API Spine (sistema clínico — somente leitura) ────────────
+builder.Services.Configure<LeadAnalytics.Api.Options.SpineOptions>(
+    builder.Configuration.GetSection(LeadAnalytics.Api.Options.SpineOptions.SectionName));
+builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Spine.SpineApiClient>((sp, c) =>
+{
+    var o = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<
+        LeadAnalytics.Api.Options.SpineOptions>>().Value;
+    c.Timeout = TimeSpan.FromSeconds(o.TimeoutSeconds);
+});
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineTokenStore>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineAvaliacoesService>();
+
 // ── I.A. (OpenAI GPT-4o-mini + Whisper) ──────────────────────────────────────
 builder.Services.AddHttpClient<LeadAnalytics.Api.Service.Ai.OpenAiClient>(c =>
 {

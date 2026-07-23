@@ -17,6 +17,7 @@ public class SpineController(
     SpineAvaliacoesService avaliacoes,
     SpineAgendaService agenda,
     SpinePacienteService pacientes,
+    SpineRedeService rede,
     SpineTokenStore tokens,
     SpineApiClient client,
     TenantUnitGuard tenantGuard,
@@ -25,10 +26,39 @@ public class SpineController(
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineAgendaService _agenda = agenda;
     private readonly SpinePacienteService _pacientes = pacientes;
+    private readonly SpineRedeService _rede = rede;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
+
+    /// <summary>
+    /// Comparativo entre as unidades da rede (avaliações + comparecimento por
+    /// unidade), para o franqueador master. Só as unidades com token conectado
+    /// entram no ranking; as demais vêm em "semToken". Padrão: últimos 30 dias.
+    /// </summary>
+    [HttpGet("rede/comparativo")]
+    public async Task<IActionResult> RedeComparativo(
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } error) return error;
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? fim.AddDays(-30);
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+        if (fim.DayNumber - inicio.DayNumber > SpineApiClient.MaxDiasJanela)
+            return BadRequest(new ProblemDetails
+            {
+                Title = $"A API do Doutor Hérnia aceita no máximo {SpineApiClient.MaxDiasJanela} dias por consulta.",
+                Status = 400,
+            });
+
+        var dto = await _rede.ComparativoAsync(tenantId, inicio, fim, ct);
+        return Ok(dto);
+    }
 
     // ─── Onboarding self-service do token (Central de Integrações) ───────────
 

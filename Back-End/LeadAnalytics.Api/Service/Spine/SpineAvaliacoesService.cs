@@ -8,9 +8,10 @@ namespace LeadAnalytics.Api.Service.Spine;
 /// <summary>
 /// Monta o card de Avaliações a partir da agenda do Spine.
 ///
-/// Por que só Avaliação (idCategory=1) e não a agenda inteira: avaliação é a consulta
-/// que fecha o funil comercial — é o "compareceu" que hoje o dashboard lê de um campo
-/// digitado na Kommo. Sessão (idCategory=2) é tratamento em curso e vira card próprio.
+/// Por que só Avaliação (idCategory=1) e não a agenda inteira: avaliação é a
+/// consulta que fecha o funil comercial — é o "compareceu" que hoje o dashboard
+/// lê de um campo digitado na Kommo. Sessão (idCategory=2) é tratamento em curso
+/// e merece card próprio.
 /// </summary>
 public class SpineAvaliacoesService(
     SpineApiClient client,
@@ -26,16 +27,18 @@ public class SpineAvaliacoesService(
     private readonly ILogger<SpineAvaliacoesService> _logger = logger;
 
     /// <summary>
-    /// O Spine devolve dateAttendance em UTC (guia §9.2). Converter é obrigatório, não
-    /// cosmético: existem consultas às 00:15/00:30 UTC que são 21h15/21h30 do dia
-    /// ANTERIOR em Imperatriz — agrupar pelo UTC cru joga essas linhas no dia errado.
+    /// Os seis status da agenda, na ordem em que a operação lê o desfecho:
+    /// o que aconteceu, o que falhou, o que foi devolvido, o que ainda vem.
     /// </summary>
-    private static readonly TimeZoneInfo BrTz =
-        TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
-
-    private static DateOnly DiaLocal(DateTime utc) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(utc, DateTimeKind.Utc), BrTz));
+    private static readonly (int Id, string Nome, string Grupo)[] Situacoes =
+    [
+        (SpineApiClient.ScheduleStatus.Atendido,      "Atendido",       "realizado"),
+        (SpineApiClient.ScheduleStatus.NaoCompareceu, "Não compareceu", "falta"),
+        (SpineApiClient.ScheduleStatus.Desmarcado,    "Desmarcado",     "cancelado"),
+        (SpineApiClient.ScheduleStatus.Remarcado,     "Remarcado",      "cancelado"),
+        (SpineApiClient.ScheduleStatus.Confirmado,    "Confirmado",     "pendente"),
+        (SpineApiClient.ScheduleStatus.Agendado,      "Agendado",       "pendente"),
+    ];
 
     public async Task<SpineAvaliacoesDto?> GetAsync(
         int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default)
@@ -60,24 +63,38 @@ public class SpineAvaliacoesService(
     internal static SpineAvaliacoesDto Montar(
         DateOnly de, DateOnly ate, IReadOnlyList<SpineSchedule> rows)
     {
-        int Contar(int status) => rows.Count(r => r.IdStatus == status);
+        var porStatus = rows.GroupBy(r => r.IdStatus).ToDictionary(g => g.Key, g => g.Count());
+        int Contar(int status) => porStatus.GetValueOrDefault(status);
 
-        var agendadas = rows.Count;
-        var compareceram = Contar(SpineApiClient.ScheduleStatus.Atendido);
-        var naoCompareceram = Contar(SpineApiClient.ScheduleStatus.NaoCompareceu);
+        // Situações conhecidas na ordem definida + qualquer código novo que o Spine
+        // passe a devolver (melhor aparecer como desconhecido do que sumir da conta).
+        var conhecidos = Situacoes.Select(s => s.Id).ToHashSet();
+        var porSituacao = Situacoes
+            .Select(s => new SpineSituacaoDto(s.Id, s.Nome, s.Grupo, Contar(s.Id)))
+            .Concat(rows.Where(r => !conhecidos.Contains(r.IdStatus))
+                        .GroupBy(r => (r.IdStatus, r.StatusName))
+                        .Select(g => new SpineSituacaoDto(
+                            g.Key.IdStatus, g.Key.StatusName ?? $"Situação {g.Key.IdStatus}",
+                            "desconhecido", g.Count())))
+            .Where(s => s.Total > 0)
+            .ToList();
+
+        var total = rows.Count;
+        var realizadas = Contar(SpineApiClient.ScheduleStatus.Atendido);
+        var pendentes = Contar(SpineApiClient.ScheduleStatus.Agendado)
+                      + Contar(SpineApiClient.ScheduleStatus.Confirmado);
+
+        // Horário que ainda não chegou não é acerto nem erro — fica fora da conta.
+        var resolvidas = total - pendentes;
+        var taxa = resolvidas == 0 ? 0d : Math.Round((double)realizadas / resolvidas * 100, 1);
+
+        var naoCompareceu = Contar(SpineApiClient.ScheduleStatus.NaoCompareceu);
         var desmarcadas = Contar(SpineApiClient.ScheduleStatus.Desmarcado);
-        var remarcadas = Contar(SpineApiClient.ScheduleStatus.Remarcado);
-        var aguardando = Contar(SpineApiClient.ScheduleStatus.Agendado)
-                       + Contar(SpineApiClient.ScheduleStatus.Confirmado);
-
-        var taxa = agendadas == 0 ? 0d : Math.Round((double)compareceram / agendadas * 100, 1);
-
-        // Sinaliza o vício de preenchimento: desmarque relevante com no-show quase zerado.
-        var alerta = desmarcadas >= 3 && naoCompareceram <= desmarcadas / 5;
+        var alerta = desmarcadas >= 3 && naoCompareceu <= desmarcadas / 5;
 
         var porDia = rows
             .Where(r => r.DateAttendance.HasValue)
-            .GroupBy(r => DiaLocal(r.DateAttendance!.Value))
+            .GroupBy(r => SpineApiClient.DiaLocal(r.DateAttendance!.Value))
             .OrderBy(g => g.Key)
             .Select(g => new SpineAvaliacoesPorDiaDto(
                 g.Key,
@@ -99,7 +116,7 @@ public class SpineAvaliacoesService(
             .Count();
 
         return new SpineAvaliacoesDto(
-            de, ate, agendadas, compareceram, naoCompareceram, desmarcadas, remarcadas,
-            aguardando, taxa, pacientes, alerta, porDia, porProfissional);
+            de, ate, total, realizadas, resolvidas, taxa, pacientes, alerta,
+            porSituacao, porDia, porProfissional);
     }
 }

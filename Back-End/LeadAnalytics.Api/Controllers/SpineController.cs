@@ -26,7 +26,7 @@ public class SpineController(
 
     /// <summary>
     /// Card de avaliações: agendadas, comparecimento real, faltas e desmarques na janela.
-    /// Padrão: últimos 30 dias. A API do Spine aceita no máximo 100 dias por consulta.
+    /// Padrão: últimos 30 dias. Janela máxima: 99 dias.
     /// </summary>
     [HttpGet("avaliacoes")]
     public async Task<IActionResult> Avaliacoes(
@@ -44,10 +44,12 @@ public class SpineController(
         if (fim < inicio)
             return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
 
-        if (fim.DayNumber - inicio.DayNumber > 100)
+        // 99 e não 100: pedimos sempre um dia a mais à API deles, porque o endDate
+        // é exclusivo (ver SpineApiClient.SearchSchedulesAsync).
+        if (fim.DayNumber - inicio.DayNumber > SpineApiClient.MaxDiasJanela)
             return BadRequest(new ProblemDetails
             {
-                Title = "A API do Doutor Hérnia aceita no máximo 100 dias por consulta.",
+                Title = $"A API do Doutor Hérnia aceita no máximo {SpineApiClient.MaxDiasJanela} dias por consulta.",
                 Status = 400,
             });
 

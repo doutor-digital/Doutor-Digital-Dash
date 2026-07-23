@@ -50,6 +50,24 @@ public class SpineApiClient
     /// <summary>Máximo aceito pela API; acima disso ela devolve 400.</summary>
     public const int MaxRowsPerPage = 100;
 
+    /// <summary>
+    /// Janela máxima da API. 100 dias é o limite deles; como pedimos sempre um dia
+    /// a mais (ver <see cref="SearchSchedulesAsync"/>), o teto efetivo aqui é 99.
+    /// </summary>
+    public const int MaxDiasJanela = 99;
+
+    /// <summary>
+    /// O Spine devolve dateAttendance em UTC (guia §9.2). Imperatriz é UTC−3 e não
+    /// tem horário de verão desde 2019, mas usamos o fuso nomeado por consistência
+    /// com o resto do projeto (ContactImportService, DailyRelatoryService).
+    /// </summary>
+    public static readonly TimeZoneInfo BrTz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+    /// <summary>Data local do atendimento — é por ela que se agrupa, nunca pelo UTC cru.</summary>
+    public static DateOnly DiaLocal(DateTime utc) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(utc, DateTimeKind.Utc), BrTz));
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -84,15 +102,22 @@ public class SpineApiClient
 
     /// <summary>
     /// Busca agendamentos por janela de <b>data de atendimento</b>, paginando até o fim.
-    /// Janela máxima aceita pela API: 100 dias.
+    ///
+    /// MEDIDO NA API (23/07/2026): <c>initialDate</c> é inclusivo e <c>endDate</c> é
+    /// EXCLUSIVO — pedir 01→23/07 devolve até 22/07 e some com o dia inteiro do 23.
+    /// Por isso pedimos <c>to + 1 dia</c> e recortamos aqui pela data LOCAL. Sem isso
+    /// todo período perde o último dia, que costuma ser justamente o de hoje.
     /// </summary>
     /// <param name="idCategory">1=Avaliação, 2=Sessão… null traz todas.</param>
     public async Task<IReadOnlyList<SpineSchedule>> SearchSchedulesAsync(
         string token, DateOnly from, DateOnly to, int? idCategory, CancellationToken ct = default)
     {
         if (to < from) (from, to) = (to, from);
-        if (to.DayNumber - from.DayNumber > 100)
-            throw new ArgumentException("Spine aceita no máximo 100 dias por consulta.", nameof(to));
+        if (to.DayNumber - from.DayNumber > MaxDiasJanela)
+            throw new ArgumentException(
+                $"Spine aceita no máximo {MaxDiasJanela} dias por consulta.", nameof(to));
+
+        var endDatePedido = to.AddDays(1);
 
         var all = new List<SpineSchedule>();
         var page = 1;
@@ -105,7 +130,7 @@ public class SpineApiClient
             var body = new Dictionary<string, object?>
             {
                 ["initialDate"] = from.ToString("yyyy-MM-dd"),
-                ["endDate"] = to.ToString("yyyy-MM-dd"),
+                ["endDate"] = endDatePedido.ToString("yyyy-MM-dd"),
                 ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
             };
             if (idCategory.HasValue) body["idCategory"] = idCategory.Value;
@@ -121,7 +146,12 @@ public class SpineApiClient
             page++;
         }
 
-        return all;
+        // Recorta o dia extra que pedimos: fica só o que cai na janela em horário local.
+        return all
+            .Where(r => r.DateAttendance is null
+                        || (DiaLocal(r.DateAttendance.Value) >= from
+                            && DiaLocal(r.DateAttendance.Value) <= to))
+            .ToList();
     }
 
     private string Base => _options.BaseUrl.TrimEnd('/');

@@ -55,6 +55,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<AdAccount> AdAccounts { get; set; }
     public DbSet<CampaignDailySpend> CampaignDailySpends { get; set; }
+    public DbSet<SpineScheduleSnapshot> SpineScheduleSnapshots { get; set; }
     public DbSet<AdsSetting> AdsSettings { get; set; }
 
     public DbSet<CloudiaImportBatch> CloudiaImportBatches { get; set; }
@@ -161,6 +162,21 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         });
 
         // ─── CampaignDailySpend (gasto por campanha/dia) ─────────
+        modelBuilder.Entity<SpineScheduleSnapshot>(entity =>
+        {
+            entity.ToTable("spine_schedule_snapshot");
+            entity.HasKey(e => e.Id);
+            // Um registro por (unidade, agendamento) — o cron faz upsert por esta chave.
+            entity.HasIndex(e => new { e.UnitId, e.IdSchedule }).IsUnique();
+            // Consulta do dashboard: por unidade e dia local.
+            entity.HasIndex(e => new { e.UnitId, e.DiaLocal });
+            entity.Property(e => e.Categoria).HasMaxLength(80);
+            entity.Property(e => e.Paciente).HasMaxLength(200);
+            entity.Property(e => e.Profissional).HasMaxLength(200);
+            entity.Property(e => e.StatusName).HasMaxLength(60);
+            entity.Property(e => e.ModifiedBySpine).HasMaxLength(200);
+        });
+
         modelBuilder.Entity<CampaignDailySpend>(entity =>
         {
             entity.ToTable("campaign_daily_spend");

@@ -20,13 +20,42 @@ namespace LeadAnalytics.Api.Controllers;
 public class InternalSpineController(
     AppDbContext db,
     SpineAvaliacoesService avaliacoes,
+    SpineHistoricoService historico,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
     private readonly AppDbContext _db = db;
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
+    private readonly SpineHistoricoService _historico = historico;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
+
+    /// <summary>
+    /// Captura a agenda recente da unidade e grava no nosso banco (preserva o que a
+    /// API do Spine perde depois de 100 dias). O n8n só dispara; a API puxa e grava.
+    /// Janela padrão: 7 dias (rolling), para corrigir status que mudaram.
+    /// </summary>
+    [HttpPost("historico/sync")]
+    public async Task<IActionResult> SincronizarHistorico(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] int dias = 7,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        try
+        {
+            var (conectado, gravados) = await _historico.SyncAsync(unitId, dias, ct);
+            return Ok(new { unitId, conectado, gravados });
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Histórico: sync falhou (unidade {UnitId})", unitId);
+            return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Motivo });
+        }
+    }
 
     /// <summary>
     /// Resumo do dia de uma unidade: avaliações de hoje (desfecho) e o que está

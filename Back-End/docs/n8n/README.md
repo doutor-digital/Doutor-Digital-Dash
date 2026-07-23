@@ -208,3 +208,23 @@ do quando, do texto e do envio**. Chamada interna pela rede do Swarm
 
 O texto sai sem emojis, com negrito do WhatsApp (`*asteriscos*`). Unidade sem
 token conectado é pulada automaticamente (o resumo devolve `conectado:false`).
+
+## Doutor Hérnia — captura de histórico (banco)
+
+`spine-historico-captura.json` — cron 03:20, preserva a agenda no NOSSO banco
+para o dashboard mostrar histórico além dos 100 dias que a API do Spine permite.
+
+Desenho mínimo no n8n: ele só DISPARA. A API é quem puxa do Doutor Hérnia e grava
+(upsert por unidade+idSchedule, janela móvel de 7 dias). Assim o token e a
+conversão de fuso ficam só na API; o n8n não vê nenhum dos dois.
+
+```
+cron → [n8n] lista unidades → POST http://ddapi_api:8080/internal/spine/historico/sync?unitId=&dias=7
+                                     (X-Admin-Key) → API puxa + grava no banco
+```
+
+Dashboard lê de GET /api/spine/historico?unitId= (sem limite de 100 dias — vem do
+banco). Só há série a partir do dia em que a captura foi ligada: ela preserva
+daqui pra frente, não recupera o passado. Ativar cedo = menos buracos depois.
+
+Antes de ativar: X-Admin-Key + a lista de unidades no nó "Unidades".

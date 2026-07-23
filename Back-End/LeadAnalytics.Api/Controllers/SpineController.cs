@@ -2,6 +2,7 @@ using LeadAnalytics.Api.Service;
 using LeadAnalytics.Api.Service.Spine;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Controllers;
 
@@ -296,6 +297,63 @@ public class SpineController(
             Detail = ex.Motivo,
             Status = 502,
         });
+
+    /// <summary>
+    /// Histórico de avaliações do nosso banco (snapshot), agrupado por mês. Lê do
+    /// banco, então NÃO tem o limite de 100 dias da API do Doutor Hérnia — é a série
+    /// longa que a franquia não consegue ver em lugar nenhum. Só há dado a partir do
+    /// dia em que a captura foi ligada.
+    /// </summary>
+    [HttpGet("historico")]
+    public async Task<IActionResult> Historico(
+        [FromQuery] int unitId,
+        [FromQuery] int meses = 12,
+        [FromServices] Data.AppDbContext db = null!,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var desde = DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-Math.Clamp(meses, 1, 60));
+
+        // Só avaliações (idCategory 1) — a métrica que fecha o funil comercial.
+        var linhas = await db.SpineScheduleSnapshots
+            .AsNoTracking()
+            .Where(s => s.UnitId == unitId
+                        && s.IdCategory == SpineApiClient.ScheduleCategory.Avaliacao
+                        && s.DiaLocal >= desde)
+            .GroupBy(s => new { s.DiaLocal.Year, s.DiaLocal.Month })
+            .Select(g => new
+            {
+                ano = g.Key.Year,
+                mes = g.Key.Month,
+                agendadas = g.Count(),
+                compareceram = g.Count(x => x.IdStatus == SpineApiClient.ScheduleStatus.Atendido),
+                naoCompareceram = g.Count(x => x.IdStatus == SpineApiClient.ScheduleStatus.NaoCompareceu),
+                desmarcadas = g.Count(x => x.IdStatus == SpineApiClient.ScheduleStatus.Desmarcado),
+            })
+            .OrderBy(x => x.ano).ThenBy(x => x.mes)
+            .ToListAsync(ct);
+
+        var meta = await db.SpineScheduleSnapshots
+            .AsNoTracking()
+            .Where(s => s.UnitId == unitId)
+            .OrderBy(s => s.DiaLocal)
+            .Select(s => (DateOnly?)s.DiaLocal)
+            .FirstOrDefaultAsync(ct);
+
+        var serie = linhas.Select(x => new
+        {
+            competencia = $"{x.ano:D4}-{x.mes:D2}",
+            x.agendadas,
+            x.compareceram,
+            x.naoCompareceram,
+            x.desmarcadas,
+            taxaComparecimento = x.agendadas == 0 ? 0 : Math.Round((double)x.compareceram / x.agendadas * 100, 1),
+        });
+
+        return Ok(new { unitId, capturandoDesde = meta, serie });
+    }
 
     /// <summary>Healthcheck da API do Doutor Hérnia — útil pra Central de Integrações.</summary>
     [HttpGet("status")]

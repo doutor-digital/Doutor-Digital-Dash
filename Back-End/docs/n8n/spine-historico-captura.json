@@ -1,0 +1,60 @@
+{
+  "name": "Doutor Hérnia — captura de histórico (banco)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3,
+              "triggerAtMinute": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "hist-trigger",
+      "name": "Todo dia 03:20"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unidades a capturar — uma linha por unidade com token conectado.\n// Some/adicione conforme a rede cresce. O n8n só dispara; a API puxa e grava.\nreturn [\n  { json: { unitId: 15 } },\n  // { json: { unitId: 7 } },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "hist-unidades",
+      "name": "Unidades"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://ddapi_api:8080/internal/spine/historico/sync?unitId={{ $json.unitId }}&dias=7",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" }
+          ]
+        },
+        "options": { "timeout": 60000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [440, 0],
+      "id": "hist-sync",
+      "name": "Captura (nossa API grava no banco)"
+    }
+  ],
+  "connections": {
+    "Todo dia 03:20": {
+      "main": [[{ "node": "Unidades", "type": "main", "index": 0 }]]
+    },
+    "Unidades": {
+      "main": [[{ "node": "Captura (nossa API grava no banco)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

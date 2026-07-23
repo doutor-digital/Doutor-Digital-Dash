@@ -1,5 +1,7 @@
+using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.DTOs.Spine;
 using LeadAnalytics.Api.Options;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
@@ -15,12 +17,14 @@ namespace LeadAnalytics.Api.Service.Spine;
 /// pacientes na Imperatriz.
 /// </summary>
 public class SpinePacienteService(
+    AppDbContext db,
     SpineApiClient client,
     SpineTokenStore tokens,
     IMemoryCache cache,
     IOptions<SpineOptions> options,
     ILogger<SpinePacienteService> logger)
 {
+    private readonly AppDbContext _db = db;
     private readonly SpineApiClient _client = client;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly IMemoryCache _cache = cache;
@@ -44,7 +48,7 @@ public class SpinePacienteService(
 
         if (exatos.Count == 1)
         {
-            var detalhe = await MontarFichaAsync(token, exatos[0].IdClient, ct);
+            var detalhe = await MontarFichaAsync(token, unitId, exatos[0].IdClient, ct);
             return new SpinePacienteResolucaoDto(nome, detalhe, []);
         }
 
@@ -61,12 +65,12 @@ public class SpinePacienteService(
     {
         var token = await _tokens.GetTokenAsync(unitId, ct);
         if (token is null) return null;
-        return await MontarFichaAsync(token, idClient, ct);
+        return await MontarFichaAsync(token, unitId, idClient, ct);
     }
 
-    private async Task<SpinePacienteDto?> MontarFichaAsync(string token, long idClient, CancellationToken ct)
+    private async Task<SpinePacienteDto?> MontarFichaAsync(string token, int unitId, long idClient, CancellationToken ct)
     {
-        var cacheKey = $"spine:paciente:{idClient}";
+        var cacheKey = $"spine:paciente:{unitId}:{idClient}";
         if (_cache.TryGetValue<SpinePacienteDto>(cacheKey, out var hit) && hit is not null)
             return hit;
 
@@ -105,10 +109,43 @@ public class SpinePacienteService(
             TotalFaltas: hist.Count(h => h.IdStatus == SpineApiClient.ScheduleStatus.NaoCompareceu),
             PrimeiroAtendimento: atendidos.Count > 0 ? atendidos.Min(h => h.QuandoLocal) : null,
             UltimoAtendimento: atendidos.Count > 0 ? atendidos.Max(h => h.QuandoLocal) : null,
-            Historico: hist);
+            Historico: hist,
+            LeadVinculado: await AcharLeadAsync(unitId, c.Whatsapp, ct));
 
         _cache.Set(cacheKey, dto, TimeSpan.FromSeconds(_options.CacheSeconds));
         return dto;
+    }
+
+    /// <summary>
+    /// Liga o paciente (clínico) ao lead comercial da Kommo pelo TELEFONE — a chave
+    /// que os dois sistemas têm em comum (a API do Spine não expõe CPF). Normaliza
+    /// para "55"+dígitos dos dois lados; filtra no banco pelos 8 últimos dígitos e
+    /// confirma na memória, preferindo lead da mesma unidade.
+    /// </summary>
+    private async Task<SpineLeadVinculadoDto?> AcharLeadAsync(int unitId, string? whatsapp, CancellationToken ct)
+    {
+        var alvo = ContactImportService.NormalizePhone(whatsapp ?? "");
+        if (alvo is null || alvo.Length < 10) return null;
+
+        var tenantId = await _db.Units.AsNoTracking()
+            .Where(u => u.Id == unitId).Select(u => (int?)u.ClinicId).FirstOrDefaultAsync(ct);
+        if (tenantId is null) return null;
+
+        var ultimos8 = alvo[^8..];
+        var candidatos = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.Phone != "" && l.Phone.Contains(ultimos8))
+            .Select(l => new { l.ExternalId, l.Name, l.Status, l.UnitId, l.Phone })
+            .Take(25)
+            .ToListAsync(ct);
+
+        var match = candidatos
+            .Where(l => ContactImportService.NormalizePhone(l.Phone) == alvo)
+            .OrderByDescending(l => l.UnitId == unitId) // mesma unidade primeiro
+            .FirstOrDefault();
+
+        return match is null
+            ? null
+            : new SpineLeadVinculadoDto(match.ExternalId, match.Name, match.Status, match.UnitId);
     }
 
     private static DateTime ParaLocal(DateTime utc) =>

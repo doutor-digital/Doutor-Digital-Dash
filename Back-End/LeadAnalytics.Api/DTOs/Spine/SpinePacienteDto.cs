@@ -39,7 +39,16 @@ public record SpinePacienteDto(
     int TotalFaltas,
     DateTime? PrimeiroAtendimento,
     DateTime? UltimoAtendimento,
-    IReadOnlyList<SpinePacienteHistoricoDto> Historico);
+    IReadOnlyList<SpinePacienteHistoricoDto> Historico,
+    /// <summary>Lead da Kommo casado por telefone, se houver — liga o clínico ao comercial.</summary>
+    SpineLeadVinculadoDto? LeadVinculado);
+
+/// <summary>O lead comercial (Kommo) do mesmo paciente, achado por telefone normalizado.</summary>
+public record SpineLeadVinculadoDto(
+    long KommoLeadId,
+    string Nome,
+    string? Etapa,
+    int? UnitId);
 
 /// <summary>Uma linha do histórico, já em horário local e ordenada do mais recente.</summary>
 public record SpinePacienteHistoricoDto(

@@ -1,0 +1,97 @@
+{
+  "name": "Doutor Hérnia — alerta diário (Evolution)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 19,
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "al-trigger",
+      "name": "Todo dia 19:05"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARA QUEM VAI CADA ALERTA — EDITE AQUI.\n// Uma linha por unidade: qual unidade consultar e o WhatsApp do gestor que\n// recebe. O número vai no formato internacional só com dígitos (55 + DDD + número).\n//\n// Uma linha vira um item; os nós seguintes rodam uma vez por item, então o mesmo\n// fluxo cobre a rede inteira: é só adicionar unidades conforme conectam o token.\nreturn [\n  { json: { unitId: 15, unidade: 'Imperatriz', whatsapp: '5599999999999' } },\n  // { json: { unitId: 7,  unidade: 'Araguaína',  whatsapp: '55639...' } },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "al-destinos",
+      "name": "Unidades e destinatários"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://ddapi_api:8080/internal/spine/resumo?unitId={{ $json.unitId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Admin-Key", "value": "COLE_SUA_ADMIN_API_KEY" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [440, 0],
+      "id": "al-resumo",
+      "name": "Resumo do dia (nossa API)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o texto do alerta a partir do resumo que a API devolveu.\n// Sem emojis (preferência do projeto); negrito do WhatsApp com *asteriscos*.\nconst r = $json;\nconst dest = $('Unidades e destinatários').item.json;\n\n// Unidade sem token conectado: não envia (retorna vazio → o nó de envio pula).\nif (!r.conectado) {\n  return [];\n}\n\nconst h = r.hoje;\nconst partes = [\n  `*${r.unidade}* — resumo de ${r.data.split('-').reverse().join('/')}`,\n  ``,\n  `Avaliacoes agendadas: ${h.avaliacoesAgendadas}`,\n  `Compareceram: ${h.compareceram}`,\n  `Faltaram: ${h.faltaram}`,\n  `Desmarcadas: ${h.desmarcadas}`,\n  `Comparecimento: ${h.taxaComparecimento}%`,\n];\n\nif (r.amanha && r.amanha.avaliacoesAgendadas > 0) {\n  partes.push('', `Amanha: ${r.amanha.avaliacoesAgendadas} avaliacoes agendadas.`);\n}\n\n// Linha de atenção quando houve falta ou desmarque relevante.\nif (h.faltaram > 0 || h.desmarcadas >= 3) {\n  partes.push('', `Atencao: ${h.faltaram} falta(s) e ${h.desmarcadas} desmarque(s) hoje.`);\n}\n\nreturn [{\n  json: {\n    number: dest.whatsapp,\n    text: partes.join('\\n'),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "al-texto",
+      "name": "Monta a mensagem"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://SEU-EVOLUTION-HOST/message/sendText/SUA_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "COLE_SUA_EVOLUTION_APIKEY" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.text }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [880, 0],
+      "id": "al-evolution",
+      "name": "Envia no WhatsApp (Evolution)"
+    }
+  ],
+  "connections": {
+    "Todo dia 19:05": {
+      "main": [[{ "node": "Unidades e destinatários", "type": "main", "index": 0 }]]
+    },
+    "Unidades e destinatários": {
+      "main": [[{ "node": "Resumo do dia (nossa API)", "type": "main", "index": 0 }]]
+    },
+    "Resumo do dia (nossa API)": {
+      "main": [[{ "node": "Monta a mensagem", "type": "main", "index": 0 }]]
+    },
+    "Monta a mensagem": {
+      "main": [[{ "node": "Envia no WhatsApp (Evolution)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

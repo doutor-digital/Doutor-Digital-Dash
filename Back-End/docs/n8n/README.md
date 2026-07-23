@@ -184,3 +184,27 @@ POST /webhook/spine-horarios-livres
 O campo `resumo` já vem em linguagem natural para a Sofia repassar direto.
 `idCategoria` default 1 (avaliação); `duracaoMin` default 30. Antes de ativar,
 apontar a credencial Header Auth do token do Spine.
+
+## Doutor Hérnia — alerta diário (Evolution)
+
+`spine-alerta-diario.json` — cron 19:05, envia o resumo do dia no WhatsApp do
+gestor via Evolution API. Mostra a divisão API × n8n na prática:
+
+```
+cron → [n8n] lista unidades+destinatários (editável)
+     → GET http://ddapi_api:8080/internal/spine/resumo?unitId=  (nossa API, X-Admin-Key)
+     → [n8n] formata o texto
+     → POST Evolution /message/sendText/{instancia}  (envia)
+```
+
+A **API entrega o número** (avaliações de hoje, agenda de amanhã); o **n8n cuida
+do quando, do texto e do envio**. Chamada interna pela rede do Swarm
+(`ddapi_api:8080`), não pela internet.
+
+**Antes de ativar, preencher 3 coisas** (tudo em nós editáveis, sem redeploy):
+- nó *Unidades e destinatários*: unitId + WhatsApp do gestor (uma linha por unidade);
+- header `X-Admin-Key` no nó da nossa API (mesma chave do painel);
+- host, instância e `apikey` do Evolution no nó de envio.
+
+O texto sai sem emojis, com negrito do WhatsApp (`*asteriscos*`). Unidade sem
+token conectado é pulada automaticamente (o resumo devolve `conectado:false`).

@@ -190,8 +190,17 @@ public class KpiConfigService(
                 {
                     if (metric == "tratamentos")
                     {
-                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, de, ate, ct);
-                        return (t?.Total ?? 0, sample, "fonte: CRM da franquia");
+                        // Tratamentos ATIVOS (EM ANDAMENTO + NÃO INICIADO) — snapshot atual.
+                        // Janela ampla (3 anos) e NÃO o período do card, senão o número pula
+                        // com a borda de data (tratamento lançado às 20h cai no dia seguinte)
+                        // e com edições ao vivo da recepção. "Quantos estão em tratamento agora".
+                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, ate.AddYears(-3), ate, ct);
+                        if (t is null) return (0, sample, "franquia (tratamentos) não configurada");
+                        var ativos = t.PorSituacao
+                            .Where(s => s.Situacao.Contains("EM ANDAMENTO", StringComparison.OrdinalIgnoreCase)
+                                     || s.Situacao.Contains("NÃO INICIADO", StringComparison.OrdinalIgnoreCase))
+                            .Sum(s => s.Quantidade);
+                        return (ativos, sample, "fonte: CRM da franquia (ativos)");
                     }
                     var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
                     if (av is null) return (0, sample, "franquia (Spine) não configurada");

@@ -26,8 +26,16 @@ public static class KpiSourceTypes
     /// </summary>
     public const string RecoveryAttempt = "recovery_attempt";
 
+    /// <summary>
+    /// Puxa o número do CRM da FRANQUIA (Doutor Hérnia), não do Kommo. O Kommo é dono do
+    /// comercial; comparecimento/falta/tratamento são do sistema clínico. Config:
+    /// {"metric":"no_show"|"consultas"|"tratamentos"}. no_show/consultas vêm da API Spine
+    /// (/avaliacoes); tratamentos vem do scrape do CRM web (módulo bloqueado na API).
+    /// </summary>
+    public const string Franquia = "franquia";
+
     public static readonly string[] All =
-        { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt };
+        { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt, Franquia };
 
     public static bool IsValid(string? type) =>
         type is not null && Array.Exists(All, t => t == type);

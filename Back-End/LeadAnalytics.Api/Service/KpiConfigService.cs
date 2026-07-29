@@ -12,9 +12,14 @@ namespace LeadAnalytics.Api.Service;
 /// customizado, ou filtro combinado), tudo direto do nosso banco
 /// (Lead.CurrentStageId + Lead.CustomFieldsJson), sem bater na Kommo ao vivo.
 /// </summary>
-public class KpiConfigService(AppDbContext db)
+public class KpiConfigService(
+    AppDbContext db,
+    Spine.SpineAvaliacoesService spineAvaliacoes,
+    Spine.FranquiaTratamentosService franquiaTratamentos)
 {
     private readonly AppDbContext _db = db;
+    private readonly Spine.SpineAvaliacoesService _spineAvaliacoes = spineAvaliacoes;
+    private readonly Spine.FranquiaTratamentosService _franquiaTratamentos = franquiaTratamentos;
 
     // Chaves (em kpi_configurations) do mapeamento de campos do Perfil do Lead por unidade.
     public const string ProfileBirthdateKey = "profile_birthdate";
@@ -172,6 +177,38 @@ public class KpiConfigService(AppDbContext db)
             case KpiSourceTypes.CreatedInPeriod:
                 // Todos os leads criados no período (ex.: "Total de Leads").
                 return (sample, sample, null);
+
+            case KpiSourceTypes.Franquia:
+            {
+                // O número vem do CRM da FRANQUIA (sistema clínico), não do Kommo.
+                // no_show/consultas = API Spine (/avaliacoes); tratamentos = scrape do web.
+                if (!unitId.HasValue) return (0, sample, "franquia exige unidade");
+                var metric = config.TryGetProperty("metric", out var mEl) ? mEl.GetString() : null;
+                var de = DateOnly.FromDateTime(from);
+                var ate = DateOnly.FromDateTime(to);
+                try
+                {
+                    if (metric == "tratamentos")
+                    {
+                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, de, ate, ct);
+                        return (t?.Total ?? 0, sample, "fonte: CRM da franquia");
+                    }
+                    var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
+                    if (av is null) return (0, sample, "franquia (Spine) não configurada");
+                    double val = metric switch
+                    {
+                        "no_show" => av.PorSituacao
+                            .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
+                            .Sum(s => s.Total),
+                        _ => av.Realizadas, // "consultas" (comparecimento real)
+                    };
+                    return (val, sample, "fonte: CRM da franquia");
+                }
+                catch (Exception ex)
+                {
+                    return (0, sample, $"franquia indisponível: {ex.Message}");
+                }
+            }
 
             case KpiSourceTypes.KommoStage:
             {

@@ -1772,7 +1772,10 @@ public class LeadService(
                      || l.CurrentStage == LeadStages.Faltou
                      || l.CurrentStage == LeadStages.NaoFechouTratamento
                      || l.CurrentStage == LeadStages.FechouTratamento
-                     || l.CurrentStage == LeadStages.EmTratamento)
+                     || l.CurrentStage == LeadStages.EmTratamento
+                     || l.CurrentStage == LeadStages.Compareceu
+                     || l.CurrentStage == LeadStages.Negociacao
+                     || l.CurrentStage == LeadStages.Alta)
             .CountAsync(ct);
         var compareceu = await baseQ
             .Where(l => l.AttendanceStatus == LeadStages.AttendedCompareceu)
@@ -1791,10 +1794,14 @@ public class LeadService(
 
         // Leads ativos: tudo que ainda está no funil (não chegou a estado terminal:
         // ganho/perda/faltou). Inclui leads em "entrada", "em atendimento", agendados etc.
+        // Funil novo COMERCIAL/TRATAMENTO: Perdido, Alta e Cancelado também são terminais.
         var leadsAtivos = await baseQ
             .Where(l => l.CurrentStage != LeadStages.FechouTratamento
                      && l.CurrentStage != LeadStages.NaoFechouTratamento
-                     && l.CurrentStage != LeadStages.Faltou)
+                     && l.CurrentStage != LeadStages.Faltou
+                     && l.CurrentStage != LeadStages.Perdido
+                     && l.CurrentStage != LeadStages.Alta
+                     && l.CurrentStage != LeadStages.TratamentoCancelado)
             .CountAsync(ct);
 
         // Estados da conversa (bot/queue/service/concluido)
@@ -1832,7 +1839,10 @@ public class LeadService(
                      || l.CurrentStage == LeadStages.Faltou
                      || l.CurrentStage == LeadStages.NaoFechouTratamento
                      || l.CurrentStage == LeadStages.FechouTratamento
-                     || l.CurrentStage == LeadStages.EmTratamento)
+                     || l.CurrentStage == LeadStages.EmTratamento
+                     || l.CurrentStage == LeadStages.Compareceu
+                     || l.CurrentStage == LeadStages.Negociacao
+                     || l.CurrentStage == LeadStages.Alta)
             .GroupBy(l => l.Source)
             .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
             .OrderByDescending(o => o.Quantidade)
@@ -1859,7 +1869,10 @@ public class LeadService(
                                       || l.CurrentStage == LeadStages.AgendadoComPagamento),
                 Consultas = g.Count(l => l.CurrentStage == LeadStages.EmTratamento
                                       || l.CurrentStage == LeadStages.FechouTratamento
-                                      || l.CurrentStage == LeadStages.NaoFechouTratamento),
+                                      || l.CurrentStage == LeadStages.NaoFechouTratamento
+                                      || l.CurrentStage == LeadStages.Compareceu
+                                      || l.CurrentStage == LeadStages.Negociacao
+                                      || l.CurrentStage == LeadStages.Alta),
                 Tratamentos = g.Count(l => l.CurrentStage == LeadStages.FechouTratamento),
                 NoShow = g.Count(l => l.CurrentStage == LeadStages.Faltou
                                     || l.AttendanceStatus == LeadStages.AttendedFaltou),

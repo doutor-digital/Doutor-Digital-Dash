@@ -18,6 +18,15 @@ public static class CanonicalStages
     public const string TratamentoFechado    = "TRATAMENTO_FECHADO";
     public const string NaoDeuContinuidade   = "NAO_DEU_CONTINUIDADE";
 
+    // Etapas do novo funil COMERCIAL/TRATAMENTO (Kommo 2026). Resolvidas por NOME,
+    // então unidades no funil antigo (04-10) não são afetadas — só a ITZ, já migrada.
+    public const string Qualificacao         = "QUALIFICACAO";          // COMERCIAL · Em Qualificação
+    public const string Compareceu           = "COMPARECEU";            // COMERCIAL · Compareceu (veio à consulta)
+    public const string Negociacao           = "NEGOCIACAO";            // COMERCIAL · Em Negociação
+    public const string Perdido              = "PERDIDO";               // COMERCIAL · Perdido (status 143)
+    public const string Alta                 = "ALTA";                  // TRATAMENTO · Alta (status 142)
+    public const string TratamentoCancelado  = "TRATAMENTO_CANCELADO";  // TRATAMENTO · Cancelado (status 143)
+
     /// <summary>Normaliza (trim + UPPER) para comparação estável.</summary>
     public static string Normalize(string? raw) =>
         (raw ?? string.Empty).Trim().ToUpperInvariant();
@@ -26,6 +35,7 @@ public static class CanonicalStages
     {
         EntradaLead, AgendadoSemPagamento, AgendadoComPagamento,
         NaoCompareceu, CompareceuConsulta, TratamentoFechado, NaoDeuContinuidade,
+        Qualificacao, Compareceu, Negociacao, Perdido, Alta, TratamentoCancelado,
     };
 
     public static bool IsKnown(string? stage) =>
@@ -52,7 +62,17 @@ public static class CanonicalStages
         var core = StripLeadingOrdinal(s);
         if (_known.Contains(core)) return core;
 
-        // 3) Heurística por palavra-chave sobre o nome da etapa. A ordem importa:
+        // 3) Funil NOVO COMERCIAL/TRATAMENTO (Kommo 2026). Checado ANTES das heurísticas
+        //    legadas porque alguns nomes contêm "TRATAMENTO"/"AGENDADO" e cairiam errado
+        //    (ex.: "TRATAMENTO CANCELADO" bateria em "TRATAMENTO"→compareceu). Perdas primeiro.
+        if (core.Contains("CANCELAD"))                          return TratamentoCancelado;
+        if (core.Contains("PERDIDO"))                           return Perdido;
+        if (core.Contains("QUALIFICA"))                         return Qualificacao;
+        if (core.Contains("NEGOCIA"))                           return Negociacao;
+        if (core.Contains("ALTA"))                              return Alta;
+        if (core.Contains("GANHO") || core.Contains("CONCLU"))  return TratamentoFechado;
+
+        // 4) Heurística por palavra-chave (funil ANTIGO 04-10). A ordem importa:
         //    "NAO_FECHOU"/"CONTINUIDADE" precisam ser testados antes de "FECHOU".
         if (core.Contains("AGENDADO"))
             return core.Contains("COM_PAGAMENTO") || core.Contains("COM PAGAMENTO")
@@ -64,7 +84,10 @@ public static class CanonicalStages
             return NaoDeuContinuidade;
         if (core.Contains("FECHOU") || core.Contains("FECHADO"))
             return TratamentoFechado;
-        if (core.Contains("COMPARECEU") || core.Contains("EM_TRATAMENTO") || core.Contains("TRATAMENTO"))
+        // "COMPARECEU" isolado = etapa própria do funil novo; testar ANTES de EM_TRATAMENTO.
+        if (core.Contains("COMPARECEU"))
+            return Compareceu;
+        if (core.Contains("EM_TRATAMENTO") || core.Contains("EM TRATAMENTO") || core.Contains("TRATAMENTO"))
             return CompareceuConsulta;
         if (core.Contains("ENTRADA"))
             return EntradaLead;
@@ -95,6 +118,13 @@ public static class CanonicalStages
         CompareceuConsulta   => LeadStages.EmTratamento,
         TratamentoFechado    => LeadStages.FechouTratamento,
         NaoDeuContinuidade   => LeadStages.NaoFechouTratamento,
+        // Funil novo COMERCIAL/TRATAMENTO
+        Qualificacao         => LeadStages.Qualificacao,
+        Compareceu           => LeadStages.Compareceu,
+        Negociacao           => LeadStages.Negociacao,
+        Perdido              => LeadStages.Perdido,
+        Alta                 => LeadStages.Alta,
+        TratamentoCancelado  => LeadStages.TratamentoCancelado,
         _ => null,
     };
 }

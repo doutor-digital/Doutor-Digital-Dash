@@ -21,6 +21,7 @@ public class SpineController(
     SpineRedeService rede,
     SpineTokenStore tokens,
     SpineApiClient client,
+    FranquiaTratamentosService tratamentos,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
 {
@@ -30,8 +31,55 @@ public class SpineController(
     private readonly SpineRedeService _rede = rede;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
+    private readonly FranquiaTratamentosService _tratamentos = tratamentos;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
+
+    /// <summary>
+    /// Situação dos tratamentos da unidade (EM ANDAMENTO / FINALIZADO / NÃO INICIADO /
+    /// DESISTÊNCIA) + valor, raspado do CRM web da franquia. O módulo "Tratamentos" está
+    /// bloqueado na API oficial (Bearer 403), por isso a fonte é o web. Padrão: por data
+    /// de lançamento do tratamento nos últimos 365 dias.
+    /// </summary>
+    [HttpGet("tratamentos")]
+    public async Task<IActionResult> Tratamentos(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? fim.AddYears(-1);
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+
+        try
+        {
+            var dto = await _tratamentos.GetAsync(unitId, inicio, fim, ct);
+            if (dto is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+                {
+                    Title = "CRM web da franquia não configurado para esta unidade.",
+                    Detail = $"Cadastre email/senha ('{FranquiaWebStore.EmailKey}'/'{FranquiaWebStore.PasswordKey}') "
+                           + $"e o idCompany ('{FranquiaWebStore.CompanyKeyFor(unitId)}') em AppConfiguration.",
+                    Status = 503,
+                });
+            return Ok(dto);
+        }
+        catch (FranquiaWebException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao raspar tratamentos da franquia (unidade {UnitId})", unitId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "CRM web da franquia recusou/mudou.",
+                Detail = ex.Motivo,
+                Status = 502,
+            });
+        }
+    }
 
     /// <summary>
     /// Comparativo entre as unidades da rede (avaliações + comparecimento por

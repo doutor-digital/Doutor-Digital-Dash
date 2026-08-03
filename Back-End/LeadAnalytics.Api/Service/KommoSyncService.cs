@@ -170,7 +170,18 @@ public class KommoSyncService
                 foreach (var st in p.Embedded?.Statuses ?? new())
                 {
                     var canonical = CanonicalStages.Resolve(st.Name);
-                    if (canonical != null) stageNameMap[st.Id.ToString()] = canonical;
+                    if (canonical == null) continue;
+
+                    // Chave qualificada pelo funil: 142/143 (ganho/perdido) repetem o MESMO
+                    // id em todos os pipelines com nomes diferentes. Indexar só por status_id
+                    // fazia o último funil lido sobrescrever os outros — em Boa Vista, os
+                    // 3.980 perdidos do COMERCIAL viravam "tratamento cancelado" porque o
+                    // 143 do funil TRATAMENTO chama "TRATAMENTO CANCELADO".
+                    stageNameMap[$"{p.Id}:{st.Id}"] = canonical;
+
+                    // Chave sem funil mantida para compatibilidade (mapa antigo/manual):
+                    // só a primeira vence, para o resultado não depender da ordem de leitura.
+                    stageNameMap.TryAdd(st.Id.ToString(), canonical);
                 }
             _logger.LogInformation(
                 "Sync Kommo unit {Unit}: {N} etapas resolvidas por nome (auto stage-map)",

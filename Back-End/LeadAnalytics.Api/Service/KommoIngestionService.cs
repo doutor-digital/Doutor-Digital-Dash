@@ -234,8 +234,16 @@ public class KommoIngestionService(
             var stageChanged = !string.IsNullOrWhiteSpace(rawStage) && rawStageId != lead.CurrentStageId;
 
             string? canonical = null;
+            // Procura primeiro a chave qualificada pelo funil ("{pipeline}:{status}"):
+            // ganho/perdido (142/143) repetem id entre funis com nomes diferentes, e sem
+            // isso o mapa de um funil sequestra os leads do outro. Cai na chave simples
+            // para unidades com KommoStageMapJson manual, que usa só o status_id.
+            var chaveComFunil = string.IsNullOrWhiteSpace(ev.PipelineId)
+                ? null
+                : $"{ev.PipelineId}:{rawStage}";
             if (!string.IsNullOrWhiteSpace(rawStage)
-                && stageMap.TryGetValue(rawStage, out var canonicalRaw))
+                && ((chaveComFunil != null && stageMap.TryGetValue(chaveComFunil, out var canonicalRaw))
+                    || stageMap.TryGetValue(rawStage, out canonicalRaw)))
             {
                 // Resolve é tolerante: aceita o nome canônico exato, o nome da etapa da
                 // Kommo com prefixo ("04_AGENDADO_SEM_PAGAMENTO") ou por palavra-chave.

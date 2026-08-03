@@ -85,6 +85,14 @@ public class DashboardOverviewDto
     [JsonPropertyName("kpis_sem_autorizacao")]
     public List<string> KpisSemAutorizacao { get; set; } = new();
 
+    /// <summary>
+    /// Leads que entraram no fim de semana (sábado/domingo pelo relógio comercial),
+    /// com a quebra por origem. Fica separado do resto porque é fila de retomada:
+    /// ninguém atendeu na hora.
+    /// </summary>
+    [JsonPropertyName("fim_de_semana")]
+    public FimDeSemanaDto FimDeSemana { get; set; } = new();
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();

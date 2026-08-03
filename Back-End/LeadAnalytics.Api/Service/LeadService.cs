@@ -2044,7 +2044,7 @@ public class LeadService(
         // específicas do provider). N tipicamente < 50k por período no caso de uso.
         // CreatedAt = COALESCE(OriginalCreatedAt, CreatedAt) — mesma data real usada no filtro.
         var dateStageRows = await baseQ
-            .Select(l => new { CreatedAt = (l.OriginalCreatedAt ?? l.CreatedAt), l.CurrentStage })
+            .Select(l => new { l.Id, CreatedAt = (l.OriginalCreatedAt ?? l.CreatedAt), l.CurrentStage })
             .ToListAsync(ct);
 
         static string WeekKey(DateTime d)
@@ -2058,6 +2058,51 @@ public class LeadService(
         // dia seguinte). CreatedAt é UTC; BRT = UTC-3 e o corte é 19h, então o relógio
         // comercial = UTC+2h (= BRT + 5h). Usado nas agregações por dia/semana.
         static DateTime BizClock(DateTime utc) => utc.AddHours(2);
+
+        // ── Leads do fim de semana ───────────────────────────────────────────
+        // Sábado/domingo pelo relógio COMERCIAL (19h→19h), igual ao resto do
+        // dashboard: lead que entra sexta 22h já conta como sábado. Usar o relógio
+        // de parede faria este card divergir dos números por dia.
+        var fimDeSemanaRows = dateStageRows
+            .Select(r => new { r.Id, Dia = BizClock(r.CreatedAt).DayOfWeek })
+            .Where(r => r.Dia is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            .ToList();
+
+        // A origem NÃO sai de Lead.Source: essa coluna guarda o sistema de origem do
+        // dado ("Kommo") e é constante. A mídia real está no custom field "Origem".
+        // Só os leads de fim de semana são relidos, então o parse de JSON fica restrito
+        // a esse recorte em vez de percorrer a base inteira.
+        static bool EhCampoOrigem(string nome)
+        {
+            var letras = new string(nome.Where(char.IsLetter).ToArray()).ToLowerInvariant();
+            return letras == "origem";
+        }
+
+        var origensFimDeSemana = new List<OrigemAgrupadaDto>();
+        if (fimDeSemanaRows.Count > 0)
+        {
+            var idsFds = fimDeSemanaRows.Select(r => r.Id).ToList();
+            var jsons = await _db.Leads.AsNoTracking()
+                .Where(l => idsFds.Contains(l.Id))
+                .Select(l => l.CustomFieldsJson)
+                .ToListAsync(ct);
+
+            origensFimDeSemana = jsons
+                .Select(j => CustomFieldReader.Read(j, null, EhCampoOrigem))
+                .Select(v => string.IsNullOrWhiteSpace(v) ? "Sem origem" : v!)
+                .GroupBy(v => v)
+                .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+                .OrderByDescending(o => o.Quantidade)
+                .ToList();
+        }
+
+        var fimDeSemana = new FimDeSemanaDto
+        {
+            Total = fimDeSemanaRows.Count,
+            Sabado = fimDeSemanaRows.Count(r => r.Dia == DayOfWeek.Saturday),
+            Domingo = fimDeSemanaRows.Count(r => r.Dia == DayOfWeek.Sunday),
+            Origens = origensFimDeSemana,
+        };
 
         var leadsPorSemana = dateStageRows
             .GroupBy(r => WeekKey(BizClock(r.CreatedAt)))
@@ -2123,6 +2168,7 @@ public class LeadService(
             FechamentoRate = Math.Round(fechamentoRate, 2),
             States = states,
             Etapas = etapas,
+            FimDeSemana = fimDeSemana,
             Origens = origens,
             OrigensConsultas = origensConsultas,
             OrigensTratamentos = origensTratamentos,

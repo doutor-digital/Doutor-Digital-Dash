@@ -1,0 +1,125 @@
+{
+  "_comment": "De-para do CSV do CRM antigo -> Kommo de Boa Vista. Editável: o importador lê daqui, nada é hardcoded no script.",
+
+  "csv": {
+    "encoding": "utf-8-sig",
+    "coluna_nome": "Nome",
+    "coluna_telefone": "Telefone",
+    "coluna_etapa": "Etapa",
+    "coluna_observacoes": "Observações",
+    "coluna_tags": "Tags",
+    "coluna_anuncio": "Anúncio de origem",
+    "coluna_bloqueado": "Bloqueado",
+    "coluna_data_consulta": "Data e hora da consulta",
+    "coluna_data_agendamento": "Data e hora do registro da última consulta",
+    "coluna_ultima_mensagem": "Data e hora da última mensagem",
+    "colunas_ignoradas": ["Conexão", "Data aniversário"]
+  },
+
+  "campo_extra_boa_vista": {
+    "key": "comercial::ultima-interacao-importado#1",
+    "name": "▷ Última interação (importado)",
+    "type": "date_time",
+    "group": "comercial",
+    "_comment": "Não existe na ITZ. Criado só aqui para preservar a recência do contato do CRM antigo."
+  },
+
+  "origem": {
+    "_default": "Sem origem",
+    "FACEBOOK": "Meta-Facebook",
+    "INSTAGRAM": "Meta-Instagram",
+    "GOOGLE": "Google",
+    "INDICAÇÃO": "Indicação",
+    "SITE DOUTOR HÉRNIA": "Site oficial - Franquia",
+    "FACHADA": "Fachada",
+    "Sem Origem": "Sem origem"
+  },
+
+  "etapas": {
+    "1 - Primeiro atendimento Lead novo(Saudação)": {
+      "pipeline": "COMERCIAL", "status": "EM QUALIFICAÇÃO",
+      "campos": {"⬢ Tipo de lead": "Cadastro"}
+    },
+    "2 - Segundo atendimento (valores)": {
+      "pipeline": "COMERCIAL", "status": "EM QUALIFICAÇÃO",
+      "campos": {"⬢ Tipo de lead": "Cadastro"}
+    },
+    "3 - Terceiro atendimento (Não agendou, Não deu continuidade)": {
+      "pipeline": "COMERCIAL", "status": "PERDIDO",
+      "motivo_perda": "Não deu continuidade ao atendimento",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "⊘ Motivo do não agendamento": "Não deu continuidade ao atendimento"}
+    },
+    "4 - Quarto atendimento (Não interagiu)": {
+      "pipeline": "COMERCIAL", "status": "PERDIDO",
+      "motivo_perda": "Não interagiu",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "⊘ Motivo do não agendamento": "Não interagiu"}
+    },
+    "5 - N/Agendou - Plano Saúde": {
+      "pipeline": "COMERCIAL", "status": "PERDIDO",
+      "motivo_perda": "Plano de saúde",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "⊘ Motivo do não agendamento": "Plano de Saúde"}
+    },
+    "6 -  Agendado com Comprovante": {
+      "pipeline": "COMERCIAL", "status": "AGENDADO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Agendou": "Sim", "¤ Pagamento antecipado": "Sim"}
+    },
+    "7 - Agendado sem comprovante": {
+      "pipeline": "COMERCIAL", "status": "AGENDADO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Agendou": "Sim", "¤ Pagamento antecipado": "Não"}
+    },
+    "8 - Não compareceu a consulta": {
+      "pipeline": "COMERCIAL", "status": "EM QUALIFICAÇÃO",
+      "campos": {"⬢ Tipo de lead": "Resgate", "✓ Agendou": "Sim"},
+      "_comment": "No-show volta ao funil ativo para recontato; o funil novo não tem etapa de falta (na ITZ vem do Spine)."
+    },
+    "9 - Consulta comparecida / fechou tratamento": {
+      "pipeline": "TRATAMENTO", "status": "EM TRATAMENTO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Agendou": "Sim", "✓ Fechou tratamento": "Sim"}
+    },
+    "10 - Consulta comparecida n/ fechou tratamento": {
+      "pipeline": "COMERCIAL", "status": "EM NEGOCIAÇÃO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Agendou": "Sim", "✓ Fechou tratamento": "Não"}
+    },
+    "11 - Paciente em tratamento": {
+      "pipeline": "TRATAMENTO", "status": "EM TRATAMENTO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Fechou tratamento": "Sim"}
+    },
+    "12 - Paciente que finalizou tratamento": {
+      "pipeline": "TRATAMENTO", "status": "ALTA",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Fechou tratamento": "Sim"}
+    },
+    "13 - Paciente cancelou tratamento": {
+      "pipeline": "TRATAMENTO", "status": "TRATAMENTO CANCELADO",
+      "motivo_perda": "Cancelamento de tratamento",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Fechou tratamento": "Sim"}
+    },
+    "14 - Leads atendimento encerrados": {
+      "pipeline": "COMERCIAL", "status": "PERDIDO",
+      "motivo_perda": "Lead morto",
+      "campos": {"⬢ Tipo de lead": "Cadastro"}
+    },
+    "15 - Pacientes em tratamento n/ comparecendo": {
+      "pipeline": "TRATAMENTO", "status": "EM TRATAMENTO",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Fechou tratamento": "Sim"}
+    },
+    "16 - Lead não que ser incomodado": {
+      "pipeline": "COMERCIAL", "status": "PERDIDO",
+      "motivo_perda": "Não perturbar",
+      "campos": {"⬢ Tipo de lead": "Cadastro"}
+    },
+    "17 - Desmarcou Consulta": {
+      "pipeline": "COMERCIAL", "status": "EM QUALIFICAÇÃO",
+      "campos": {"⬢ Tipo de lead": "Resgate", "✓ Agendou": "Sim"}
+    },
+    "19 - COMPARECEU NA CONSULTA / SOLICITADO EXAME": {
+      "pipeline": "COMERCIAL", "status": "COMPARECEU",
+      "campos": {"⬢ Tipo de lead": "Cadastro", "✓ Agendou": "Sim"}
+    }
+  },
+
+  "bloqueado": {
+    "_comment": "Bloqueado=Sim: se o lead já vai para perdido, o motivo vira 'Não perturbar'; senão só marca na observação (não derruba paciente em tratamento).",
+    "motivo_perda_override": "Não perturbar",
+    "prefixo_observacao": "[bloqueado no CRM antigo] "
+  }
+}

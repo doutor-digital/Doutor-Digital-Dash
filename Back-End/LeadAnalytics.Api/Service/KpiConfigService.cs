@@ -195,7 +195,7 @@ public class KpiConfigService(
                         // com a borda de data (tratamento lançado às 20h cai no dia seguinte)
                         // e com edições ao vivo da recepção. "Quantos estão em tratamento agora".
                         var t = await _franquiaTratamentos.GetAsync(unitId.Value, ate.AddYears(-3), ate, ct);
-                        if (t is null) return (0, sample, "franquia (tratamentos) não configurada");
+                        if (t is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
                         var ativos = t.PorSituacao
                             .Where(s => s.Situacao.Contains("EM ANDAMENTO", StringComparison.OrdinalIgnoreCase)
                                      || s.Situacao.Contains("NÃO INICIADO", StringComparison.OrdinalIgnoreCase))
@@ -203,7 +203,7 @@ public class KpiConfigService(
                         return (ativos, sample, "fonte: CRM da franquia (ativos)");
                     }
                     var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
-                    if (av is null) return (0, sample, "franquia (Spine) não configurada");
+                    if (av is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
                     double val = metric switch
                     {
                         "no_show" => av.PorSituacao

@@ -1,0 +1,5 @@
+__pycache__/
+*.token
+token*.txt
+# Estado do import: telefone -> lead_id de pacientes reais. NÃO versionar (PII).
+import.*.jsonl

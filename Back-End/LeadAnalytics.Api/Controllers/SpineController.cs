@@ -60,13 +60,9 @@ public class SpineController(
         {
             var dto = await _tratamentos.GetAsync(unitId, inicio, fim, ct);
             if (dto is null)
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
-                {
-                    Title = "CRM web da franquia não configurado para esta unidade.",
-                    Detail = $"Cadastre email/senha ('{FranquiaWebStore.EmailKey}'/'{FranquiaWebStore.PasswordKey}') "
-                           + $"e o idCompany ('{FranquiaWebStore.CompanyKeyFor(unitId)}') em AppConfiguration.",
-                    Status = 503,
-                });
+                return SemAutorizacaoDaFranquia(
+                    $"Cadastre email/senha ('{FranquiaWebStore.EmailKey}'/'{FranquiaWebStore.PasswordKey}') "
+                    + $"e o idCompany ('{FranquiaWebStore.CompanyKeyFor(unitId)}') em AppConfiguration.");
             return Ok(dto);
         }
         catch (FranquiaWebException ex)
@@ -198,12 +194,8 @@ public class SpineController(
         {
             var dto = await _avaliacoes.GetAsync(unitId, inicio, fim, ct);
             if (dto is null)
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
-                {
-                    Title = "Integração com o Doutor Hérnia não configurada para esta unidade.",
-                    Detail = $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.",
-                    Status = 503,
-                });
+                return SemAutorizacaoDaFranquia(
+                    $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.");
 
             return Ok(dto);
         }
@@ -254,12 +246,8 @@ public class SpineController(
         {
             var dto = await _agenda.GetAsync(unitId, inicio, fim, ct);
             if (dto is null)
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
-                {
-                    Title = "Integração com o Doutor Hérnia não configurada para esta unidade.",
-                    Detail = $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.",
-                    Status = 503,
-                });
+                return SemAutorizacaoDaFranquia(
+                    $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.");
 
             return Ok(dto);
         }
@@ -330,13 +318,29 @@ public class SpineController(
         }
     }
 
-    private IActionResult SemToken(int unitId) =>
-        StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+    /// <summary>
+    /// Código estável devolvido em <c>ProblemDetails.Extensions["codigo"]</c> quando a
+    /// unidade não tem autorização da franquia (sem token da API ou sem credencial do
+    /// CRM web). O front usa ESTE código — não o texto nem só o 503 — para mostrar o
+    /// aviso "Sem autorização da franquia" no lugar de um erro genérico.
+    /// </summary>
+    public const string CodigoSemAutorizacao = "sem_autorizacao_franquia";
+
+    /// <summary>503 padronizado de unidade sem autorização da franquia.</summary>
+    private IActionResult SemAutorizacaoDaFranquia(string detalheTecnico)
+    {
+        var problema = new ProblemDetails
         {
-            Title = "Integração com o Doutor Hérnia não configurada para esta unidade.",
-            Detail = $"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.",
-            Status = 503,
-        });
+            Title = "Sem autorização da franquia",
+            Detail = detalheTecnico,
+            Status = StatusCodes.Status503ServiceUnavailable,
+        };
+        problema.Extensions["codigo"] = CodigoSemAutorizacao;
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, problema);
+    }
+
+    private IActionResult SemToken(int unitId) =>
+        SemAutorizacaoDaFranquia($"Cadastre o token em AppConfiguration '{SpineTokenStore.KeyFor(unitId)}'.");
 
     private IActionResult BadGateway(SpineApiException ex) =>
         StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails

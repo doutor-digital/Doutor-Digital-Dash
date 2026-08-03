@@ -1,0 +1,2230 @@
+{
+  "blueprint_version": 1,
+  "exported_at": "2026-07-31T18:15:52+00:00",
+  "source": {
+    "subdomain": "attivacorpoementeitz",
+    "account_id": 36459431,
+    "currency": "BRL"
+  },
+  "pipelines": [
+    {
+      "name": "COMERCIAL",
+      "sort": 1,
+      "is_main": true,
+      "is_unsorted_on": true,
+      "statuses": [
+        {
+          "name": "EM QUALIFICAÇÃO",
+          "sort": 20,
+          "color": "#87f2c0"
+        },
+        {
+          "name": "AGENDADO",
+          "sort": 30,
+          "color": "#fffeb2"
+        },
+        {
+          "name": "COMPARECEU",
+          "sort": 40,
+          "color": "#deff81"
+        },
+        {
+          "name": "EM NEGOCIAÇÃO",
+          "sort": 50,
+          "color": "#ff8f92"
+        }
+      ],
+      "system_statuses": {
+        "142": "GANHO / CONCLUÍDO",
+        "143": "PERDIDO"
+      }
+    },
+    {
+      "name": "TRATAMENTO",
+      "sort": 2,
+      "is_main": false,
+      "is_unsorted_on": false,
+      "statuses": [
+        {
+          "name": "EM TRATAMENTO",
+          "sort": 10,
+          "color": "#87f2c0"
+        }
+      ],
+      "system_statuses": {
+        "142": "ALTA",
+        "143": "TRATAMENTO CANCELADO"
+      }
+    }
+  ],
+  "field_groups": [
+    {
+      "key": "comercial",
+      "name": "COMERCIAL",
+      "sort": 1
+    },
+    {
+      "key": "tratamento",
+      "name": "TRATAMENTO",
+      "sort": 2
+    },
+    {
+      "key": "asaas",
+      "name": "ASAAS",
+      "sort": 3
+    },
+    {
+      "key": "3c-ligacoes",
+      "name": "☎ 3C — LIGAÇÕES",
+      "sort": 4
+    },
+    {
+      "key": "agente-dt",
+      "name": "AGENTE DT",
+      "sort": 5
+    }
+  ],
+  "fields": [
+    {
+      "key": "3c-ligacoes::ultima-ligacao#1",
+      "name": "☎ Última ligação",
+      "type": "date_time",
+      "group": "3c-ligacoes",
+      "sort": 1
+    },
+    {
+      "key": "3c-ligacoes::resultado#1",
+      "name": "☎ Resultado",
+      "type": "select",
+      "group": "3c-ligacoes",
+      "sort": 2,
+      "enums": [
+        {
+          "value": "Atendida",
+          "sort": 1
+        },
+        {
+          "value": "Não atendida",
+          "sort": 2
+        },
+        {
+          "value": "Caixa postal",
+          "sort": 3
+        },
+        {
+          "value": "Ocupado",
+          "sort": 4
+        },
+        {
+          "value": "Falha",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "3c-ligacoes::duracao-da-conversa#1",
+      "name": "☎ Duração da conversa",
+      "type": "text",
+      "group": "3c-ligacoes",
+      "sort": 3
+    },
+    {
+      "key": "3c-ligacoes::motivo-qualificacao#1",
+      "name": "☎ Motivo (qualificação)",
+      "type": "text",
+      "group": "3c-ligacoes",
+      "sort": 4
+    },
+    {
+      "key": "3c-ligacoes::agente#1",
+      "name": "☎ Agente",
+      "type": "text",
+      "group": "3c-ligacoes",
+      "sort": 5
+    },
+    {
+      "key": "3c-ligacoes::campanha-3c#1",
+      "name": "☎ Campanha 3C",
+      "type": "text",
+      "group": "3c-ligacoes",
+      "sort": 6
+    },
+    {
+      "key": "3c-ligacoes::tentativas#1",
+      "name": "☎ Tentativas",
+      "type": "numeric",
+      "group": "3c-ligacoes",
+      "sort": 7
+    },
+    {
+      "key": "3c-ligacoes::gravacao#1",
+      "name": "☎ Gravação",
+      "type": "url",
+      "group": "3c-ligacoes",
+      "sort": 8
+    },
+    {
+      "key": "comercial::humano#1",
+      "name": "*HUMANO*",
+      "type": "text",
+      "group": "comercial",
+      "sort": 502
+    },
+    {
+      "key": "comercial::responsavel-agendamento#1",
+      "name": "☻ Responsável agendamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 503,
+      "enums": [
+        {
+          "value": "GIULIA",
+          "sort": 1
+        },
+        {
+          "value": "ADRIELE",
+          "sort": 2
+        },
+        {
+          "value": "NATYELE",
+          "sort": 3
+        },
+        {
+          "value": "DOUTOR DIGITAL",
+          "sort": 4
+        },
+        {
+          "value": "GRAZIELLE",
+          "sort": 5
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "AGENDADO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::consulta#1",
+      "name": "## CONSULTA",
+      "type": "text",
+      "group": "comercial",
+      "sort": 504
+    },
+    {
+      "key": "comercial::data-da-consulta#1",
+      "name": "◷ Data da Consulta",
+      "type": "date",
+      "group": "comercial",
+      "sort": 505,
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "AGENDADO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::valor-da-consulta#1",
+      "name": "¤ Valor da Consulta",
+      "type": "monetary",
+      "group": "comercial",
+      "sort": 506,
+      "currency": "BRL",
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "GANHO / CONCLUÍDO"
+        },
+        {
+          "pipeline": "TRATAMENTO",
+          "status": "EM TRATAMENTO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::consulta-pg-antecipado#1",
+      "name": "✓ Consulta pg antecipado",
+      "type": "select",
+      "group": "comercial",
+      "sort": 507,
+      "enums": [
+        {
+          "value": "Não",
+          "sort": 1
+        },
+        {
+          "value": "Sim",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::consulta-pg-no-dia#1",
+      "name": "Consulta pg no dia",
+      "type": "select",
+      "group": "comercial",
+      "sort": 508,
+      "enums": [
+        {
+          "value": "NÃO",
+          "sort": 1
+        },
+        {
+          "value": "SIM",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::satisfacao-nps#1",
+      "name": "★ Satisfação / NPS",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 509
+    },
+    {
+      "key": "comercial::tratamento#1",
+      "name": "## TRATAMENTO",
+      "type": "text",
+      "group": "comercial",
+      "sort": 510
+    },
+    {
+      "key": "comercial::fisioterapeuta#1",
+      "name": "⚕ Fisioterapeuta",
+      "type": "select",
+      "group": "comercial",
+      "sort": 511,
+      "enums": [
+        {
+          "value": "DRA. BARBÁRA WIRTZBIKI",
+          "sort": 500
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "GANHO / CONCLUÍDO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::tratamento-indicado#1",
+      "name": "⚕ Tratamento indicado",
+      "type": "multiselect",
+      "group": "comercial",
+      "sort": 512,
+      "enums": [
+        {
+          "value": "01 Mês — PREVENTIVO CERVICAL",
+          "sort": 1
+        },
+        {
+          "value": "01 Mês — MANUTENÇÃO CERVICAL",
+          "sort": 2
+        },
+        {
+          "value": "01 Mês — MANUTENÇÃO LOMBAR",
+          "sort": 3
+        },
+        {
+          "value": "01 Mês — DESCOMPRESSÃO CERVICAL",
+          "sort": 4
+        },
+        {
+          "value": "01 Mês — DESCOMPRESSÃO LOMBAR",
+          "sort": 5
+        },
+        {
+          "value": "02 Meses — POSTURAL",
+          "sort": 6
+        },
+        {
+          "value": "03 Meses — LOMBAR CRÔNICO",
+          "sort": 7
+        },
+        {
+          "value": "03 Meses — LOMBAR AGUDO",
+          "sort": 8
+        },
+        {
+          "value": "03 Meses — CERVICAL CRÔNICO",
+          "sort": 9
+        },
+        {
+          "value": "03 Meses — CERVICAL AGUDO",
+          "sort": 10
+        },
+        {
+          "value": "01 Mês — PREVENTIVO LOMBAR",
+          "sort": 500
+        },
+        {
+          "value": "Cervical longo - 3 meses",
+          "sort": 501
+        },
+        {
+          "value": "Lombar longo - 3 meses",
+          "sort": 502
+        },
+        {
+          "value": "Cervical curto - 1 mês",
+          "sort": 503
+        },
+        {
+          "value": "Lombar curto - 1 mês",
+          "sort": 504
+        },
+        {
+          "value": "Manutenção",
+          "sort": 505
+        },
+        {
+          "value": "Postural",
+          "sort": 506
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "EM NEGOCIAÇÃO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::tratamento-fechado#1",
+      "name": "⚕ Tratamento fechado",
+      "type": "multiselect",
+      "group": "comercial",
+      "sort": 513,
+      "enums": [
+        {
+          "value": "01 Mês — PREVENTIVO CERVICAL",
+          "sort": 1
+        },
+        {
+          "value": "01 Mês — MANUTENÇÃO CERVICAL",
+          "sort": 2
+        },
+        {
+          "value": "01 Mês — MANUTENÇÃO LOMBAR",
+          "sort": 3
+        },
+        {
+          "value": "01 Mês — DESCOMPRESSÃO CERVICAL",
+          "sort": 4
+        },
+        {
+          "value": "01 Mês — DESCOMPRESSÃO LOMBAR",
+          "sort": 5
+        },
+        {
+          "value": "02 Meses — POSTURAL",
+          "sort": 6
+        },
+        {
+          "value": "03 Meses — LOMBAR CRÔNICO",
+          "sort": 7
+        },
+        {
+          "value": "03 Meses — LOMBAR AGUDO",
+          "sort": 8
+        },
+        {
+          "value": "03 Meses — CERVICAL CRÔNICO",
+          "sort": 9
+        },
+        {
+          "value": "03 Meses — CERVICAL AGUDO",
+          "sort": 10
+        },
+        {
+          "value": "01 Mês — PREVENTIVO LOMBAR",
+          "sort": 500
+        },
+        {
+          "value": "Cervical longo - 3 meses",
+          "sort": 501
+        },
+        {
+          "value": "Lombar longo - 3 meses",
+          "sort": 502
+        },
+        {
+          "value": "Cervical - 1 mês",
+          "sort": 503
+        },
+        {
+          "value": "Lombar - 1 mês",
+          "sort": 504
+        },
+        {
+          "value": "Manutenção",
+          "sort": 505
+        },
+        {
+          "value": "Postural",
+          "sort": 506
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "GANHO / CONCLUÍDO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::contraindicacao-bandeira-vermelha#1",
+      "name": "✎ Contraindicação / bandeira vermelha",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 514
+    },
+    {
+      "key": "comercial::data-de-retorno-com-exames#1",
+      "name": "◷ Data de retorno com exames",
+      "type": "date",
+      "group": "comercial",
+      "sort": 515
+    },
+    {
+      "key": "comercial::fechou-tratamento#1",
+      "name": "✓ Fechou tratamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 516,
+      "enums": [
+        {
+          "value": "Não",
+          "sort": 1
+        },
+        {
+          "value": "Sim",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-de-fechamento#1",
+      "name": "◷ Data de fechamento",
+      "type": "date",
+      "group": "comercial",
+      "sort": 517
+    },
+    {
+      "key": "comercial::data-do-tratamento-iniciado#1",
+      "name": "◷ Data do tratamento iniciado",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 518
+    },
+    {
+      "key": "comercial::valor-do-tratamento#1",
+      "name": "¤ Valor do tratamento",
+      "type": "monetary",
+      "group": "comercial",
+      "sort": 519,
+      "currency": "BRL",
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "EM NEGOCIAÇÃO"
+        },
+        {
+          "pipeline": "TRATAMENTO",
+          "status": "EM TRATAMENTO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::desconto-concedido#1",
+      "name": "¤ Desconto concedido",
+      "type": "monetary",
+      "group": "comercial",
+      "sort": 520,
+      "currency": "BRL"
+    },
+    {
+      "key": "comercial::forma-de-pagamento#1",
+      "name": "⬢ Forma de pagamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 521,
+      "enums": [
+        {
+          "value": "À vista / PIX",
+          "sort": 1
+        },
+        {
+          "value": "Cartão de crédito",
+          "sort": 2
+        },
+        {
+          "value": "Cartão de débito",
+          "sort": 3
+        },
+        {
+          "value": "Boleto",
+          "sort": 4
+        },
+        {
+          "value": "Misto",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "comercial::no-de-parcelas#1",
+      "name": "# Nº de parcelas",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 522
+    },
+    {
+      "key": "comercial::pagamento-antecipado#1",
+      "name": "¤ Pagamento antecipado",
+      "type": "select",
+      "group": "comercial",
+      "sort": 523,
+      "enums": [
+        {
+          "value": "Não",
+          "sort": 1
+        },
+        {
+          "value": "Sim",
+          "sort": 500
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "GANHO / CONCLUÍDO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::valor-pago-entrada#1",
+      "name": "¤ Valor pago / entrada",
+      "type": "monetary",
+      "group": "comercial",
+      "sort": 524,
+      "currency": "BRL"
+    },
+    {
+      "key": "comercial::data-do-pagamento#1",
+      "name": "◷ Data do pagamento",
+      "type": "date",
+      "group": "comercial",
+      "sort": 525
+    },
+    {
+      "key": "comercial::negociacao-feita#1",
+      "name": "✎ Negociação feita",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 526
+    },
+    {
+      "key": "comercial::motivo-de-nao-fechamento-do-tratamento#1",
+      "name": "⊘ Motivo de não fechamento do tratamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 527,
+      "enums": [
+        {
+          "value": "Plano de saúde",
+          "sort": 1
+        },
+        {
+          "value": "Outra patologia",
+          "sort": 2
+        },
+        {
+          "value": "Solicitado exames",
+          "sort": 3
+        },
+        {
+          "value": "Caso enviado para a franquia",
+          "sort": 4
+        },
+        {
+          "value": "Decidir com a familia",
+          "sort": 5
+        },
+        {
+          "value": "Mora em outra cidade",
+          "sort": 6
+        },
+        {
+          "value": "Bandeira vermelha",
+          "sort": 7
+        },
+        {
+          "value": "Vai viajar",
+          "sort": 8
+        },
+        {
+          "value": "Achou caro",
+          "sort": 9
+        },
+        {
+          "value": "Vai se organizar financeiramente",
+          "sort": 10
+        },
+        {
+          "value": "Assinou contrato",
+          "sort": 11
+        },
+        {
+          "value": "Financeiramente vulnerável",
+          "sort": 12
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-da-perda#1",
+      "name": "◷ Data da perda",
+      "type": "date",
+      "group": "comercial",
+      "sort": 528
+    },
+    {
+      "key": "comercial::campo#1",
+      "name": "**!",
+      "type": "text",
+      "group": "comercial",
+      "sort": 529
+    },
+    {
+      "key": "comercial::campo#2",
+      "name": "*!",
+      "type": "text",
+      "group": "comercial",
+      "sort": 530
+    },
+    {
+      "key": "comercial::ia-sofia#1",
+      "name": "*IA SOFIA*",
+      "type": "text",
+      "group": "comercial",
+      "sort": 531
+    },
+    {
+      "key": "comercial::data-de-criacao-lead#1",
+      "name": "◷ Data de criação lead",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 532
+    },
+    {
+      "key": "comercial::data-do-primeiro-contato#1",
+      "name": "◷ Data do primeiro contato",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 533
+    },
+    {
+      "key": "comercial::interacao#1",
+      "name": "✓ Interação",
+      "type": "select",
+      "group": "comercial",
+      "sort": 534,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "comercial::no-de-tentativas-de-contato#1",
+      "name": "# Nº de tentativas de contato",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 535
+    },
+    {
+      "key": "comercial::tipo-de-resgate#1",
+      "name": "⬢ Tipo de resgate",
+      "type": "select",
+      "group": "comercial",
+      "sort": 536,
+      "enums": [
+        {
+          "value": "Disparo Whatsap",
+          "sort": 1
+        },
+        {
+          "value": "Template de Mensagem",
+          "sort": 2
+        },
+        {
+          "value": "Disparo Email",
+          "sort": 3
+        },
+        {
+          "value": "Disparo SMS",
+          "sort": 4
+        },
+        {
+          "value": "Ligação",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::tentativas-de-resgate#1",
+      "name": "⬢ Tentativas de resgate",
+      "type": "multiselect",
+      "group": "comercial",
+      "sort": 537,
+      "enums": [
+        {
+          "value": "Resgate 1 - 24h",
+          "sort": 1
+        },
+        {
+          "value": "Resgate 2 - 48h",
+          "sort": 2
+        },
+        {
+          "value": "Resgate 3 - 72h",
+          "sort": 3
+        },
+        {
+          "value": "Resgate 4 - 120h",
+          "sort": 4
+        },
+        {
+          "value": "Resgate 5 - 240h",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "comercial::origem#1",
+      "name": "⚑ Origem",
+      "type": "select",
+      "group": "comercial",
+      "sort": 538,
+      "enums": [
+        {
+          "value": "Meta-Instagram",
+          "sort": 1
+        },
+        {
+          "value": "Meta-WhatsApp",
+          "sort": 2
+        },
+        {
+          "value": "Org-Facebook",
+          "sort": 3
+        },
+        {
+          "value": "Org-Instagram",
+          "sort": 4
+        },
+        {
+          "value": "Org-WhatsApp",
+          "sort": 5
+        },
+        {
+          "value": "Indicação",
+          "sort": 6
+        },
+        {
+          "value": "Outdoor",
+          "sort": 7
+        },
+        {
+          "value": "Fachada",
+          "sort": 8
+        },
+        {
+          "value": "Rádio",
+          "sort": 9
+        },
+        {
+          "value": "Carro de som",
+          "sort": 10
+        },
+        {
+          "value": "Panfleto",
+          "sort": 11
+        },
+        {
+          "value": "Eventos",
+          "sort": 12
+        },
+        {
+          "value": "Site oficial - Franquia",
+          "sort": 13
+        },
+        {
+          "value": "Google",
+          "sort": 14
+        },
+        {
+          "value": "Sem origem",
+          "sort": 15
+        },
+        {
+          "value": "Meta-Facebook",
+          "sort": 500
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "EM QUALIFICAÇÃO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::campanha#1",
+      "name": "⌂ Campanha",
+      "type": "text",
+      "group": "comercial",
+      "sort": 539
+    },
+    {
+      "key": "comercial::conjunto-de-anuncio#1",
+      "name": "⌂ Conjunto de anúncio",
+      "type": "text",
+      "group": "comercial",
+      "sort": 540
+    },
+    {
+      "key": "comercial::quem-indicou#1",
+      "name": "✎ Quem indicou",
+      "type": "text",
+      "group": "comercial",
+      "sort": 541
+    },
+    {
+      "key": "comercial::unidade#1",
+      "name": "⌂ Unidade",
+      "type": "text",
+      "group": "comercial",
+      "sort": 542
+    },
+    {
+      "key": "comercial::tipo-de-lead#1",
+      "name": "⬢ Tipo de lead",
+      "type": "select",
+      "group": "comercial",
+      "sort": 543,
+      "enums": [
+        {
+          "value": "Resgate",
+          "sort": 1
+        },
+        {
+          "value": "Cadastro",
+          "sort": 2
+        },
+        {
+          "value": "TRANSFERIDO DE OUTRA UNIDADE",
+          "sort": 3
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "EM QUALIFICAÇÃO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::queixa#1",
+      "name": "✎ Queixa",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 544
+    },
+    {
+      "key": "comercial::qualificacao-quente-morno-frio#1",
+      "name": "★ Qualificação (Quente/Morno/Frio)",
+      "type": "select",
+      "group": "comercial",
+      "sort": 545,
+      "enums": [
+        {
+          "value": "Quente",
+          "sort": 1
+        },
+        {
+          "value": "Morno",
+          "sort": 2
+        },
+        {
+          "value": "Frio",
+          "sort": 3
+        }
+      ],
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "AGENDADO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-da-qualificacao#1",
+      "name": "◷ Data da qualificação",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 546
+    },
+    {
+      "key": "comercial::sexo#1",
+      "name": "⚥ Sexo",
+      "type": "select",
+      "group": "comercial",
+      "sort": 547,
+      "enums": [
+        {
+          "value": "Feminino",
+          "sort": 1
+        },
+        {
+          "value": "Masculino",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-de-nascimento#1",
+      "name": "◷ Data de nascimento",
+      "type": "date",
+      "group": "comercial",
+      "sort": 548
+    },
+    {
+      "key": "comercial::profissao#1",
+      "name": "⚒ Profissão",
+      "type": "text",
+      "group": "comercial",
+      "sort": 549
+    },
+    {
+      "key": "comercial::plano-de-saude#1",
+      "name": "⬢ Plano de saúde",
+      "type": "text",
+      "group": "comercial",
+      "sort": 550
+    },
+    {
+      "key": "comercial::observacoes#1",
+      "name": "✎ Observações",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 551
+    },
+    {
+      "key": "comercial::agendamento#1",
+      "name": "## AGENDAMENTO",
+      "type": "text",
+      "group": "comercial",
+      "sort": 552
+    },
+    {
+      "key": "comercial::preferencia-de-horario#1",
+      "name": "◷ Preferência de horário",
+      "type": "text",
+      "group": "comercial",
+      "sort": 553
+    },
+    {
+      "key": "comercial::agendou#1",
+      "name": "✓ Agendou",
+      "type": "select",
+      "group": "comercial",
+      "sort": 554,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-de-agendamento#1",
+      "name": "◷ Data de agendamento",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 555,
+      "required_statuses": [
+        {
+          "pipeline": "COMERCIAL",
+          "status": "AGENDADO"
+        }
+      ]
+    },
+    {
+      "key": "comercial::motivo-do-nao-agendamento#1",
+      "name": "⊘ Motivo do não agendamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 556,
+      "enums": [
+        {
+          "value": "Sem condições financeira",
+          "sort": 1
+        },
+        {
+          "value": "Não interagiu",
+          "sort": 2
+        },
+        {
+          "value": "Informação para terceiro",
+          "sort": 3
+        },
+        {
+          "value": "Outra patologia",
+          "sort": 4
+        },
+        {
+          "value": "Clicou por engano",
+          "sort": 5
+        },
+        {
+          "value": "Está viajando",
+          "sort": 6
+        },
+        {
+          "value": "Sem interesse",
+          "sort": 7
+        },
+        {
+          "value": "Não deu continuidade ao atendimento",
+          "sort": 8
+        },
+        {
+          "value": "Vai se organizar",
+          "sort": 9
+        },
+        {
+          "value": "Assinou contrato",
+          "sort": 10
+        },
+        {
+          "value": "Plano de Saúde",
+          "sort": 11
+        },
+        {
+          "value": "Outra cidade",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "comercial::motivo-do-no-show#1",
+      "name": "⊘ Motivo do no-show",
+      "type": "select",
+      "group": "comercial",
+      "sort": 557,
+      "enums": [
+        {
+          "value": "Esqueceu",
+          "sort": 1
+        },
+        {
+          "value": "Imprevisto pessoal",
+          "sort": 2
+        },
+        {
+          "value": "Trabalho",
+          "sort": 3
+        },
+        {
+          "value": "Transporte / distância",
+          "sort": 4
+        },
+        {
+          "value": "Problema de saúde",
+          "sort": 5
+        },
+        {
+          "value": "Desistiu",
+          "sort": 6
+        },
+        {
+          "value": "Não informou",
+          "sort": 7
+        },
+        {
+          "value": "Outro",
+          "sort": 8
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-do-reagendamento#1",
+      "name": "◷ Data do reagendamento",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 558
+    },
+    {
+      "key": "comercial::no-de-reagendamentos#1",
+      "name": "# Nº de reagendamentos",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 559
+    },
+    {
+      "key": "comercial::endereco#1",
+      "name": "## ENDEREÇO",
+      "type": "text",
+      "group": "comercial",
+      "sort": 560
+    },
+    {
+      "key": "comercial::cidade#1",
+      "name": "⌂ Cidade",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 561
+    },
+    {
+      "key": "comercial::bairro#1",
+      "name": "⌂ Bairro",
+      "type": "textarea",
+      "group": "comercial",
+      "sort": 562
+    },
+    {
+      "key": "comercial::estado#1",
+      "name": "⌂ Estado",
+      "type": "text",
+      "group": "comercial",
+      "sort": 563
+    },
+    {
+      "key": "comercial::campo#3",
+      "name": "##!",
+      "type": "text",
+      "group": "comercial",
+      "sort": 564
+    },
+    {
+      "key": "comercial::atendimento-assumido-por-humano#1",
+      "name": "✓ Atendimento assumido por humano",
+      "type": "select",
+      "group": "comercial",
+      "sort": 565,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "comercial::data-do-handoff-ia-humano#1",
+      "name": "◷ Data do handoff IA → humano",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 566
+    },
+    {
+      "key": "comercial::metricas-ia#1",
+      "name": "##MÉTRICAS IA",
+      "type": "text",
+      "group": "comercial",
+      "sort": 567
+    },
+    {
+      "key": "IA_FIRST_REPLY_AT",
+      "name": "◷ Data/hora da 1ª resposta",
+      "type": "date_time",
+      "group": "comercial",
+      "sort": 568,
+      "code": "IA_FIRST_REPLY_AT"
+    },
+    {
+      "key": "IA_FIRST_REPLY_MIN",
+      "name": "# Tempo até 1ª resposta (min)",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 569,
+      "code": "IA_FIRST_REPLY_MIN"
+    },
+    {
+      "key": "IA_TIME_TO_SCHEDULE_H",
+      "name": "# Tempo até agendamento (h)",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 570,
+      "code": "IA_TIME_TO_SCHEDULE_H"
+    },
+    {
+      "key": "IA_MSG_COUNT",
+      "name": "# Nº de mensagens trocadas",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 571,
+      "code": "IA_MSG_COUNT"
+    },
+    {
+      "key": "IA_CONV_STATUS",
+      "name": "⬢ Status da conversa",
+      "type": "select",
+      "group": "comercial",
+      "sort": 572,
+      "code": "IA_CONV_STATUS",
+      "enums": [
+        {
+          "value": "Aguardando lead",
+          "sort": 1
+        },
+        {
+          "value": "Respondendo",
+          "sort": 2
+        },
+        {
+          "value": "Sem resposta",
+          "sort": 3
+        },
+        {
+          "value": "Encerrada",
+          "sort": 4
+        }
+      ]
+    },
+    {
+      "key": "IA_QUALIFIED",
+      "name": "✓ Qualificou",
+      "type": "select",
+      "group": "comercial",
+      "sort": 573,
+      "code": "IA_QUALIFIED",
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "IA_QUALIFY_RESULT",
+      "name": "⬢ Resultado da qualificação",
+      "type": "select",
+      "group": "comercial",
+      "sort": 574,
+      "code": "IA_QUALIFY_RESULT",
+      "enums": [
+        {
+          "value": "Qualificado",
+          "sort": 1
+        },
+        {
+          "value": "Desqualificado",
+          "sort": 2
+        },
+        {
+          "value": "Incompleto",
+          "sort": 3
+        }
+      ]
+    },
+    {
+      "key": "IA_INTENT",
+      "name": "⬢ Intenção principal",
+      "type": "select",
+      "group": "comercial",
+      "sort": 575,
+      "code": "IA_INTENT",
+      "enums": [
+        {
+          "value": "Agendar",
+          "sort": 1
+        },
+        {
+          "value": "Preço",
+          "sort": 2
+        },
+        {
+          "value": "Dúvida",
+          "sort": 3
+        },
+        {
+          "value": "Reclamação",
+          "sort": 4
+        },
+        {
+          "value": "Outro",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "IA_SCHEDULED_BY",
+      "name": "⬢ Agendamento feito por",
+      "type": "select",
+      "group": "comercial",
+      "sort": 576,
+      "code": "IA_SCHEDULED_BY",
+      "enums": [
+        {
+          "value": "IA",
+          "sort": 1
+        },
+        {
+          "value": "Humano",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "IA_CLOSED_BY",
+      "name": "⬢ Fechamento atribuído a",
+      "type": "select",
+      "group": "comercial",
+      "sort": 577,
+      "code": "IA_CLOSED_BY",
+      "enums": [
+        {
+          "value": "IA",
+          "sort": 1
+        },
+        {
+          "value": "Humano",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "IA_AUTONOMOUS",
+      "name": "✓ Resolvido sem humano",
+      "type": "select",
+      "group": "comercial",
+      "sort": 578,
+      "code": "IA_AUTONOMOUS",
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "IA_HANDOFF_REASON",
+      "name": "⬢ Motivo do handoff",
+      "type": "select",
+      "group": "comercial",
+      "sort": 579,
+      "code": "IA_HANDOFF_REASON",
+      "enums": [
+        {
+          "value": "Pedido do lead",
+          "sort": 1
+        },
+        {
+          "value": "IA não soube",
+          "sort": 2
+        },
+        {
+          "value": "Fechamento",
+          "sort": 3
+        },
+        {
+          "value": "Fora do horário",
+          "sort": 4
+        },
+        {
+          "value": "Escalonamento",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "IA_SENTIMENT",
+      "name": "⬢ Sentimento do lead",
+      "type": "select",
+      "group": "comercial",
+      "sort": 580,
+      "code": "IA_SENTIMENT",
+      "enums": [
+        {
+          "value": "Positivo",
+          "sort": 1
+        },
+        {
+          "value": "Neutro",
+          "sort": 2
+        },
+        {
+          "value": "Negativo",
+          "sort": 3
+        }
+      ]
+    },
+    {
+      "key": "IA_CONV_SCORE",
+      "name": "★ Nota da conversa (1–5)",
+      "type": "numeric",
+      "group": "comercial",
+      "sort": 581,
+      "code": "IA_CONV_SCORE"
+    },
+    {
+      "key": "IA_FALLBACK",
+      "name": "⬢ Fallback / erro",
+      "type": "select",
+      "group": "comercial",
+      "sort": 582,
+      "code": "IA_FALLBACK",
+      "enums": [
+        {
+          "value": "Nenhum",
+          "sort": 1
+        },
+        {
+          "value": "Não entendeu",
+          "sort": 2
+        },
+        {
+          "value": "Fora de escopo",
+          "sort": 3
+        },
+        {
+          "value": "Erro técnico",
+          "sort": 4
+        }
+      ]
+    },
+    {
+      "key": "comercial::campo#4",
+      "name": "**!",
+      "type": "text",
+      "group": "comercial",
+      "sort": 583
+    },
+    {
+      "key": "OBS_CONSULTA",
+      "name": "✎ Observações de consulta",
+      "type": "text",
+      "group": "comercial",
+      "sort": 584,
+      "code": "OBS_CONSULTA"
+    },
+    {
+      "key": "TIPO_AGENDAMENTO",
+      "name": "⬢ Tipo de agendamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 585,
+      "code": "TIPO_AGENDAMENTO",
+      "enums": [
+        {
+          "value": "Resgate",
+          "sort": 1
+        },
+        {
+          "value": "Cadastro",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "TIPO_FECHAMENTO",
+      "name": "⬢ Tipo de fechamento de tratamento",
+      "type": "select",
+      "group": "comercial",
+      "sort": 586,
+      "code": "TIPO_FECHAMENTO",
+      "enums": [
+        {
+          "value": "Resgate",
+          "sort": 1
+        },
+        {
+          "value": "Cadastro",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "tratamento::em-tratamento#1",
+      "name": "*EM TRATAMENTO*",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 588
+    },
+    {
+      "key": "tratamento::sessoes-previstas#1",
+      "name": "# Sessões previstas",
+      "type": "numeric",
+      "group": "tratamento",
+      "sort": 589
+    },
+    {
+      "key": "tratamento::sessoes-realizadas#1",
+      "name": "# Sessões realizadas",
+      "type": "numeric",
+      "group": "tratamento",
+      "sort": 590
+    },
+    {
+      "key": "tratamento::proxima-sessao#1",
+      "name": "◷ Próxima sessão",
+      "type": "date_time",
+      "group": "tratamento",
+      "sort": 591
+    },
+    {
+      "key": "tratamento::ultima-sessao-marcada#1",
+      "name": "◷ Última sessão marcada",
+      "type": "date_time",
+      "group": "tratamento",
+      "sort": 592
+    },
+    {
+      "key": "tratamento::compareceu-a-ultima-sessao-marcada#1",
+      "name": "✓ Compareceu à última sessão marcada",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 593,
+      "enums": [
+        {
+          "value": "Não",
+          "sort": 1
+        },
+        {
+          "value": "Sim",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "tratamento::no-de-faltas-em-sessao#1",
+      "name": "# Nº de faltas em sessão",
+      "type": "numeric",
+      "group": "tratamento",
+      "sort": 594
+    },
+    {
+      "key": "tratamento::data-prevista-de-termino#1",
+      "name": "◷ Data prevista de término",
+      "type": "date",
+      "group": "tratamento",
+      "sort": 595
+    },
+    {
+      "key": "tratamento::observacoes-de-sessoes#1",
+      "name": "✎ Observações de sessões",
+      "type": "textarea",
+      "group": "tratamento",
+      "sort": 596
+    },
+    {
+      "key": "tratamento::campo#1",
+      "name": "**!",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 597
+    },
+    {
+      "key": "tratamento::alta#1",
+      "name": "*ALTA*",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 598
+    },
+    {
+      "key": "tratamento::alta#2",
+      "name": "✓ Alta",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 599,
+      "enums": [
+        {
+          "value": "Insatisfeito",
+          "sort": 1
+        },
+        {
+          "value": "Tratamento cancelado",
+          "sort": 2
+        },
+        {
+          "value": "Ocioso",
+          "sort": 3
+        },
+        {
+          "value": "Satisfeito",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "tratamento::data-de-alta#1",
+      "name": "◷ Data de alta",
+      "type": "date",
+      "group": "tratamento",
+      "sort": 600
+    },
+    {
+      "key": "tratamento::satisfacao-nps-tratamento#1",
+      "name": "★ Satisfação / NPS (Tratamento)",
+      "type": "numeric",
+      "group": "tratamento",
+      "sort": 601
+    },
+    {
+      "key": "tratamento::data-da-pesquisa-nps#1",
+      "name": "◷ Data da pesquisa NPS",
+      "type": "date",
+      "group": "tratamento",
+      "sort": 602
+    },
+    {
+      "key": "tratamento::motivo-da-insatisfacao#1",
+      "name": "⊘ Motivo da insatisfação",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 603,
+      "enums": [
+        {
+          "value": "Atendimento",
+          "sort": 1
+        },
+        {
+          "value": "Estrutura / instalações",
+          "sort": 2
+        },
+        {
+          "value": "Horários",
+          "sort": 3
+        },
+        {
+          "value": "Preço",
+          "sort": 4
+        },
+        {
+          "value": "Dor persistente",
+          "sort": 5
+        },
+        {
+          "value": "Pedido Médico",
+          "sort": 6
+        },
+        {
+          "value": "Resultado abaixo do esperado",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "tratamento::deixou-avaliacao-google#1",
+      "name": "✓ Deixou avaliação (Google)",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 604,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "tratamento::autorizou-depoimento-video#1",
+      "name": "✓ Autorizou depoimento / vídeo",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 605,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "tratamento::indicacoes-geradas#1",
+      "name": "# Indicações geradas",
+      "type": "numeric",
+      "group": "tratamento",
+      "sort": 606
+    },
+    {
+      "key": "tratamento::campo#2",
+      "name": "**!",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 607
+    },
+    {
+      "key": "tratamento::cancelamento#1",
+      "name": "*CANCELAMENTO*",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 608
+    },
+    {
+      "key": "tratamento::data-solicitacao-de-cancelamento#1",
+      "name": "◷ Data solicitação de cancelamento",
+      "type": "date_time",
+      "group": "tratamento",
+      "sort": 609
+    },
+    {
+      "key": "tratamento::motivo-do-cancelamento-do-tratamento#1",
+      "name": "⊘ Motivo do cancelamento do tratamento",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 610,
+      "enums": [
+        {
+          "value": "Mudou de cidade",
+          "sort": 1
+        },
+        {
+          "value": "Insatisfação com resultado",
+          "sort": 2
+        },
+        {
+          "value": "Insatisfação com atendimento",
+          "sort": 3
+        },
+        {
+          "value": "Problema de saúde",
+          "sort": 4
+        },
+        {
+          "value": "Falta de tempo / horário",
+          "sort": 5
+        },
+        {
+          "value": "Plano de saúde",
+          "sort": 6
+        },
+        {
+          "value": "Outro",
+          "sort": 7
+        },
+        {
+          "value": "Pedido Médico",
+          "sort": 8
+        },
+        {
+          "value": "Financeiro",
+          "sort": 500
+        }
+      ]
+    },
+    {
+      "key": "tratamento::cancelamento-revertido#1",
+      "name": "✓ Cancelamento revertido",
+      "type": "select",
+      "group": "tratamento",
+      "sort": 611,
+      "enums": [
+        {
+          "value": "Sim",
+          "sort": 1
+        },
+        {
+          "value": "Não",
+          "sort": 2
+        }
+      ]
+    },
+    {
+      "key": "tratamento::data-do-cancelamento#1",
+      "name": "◷ Data do cancelamento",
+      "type": "date",
+      "group": "tratamento",
+      "sort": 612
+    },
+    {
+      "key": "tratamento::campo#3",
+      "name": "**!",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 613
+    },
+    {
+      "key": "tratamento::transferencia#1",
+      "name": "*TRANSFERÊNCIA*",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 614
+    },
+    {
+      "key": "tratamento::clinica-de-transferencia#1",
+      "name": "Clinica de transferência",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 615
+    },
+    {
+      "key": "tratamento::data-das-sessoes-realiadas#1",
+      "name": "Data das sessões realiadas",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 616
+    },
+    {
+      "key": "tratamento::valor-de-repasse#1",
+      "name": "Valor de repasse",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 617
+    },
+    {
+      "key": "tratamento::clinica-rebida#1",
+      "name": "Clinica Rebida",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 618
+    },
+    {
+      "key": "tratamento::data-das-sessoes-realiadas#2",
+      "name": "Data das Sessões realiadas",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 619,
+      "is_api_only": true
+    },
+    {
+      "key": "tratamento::valor-de-recebimento#1",
+      "name": "Valor de Recebimento",
+      "type": "text",
+      "group": "tratamento",
+      "sort": 620
+    },
+    {
+      "key": "ASAAS_CUSTOMER_ID",
+      "name": "№ Cliente",
+      "type": "text",
+      "group": "asaas",
+      "sort": 622,
+      "code": "ASAAS_CUSTOMER_ID"
+    },
+    {
+      "key": "ASAAS_PAYMENT_ID",
+      "name": "№ Cobrança",
+      "type": "text",
+      "group": "asaas",
+      "sort": 623,
+      "code": "ASAAS_PAYMENT_ID"
+    },
+    {
+      "key": "ASAAS_SUBSCRIPTION_ID",
+      "name": "№ Assinatura",
+      "type": "text",
+      "group": "asaas",
+      "sort": 624,
+      "code": "ASAAS_SUBSCRIPTION_ID"
+    },
+    {
+      "key": "ASAAS_STATUS",
+      "name": "⬢ Status do pagamento",
+      "type": "select",
+      "group": "asaas",
+      "sort": 625,
+      "code": "ASAAS_STATUS",
+      "enums": [
+        {
+          "value": "Pendente",
+          "sort": 1
+        },
+        {
+          "value": "Confirmado",
+          "sort": 2
+        },
+        {
+          "value": "Recebido",
+          "sort": 3
+        },
+        {
+          "value": "Recebido em dinheiro",
+          "sort": 4
+        },
+        {
+          "value": "Vencido",
+          "sort": 5
+        },
+        {
+          "value": "Estornado",
+          "sort": 6
+        },
+        {
+          "value": "Cancelado",
+          "sort": 7
+        },
+        {
+          "value": "Em análise (risco)",
+          "sort": 8
+        },
+        {
+          "value": "Chargeback",
+          "sort": 9
+        }
+      ]
+    },
+    {
+      "key": "ASAAS_BILLING_TYPE",
+      "name": "⬢ Forma de pagamento",
+      "type": "select",
+      "group": "asaas",
+      "sort": 626,
+      "code": "ASAAS_BILLING_TYPE",
+      "enums": [
+        {
+          "value": "Boleto",
+          "sort": 1
+        },
+        {
+          "value": "Pix",
+          "sort": 2
+        },
+        {
+          "value": "Cartão de crédito",
+          "sort": 3
+        },
+        {
+          "value": "Cartão de débito",
+          "sort": 4
+        },
+        {
+          "value": "Não definido",
+          "sort": 5
+        }
+      ]
+    },
+    {
+      "key": "ASAAS_INSTALLMENTS",
+      "name": "# Nº de parcelas",
+      "type": "numeric",
+      "group": "asaas",
+      "sort": 627,
+      "code": "ASAAS_INSTALLMENTS"
+    },
+    {
+      "key": "ASAAS_DUE_DATE",
+      "name": "◷ Vencimento",
+      "type": "date",
+      "group": "asaas",
+      "sort": 628,
+      "code": "ASAAS_DUE_DATE"
+    },
+    {
+      "key": "ASAAS_PAYMENT_DATE",
+      "name": "◷ Data do pagamento",
+      "type": "date",
+      "group": "asaas",
+      "sort": 629,
+      "code": "ASAAS_PAYMENT_DATE"
+    },
+    {
+      "key": "ASAAS_NEXT_DUE_DATE",
+      "name": "◷ Próximo vencimento",
+      "type": "date",
+      "group": "asaas",
+      "sort": 630,
+      "code": "ASAAS_NEXT_DUE_DATE"
+    },
+    {
+      "key": "ASAAS_INVOICE_URL",
+      "name": "↗ Link da fatura",
+      "type": "url",
+      "group": "asaas",
+      "sort": 631,
+      "code": "ASAAS_INVOICE_URL"
+    },
+    {
+      "key": "ASAAS_BANKSLIP_URL",
+      "name": "↗ Boleto / PIX",
+      "type": "url",
+      "group": "asaas",
+      "sort": 632,
+      "code": "ASAAS_BANKSLIP_URL"
+    },
+    {
+      "key": "ASAAS_DESCRIPTION",
+      "name": "✎ Descrição",
+      "type": "text",
+      "group": "asaas",
+      "sort": 633,
+      "code": "ASAAS_DESCRIPTION"
+    },
+    {
+      "key": "ASAAS_VALUE",
+      "name": "¤ Valor da cobrança",
+      "type": "monetary",
+      "group": "asaas",
+      "sort": 634,
+      "code": "ASAAS_VALUE",
+      "currency": "BRL"
+    },
+    {
+      "key": "ASAAS_NET_VALUE",
+      "name": "¤ Valor líquido recebido",
+      "type": "monetary",
+      "group": "asaas",
+      "sort": 635,
+      "code": "ASAAS_NET_VALUE",
+      "currency": "BRL"
+    },
+    {
+      "key": "agente-dt::info-agente#1",
+      "name": "*INFO AGENTE*",
+      "type": "text",
+      "group": "agente-dt",
+      "sort": 637
+    },
+    {
+      "key": "agente-dt::resposta-da-ia#1",
+      "name": "Resposta da IA",
+      "type": "text",
+      "group": "agente-dt",
+      "sort": 638
+    },
+    {
+      "key": "agente-dt::pausar-ia#1",
+      "name": "Pausar IA",
+      "type": "checkbox",
+      "group": "agente-dt",
+      "sort": 639
+    }
+  ],
+  "loss_reasons": [
+    {
+      "name": "Plano de saúde",
+      "sort": 0
+    },
+    {
+      "name": "Outra patologia",
+      "sort": 1
+    },
+    {
+      "name": "Solicitado exames",
+      "sort": 2
+    },
+    {
+      "name": "Caso enviado para a franquia",
+      "sort": 3
+    },
+    {
+      "name": "Decidir com a familia",
+      "sort": 4
+    },
+    {
+      "name": "Mora em outra cidade",
+      "sort": 5
+    },
+    {
+      "name": "Bandeira vermelha",
+      "sort": 6
+    },
+    {
+      "name": "Vai viajar",
+      "sort": 7
+    },
+    {
+      "name": "Achou caro",
+      "sort": 8
+    },
+    {
+      "name": "Vai se organizar financeiramente",
+      "sort": 9
+    },
+    {
+      "name": "Assinou contrato",
+      "sort": 10
+    },
+    {
+      "name": "Financeiramente vulnerável",
+      "sort": 11
+    },
+    {
+      "name": "Outra cidade",
+      "sort": 12
+    },
+    {
+      "name": "Sem condições financeiras",
+      "sort": 13
+    },
+    {
+      "name": "Não interagiu",
+      "sort": 14
+    },
+    {
+      "name": "Informação para terceiro",
+      "sort": 15
+    },
+    {
+      "name": "Clicou por engano",
+      "sort": 17
+    },
+    {
+      "name": "Está viajando",
+      "sort": 18
+    },
+    {
+      "name": "Sem interesse",
+      "sort": 19
+    },
+    {
+      "name": "Não deu continuidade ao atendimento",
+      "sort": 20
+    },
+    {
+      "name": "Vai se organizar",
+      "sort": 21
+    },
+    {
+      "name": "Não perturbar",
+      "sort": 24
+    },
+    {
+      "name": "Lead morto",
+      "sort": 25
+    },
+    {
+      "name": "Cancelamento de tratamento",
+      "sort": 26
+    }
+  ],
+  "notes": [
+    "Tags NÃO são exportadas: na conta de origem são lixo de disparo em massa.",
+    "Campos de contato NÃO são exportados (sobras da Cloudia).",
+    "Os nomes de 142/143 vêm em system_statuses e precisam ser aplicados NA UI da conta destino — a API aceita o PATCH e ignora silenciosamente."
+  ]
+}

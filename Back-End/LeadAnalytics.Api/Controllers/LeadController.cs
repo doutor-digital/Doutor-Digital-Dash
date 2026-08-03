@@ -598,9 +598,17 @@ public class WebhooksController(
                     {
                         var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
                             string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
-                        var (value, _, _) = await _kpiService.ComputeAsync(
+                        var (value, _, note) = await _kpiService.ComputeAsync(
                             clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
-                        result.KpiOverrides[cfg.KpiKey] = value;
+
+                        // Unidade sem autorização da franquia: NÃO publica override. Publicar
+                        // 0 faria o card mostrar "0 consultas", que o usuário lê como resultado
+                        // ruim em vez de acesso ausente. O card custom continua sendo montado
+                        // abaixo — quem decide o que desenhar é o front, pela lista de chaves.
+                        if (note == KpiNotes.SemAutorizacaoFranquia)
+                            result.KpisSemAutorizacao.Add(cfg.KpiKey);
+                        else
+                            result.KpiOverrides[cfg.KpiKey] = value;
 
                         // KPIs criados do zero viram cards próprios no dashboard.
                         if (cfg.IsCustom)

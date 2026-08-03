@@ -76,6 +76,15 @@ public class DashboardOverviewDto
     [JsonPropertyName("custom_kpis")]
     public List<CustomKpiDto> CustomKpis { get; set; } = new();
 
+    /// <summary>
+    /// Chaves de KPI cujo número vem do CRM da franquia e que esta unidade AINDA não pode
+    /// ler, por não ter autorização (sem token da API Spine / sem credencial do CRM web).
+    /// O front mostra "Sem autorização da franquia" nesses cards em vez de um zero — o
+    /// zero seria lido como "não houve consulta/tratamento", que é falso.
+    /// </summary>
+    [JsonPropertyName("kpis_sem_autorizacao")]
+    public List<string> KpisSemAutorizacao { get; set; } = new();
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();

@@ -41,6 +41,18 @@ public static class KpiSourceTypes
         type is not null && Array.Exists(All, t => t == type);
 }
 
+/// <summary>Notas padronizadas devolvidas por <see cref="KpiConfigService.ComputeAsync"/>.</summary>
+public static class KpiNotes
+{
+    /// <summary>
+    /// A unidade não tem autorização da franquia (sem token da API Spine ou sem credencial
+    /// do CRM web), então o KPI de fonte <see cref="KpiSourceTypes.Franquia"/> não tem número.
+    /// É devolvido como NOTA estável (não texto livre) para o dashboard exibir
+    /// "Sem autorização da franquia" no lugar de um zero — zero mentiria.
+    /// </summary>
+    public const string SemAutorizacaoFranquia = "sem_autorizacao_franquia";
+}
+
 /// <summary>Um KPI do dashboard que pode ser mapeado nas Configurações Técnicas.</summary>
 public record KpiCatalogItem(string Key, string Label, string Description);
 

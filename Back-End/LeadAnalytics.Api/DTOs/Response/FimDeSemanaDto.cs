@@ -21,3 +21,33 @@ public class FimDeSemanaDto
     /// <summary>Distribuição por origem, da maior para a menor.</summary>
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();
 }
+
+/// <summary>
+/// Dinheiro do período: quanto de tratamento foi fechado e o ticket médio.
+///
+/// Só entram leads com valor preenchido — por isso <see cref="ComValor"/> vem junto:
+/// um ticket médio calculado sobre 3 de 200 fechamentos é ruído, e o card precisa
+/// deixar isso visível em vez de exibir um número bonito e falso.
+/// </summary>
+public class ReceitaResumoDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("receita_fechada")]
+    public decimal ReceitaFechada { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("ticket_medio")]
+    public decimal TicketMedio { get; set; }
+
+    /// <summary>Quantos leads fechados tinham valor preenchido (base do ticket médio).</summary>
+    [System.Text.Json.Serialization.JsonPropertyName("com_valor")]
+    public int ComValor { get; set; }
+
+    /// <summary>Total de leads que fecharam tratamento no período (com ou sem valor).</summary>
+    public int Fechados { get; set; }
+}
+
+/// <summary>Um motivo de não-conversão e quantas vezes apareceu no período.</summary>
+public class MotivoPerdaDto
+{
+    public string Motivo { get; set; } = "";
+    public int Quantidade { get; set; }
+}

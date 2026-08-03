@@ -93,6 +93,17 @@ public class DashboardOverviewDto
     [JsonPropertyName("fim_de_semana")]
     public FimDeSemanaDto FimDeSemana { get; set; } = new();
 
+    /// <summary>Receita de tratamento fechada no período e ticket médio.</summary>
+    public ReceitaResumoDto Receita { get; set; } = new();
+
+    /// <summary>
+    /// Ranking dos motivos de não-agendamento preenchidos no cartão da Kommo.
+    /// Transforma "perdemos X leads" em "perdemos por preço / por convênio", que é o
+    /// que muda a ação da equipe.
+    /// </summary>
+    [JsonPropertyName("motivos_perda")]
+    public List<MotivoPerdaDto> MotivosPerda { get; set; } = new();
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
     public List<OrigemAgrupadaDto> Origens { get; set; } = new();

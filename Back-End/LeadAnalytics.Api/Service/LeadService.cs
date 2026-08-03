@@ -2096,6 +2096,57 @@ public class LeadService(
                 .ToList();
         }
 
+        // ── Receita fechada e ticket médio ──────────────────────────────────
+        // Valor do tratamento tem 3 origens possíveis no cartão (plano fechado,
+        // orçamento, price da Kommo) — pega a primeira preenchida, na ordem em que
+        // representam compromisso: plano > orçamento > price.
+        var valoresFechados = await baseQ
+            .Where(l => l.CurrentStage == LeadStages.FechouTratamento
+                     || l.CurrentStage == LeadStages.EmTratamento)
+            .Select(l => l.TreatmentPlanValue ?? l.TreatmentBudget ?? l.Price)
+            .ToListAsync(ct);
+
+        var comValor = valoresFechados.Where(v => v is > 0).Select(v => v!.Value).ToList();
+        var receita = new ReceitaResumoDto
+        {
+            Fechados = valoresFechados.Count,
+            ComValor = comValor.Count,
+            ReceitaFechada = comValor.Sum(),
+            // Média só sobre quem tem valor: incluir os zerados afundaria o ticket.
+            TicketMedio = comValor.Count > 0 ? Math.Round(comValor.Sum() / comValor.Count, 2) : 0,
+        };
+
+        // ── Motivos de não-agendamento ──────────────────────────────────────
+        // Agregado no Postgres (jsonb_array_elements) em vez de trazer o JSON de
+        // milhares de leads para a memória — esse parse em massa já foi causa de
+        // lentidão neste endpoint. Restringe pelos ids que os filtros já resolveram.
+        var motivosPerda = new List<MotivoPerdaDto>();
+        var idsPeriodo = dateStageRows.Select(r => r.Id).ToList();
+        if (idsPeriodo.Count > 0)
+        {
+            var idsCsv = string.Join(",", idsPeriodo); // ids são int vindos do banco
+            var sql = $@"
+                select coalesce(e->>'value','') as ""Motivo"", count(*)::int as ""Quantidade""
+                from leads l, lateral jsonb_array_elements(l.""CustomFieldsJson"") e
+                where l.""Id"" in ({idsCsv})
+                  and l.""CustomFieldsJson"" is not null
+                  and lower(e->>'field_name') like '%motivo%agendamento%'
+                  and coalesce(e->>'value','') <> ''
+                group by 1
+                order by 2 desc
+                limit 12";
+            try
+            {
+                motivosPerda = await _db.Database.SqlQueryRaw<MotivoPerdaDto>(sql).ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                // Card acessório: se a query falhar (json malformado, coluna vazia),
+                // o dashboard continua respondendo sem ele.
+                _logger.LogWarning(ex, "Falha ao agregar motivos de perda no período");
+            }
+        }
+
         var fimDeSemana = new FimDeSemanaDto
         {
             Total = fimDeSemanaRows.Count,
@@ -2169,6 +2220,8 @@ public class LeadService(
             States = states,
             Etapas = etapas,
             FimDeSemana = fimDeSemana,
+            Receita = receita,
+            MotivosPerda = motivosPerda,
             Origens = origens,
             OrigensConsultas = origensConsultas,
             OrigensTratamentos = origensTratamentos,

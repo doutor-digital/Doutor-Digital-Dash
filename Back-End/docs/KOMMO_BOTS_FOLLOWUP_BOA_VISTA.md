@@ -111,9 +111,18 @@ isso, 10 reaproveitados dos que já existiam.
 Opção sem bot correspondente não fica em silêncio: o fluxo emite um item de erro em vez de
 engolir o disparo.
 
-**Pré-requisito para ligar:** variável `KOMMO_TOKEN_BOA_VISTA` no n8n. E vale um teste
-supervisionado com um número da equipe antes de liberar — o `salesbot/run` não foi executado
-contra lead real, justamente para não mandar mensagem a paciente sem você ver.
+**Autenticação:** o n8n tem o community node da Kommo (`n8n-nodes-kommo`) instalado, que
+traz a credencial **`kommoLongLivedApi`** — exatamente o tipo de token que a unidade usa. Os
+três nós HTTP do fluxo usam essa credencial (`predefinedCredentialType`), então **não há
+token em variável de ambiente nem header manual**. Ao importar, selecione a credencial da
+conta de Boa Vista nos três nós (o JSON traz `REPLACE_ME` como marcador).
+
+O nó nativo da Kommo cobre deals/contatos/tarefas/notas, mas **não expõe `salesbot/run`** —
+por isso as chamadas continuam via HTTP Request, só que autenticadas pela credencial.
+
+**Antes de liberar:** faça um teste supervisionado com um número da equipe. O `salesbot/run`
+não foi executado contra lead real, justamente para não mandar mensagem a paciente sem você
+ver o resultado.
 
 ## 3. Por que cada escolha
 

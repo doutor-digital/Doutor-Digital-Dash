@@ -38,17 +38,10 @@
             }
           ]
         },
-        "sendHeaders": true,
-        "specifyHeaders": "keypair",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
-            }
-          ]
-        },
-        "options": {}
+        "sendHeaders": false,
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi"
       },
       "id": "buscar",
       "name": "Buscar leads com envio vencido",
@@ -57,7 +50,13 @@
       "position": [
         220,
         0
-      ]
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
     },
     {
       "parameters": {
@@ -114,16 +113,14 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi"
       },
       "id": "disparar",
       "name": "Rodar o bot no lead",
@@ -132,7 +129,13 @@
       "position": [
         880,
         0
-      ]
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
     },
     {
       "parameters": {
@@ -146,16 +149,14 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi"
       },
       "id": "carimbar",
       "name": "Carimbar envio e limpar agendamento",
@@ -164,7 +165,13 @@
       "position": [
         1100,
         0
-      ]
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
     }
   ],
   "connections": {

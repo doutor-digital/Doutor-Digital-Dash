@@ -75,6 +75,26 @@ public class FunilOrigemDto
     public int Fechados { get; set; }
 }
 
+/// <summary>
+/// Desempenho de um anúncio: quantos leads ele trouxe e quantos deles agendaram.
+///
+/// Volume de lead por anúncio não decide verba — anúncio que traz muito lead e
+/// nenhum agendamento custa caro. Por isso o card carrega as duas colunas juntas.
+/// A origem vem do campo que o rastreio de campanha grava no cartão (CTWA), não
+/// de <c>Lead.Source</c>.
+/// </summary>
+public class AnuncioDesempenhoDto
+{
+    /// <summary>Título do anúncio quando disponível; senão o id.</summary>
+    public string Anuncio { get; set; } = "";
+
+    /// <summary>Leads que chegaram por este anúncio no período.</summary>
+    public int Total { get; set; }
+
+    /// <summary>Destes, quantos chegaram a agendar consulta.</summary>
+    public int Agendados { get; set; }
+}
+
 /// <summary>Um tipo de tratamento indicado e quantas vezes foi indicado no período.</summary>
 public class TratamentoIndicadoDto
 {

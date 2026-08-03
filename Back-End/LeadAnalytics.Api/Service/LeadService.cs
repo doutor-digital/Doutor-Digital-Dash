@@ -2151,6 +2151,7 @@ public class LeadService(
         // Mesma estratégia dos motivos: agregação no Postgres sobre os ids já
         // filtrados. A origem sai do custom field — Lead.Source é constante ("Kommo").
         var funilPorOrigem = new List<FunilOrigemDto>();
+        var anuncios = new List<AnuncioDesempenhoDto>();
         var tratamentosIndicados = new List<TratamentoIndicadoDto>();
         if (idsPeriodo.Count > 0)
         {
@@ -2193,6 +2194,45 @@ public class LeadService(
                 select tratamento as ""Tratamento"", count(*)::int as ""Quantidade""
                 from v where coalesce(tratamento,'') <> ''
                 group by 1 order by 2 desc limit 12";
+
+            // ── Anúncios que mais trazem lead, e quantos deles agendaram ────
+            // Cascata título → id do anúncio → campanha: o título só existe quando o
+            // rastreio CTWA conseguiu resolver o nome na Meta; a base histórica só tem
+            // o id numérico em `⌂ Campanha`, e um id ainda é acionável (dá para buscar
+            // no Gerenciador de Anúncios). Sem a cascata o card ficaria vazio até o
+            // rastreio novo cobrir toda a base.
+            //
+            // `split_part(...,',',1)` porque a Kommo junta os valores com vírgula quando o
+            // mesmo lead toca mais de um anúncio. Fica o primeiro — mesma regra de primeiro
+            // toque que o rastreio usa ao gravar: quem trouxe o paciente é quem leva o
+            // crédito, senão o relatório vira último clique.
+            var sqlAnuncios = $@"
+                with x as (
+                  select l.""CurrentStage"",
+                    (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
+                       where lower(e->>'field_name') like '%título do anúncio%' limit 1) as titulo,
+                    (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
+                       where lower(e->>'field_name') like '%anúncio (ad)%' limit 1) as anuncio,
+                    (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
+                       where lower(e->>'field_name') like '%campanha%' limit 1) as campanha
+                  from leads l
+                  where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
+                )
+                select coalesce(nullif(titulo,''), nullif(anuncio,''), nullif(campanha,'')) as ""Anuncio"",
+                       count(*)::int as ""Total"",
+                       count(*) filter (where ""CurrentStage"" in ({agendadosMais}))::int as ""Agendados""
+                from x
+                where coalesce(nullif(titulo,''), nullif(anuncio,''), nullif(campanha,'')) is not null
+                group by 1 order by 2 desc limit 10";
+
+            try
+            {
+                anuncios = await _db.Database.SqlQueryRaw<AnuncioDesempenhoDto>(sqlAnuncios).ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao agregar desempenho de anúncios");
+            }
 
             try
             {
@@ -2290,6 +2330,7 @@ public class LeadService(
             Receita = receita,
             MotivosPerda = motivosPerda,
             FunilPorOrigem = funilPorOrigem,
+            Anuncios = anuncios,
             TratamentosIndicados = tratamentosIndicados,
             Origens = origens,
             OrigensConsultas = origensConsultas,

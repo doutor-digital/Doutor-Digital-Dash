@@ -115,6 +115,13 @@ public class DashboardOverviewDto
     [JsonPropertyName("tratamentos_indicados")]
     public List<TratamentoIndicadoDto> TratamentosIndicados { get; set; } = [];
 
+    /// <summary>
+    /// Anúncios que mais trouxeram lead no período e quantos deles agendaram.
+    /// Alimentado pelo rastreio de campanha (Click-to-WhatsApp) gravado no cartão.
+    /// </summary>
+    [JsonPropertyName("anuncios")]
+    public List<AnuncioDesempenhoDto> Anuncios { get; set; } = [];
+
     // ─── Distribuições ─────────────────────────────────────────────
     public List<EtapaAgrupadaDto> Etapas { get; set; } = [];
     public List<OrigemAgrupadaDto> Origens { get; set; } = [];

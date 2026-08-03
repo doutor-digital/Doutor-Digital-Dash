@@ -1,0 +1,238 @@
+{
+  "name": "Kommo · Mensagens agendadas (Boa Vista)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "cron",
+      "name": "A cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/leads",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "250"
+            },
+            {
+              "name": "filter[custom_fields_values][496166][to]",
+              "value": "={{ Math.floor(Date.now()/1000) }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar",
+      "name": "Buscar leads com envio vencido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Seleciona os leads cuja hora de envio chegou e resolve o bot de cada mensagem.\n// O campo \"Mensagem enviada em\" funciona como trava: lead já disparado não volta.\nconst BOT_POR_MENSAGEM = {\n  \"01 | Boas-vindas (primeiro contato)\": 13352,\n  \"02 | Retorno fora do horário\": 13212,\n  \"03 | Apresentação da clínica + método\": 13354,\n  \"04 | Qualificação (perguntas iniciais)\": 13216,\n  \"05 | Convite para agendar consulta\": 13218,\n  \"06 | Endereço + como chegar\": 13356,\n  \"07 | Confirmação de agendamento\": 13358,\n  \"08 | Lembrete véspera da consulta\": 13360,\n  \"09 | Confirmação no dia (2h antes)\": 13362,\n  \"10 | No-show (faltou consulta)\": 13134,\n  \"11 | Objeção: 'vou operar'\": 13364,\n  \"12 | Objeção: preço\": 13226,\n  \"13 | Follow-up 'vou pensar'\": 13124,\n  \"14 | Reativação de lead frio\": 13130,\n  \"15 | Pedido de avaliação Google / NPS\": 13366,\n  \"16 | Autoridade + método (Cialdini)\": 13368,\n  \"17 | Prova social - depoimento em vídeo\": 13126,\n  \"18 | Escassez - últimos horários\": 13370,\n  \"19 | Escassez - campanha do mês\": 13372,\n  \"20 | PAS - amplificação de dor\": 13374,\n  \"21 | Loss aversion - custo de adiar\": 13128,\n  \"22 | Yes-ladder - ligação de 5 min\": 13228,\n  \"23 | Objeção: 'vou conversar com esposo(a)'\": 13376,\n  \"24 | Objeção: não moro em Boa Vista\": 13378,\n  \"25 | Objeção: 'vou esperar melhorar'\": 13380,\n  \"26 | Objeção: 'já fiz fisio e não deu certo'\": 13382,\n  \"27 | Anchoring - cirurgia vs tratamento\": 13384,\n  \"28 | Reciprocidade - conteúdo grátis\": 13386,\n  \"29 | Storytelling - caso real de paciente\": 13388,\n  \"30 | Break-up (última mensagem - Kennedy)\": 13390\n};\nconst F_QUANDO = 496166, F_QUAL = 496168, F_ENVIADO = 496170;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\n\nfor (const item of $input.all()) {\n  for (const lead of (item.json?._embedded?.leads ?? [])) {\n    const cfs = lead.custom_fields_values ?? [];\n    const val = (id) => cfs.find((c) => c.field_id === id)?.values?.[0]?.value ?? null;\n\n    const quando = Number(val(F_QUANDO) ?? 0);\n    const mensagem = val(F_QUAL);\n    const jaEnviado = val(F_ENVIADO);\n\n    if (!quando || quando > agora) continue;   // ainda não chegou a hora\n    if (!mensagem) continue;                    // sem mensagem escolhida\n    if (jaEnviado) continue;                    // trava de reenvio\n\n    const botId = BOT_POR_MENSAGEM[mensagem];\n    if (!botId) {                               // opção sem bot: avisa em vez de silenciar\n      saida.push({ json: { erro: 'sem bot para a mensagem', leadId: lead.id, mensagem } });\n      continue;\n    }\n    saida.push({ json: { leadId: lead.id, botId, mensagem, agendadoPara: quando } });\n  }\n}\nreturn saida;"
+      },
+      "id": "resolver",
+      "name": "Resolver bot de cada mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.erro }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "filtro",
+      "name": "Só os que têm bot",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v2/salesbot/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ bot_id: $json.botId, entity_id: $json.leadId, entity_type: 2 }]) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "disparar",
+      "name": "Rodar o bot no lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/leads",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ id: $('Resolver bot de cada mensagem').item.json.leadId, custom_fields_values: [{ field_id: 496170, values: [{ value: Math.floor(Date.now()/1000) }] },{ field_id: 496166, values: null },{ field_id: 496168, values: null }] }]) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.KOMMO_TOKEN_BOA_VISTA }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "carimbar",
+      "name": "Carimbar envio e limpar agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "A cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Buscar leads com envio vencido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar leads com envio vencido": {
+      "main": [
+        [
+          {
+            "node": "Resolver bot de cada mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver bot de cada mensagem": {
+      "main": [
+        [
+          {
+            "node": "Só os que têm bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Só os que têm bot": {
+      "main": [
+        [
+          {
+            "node": "Rodar o bot no lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rodar o bot no lead": {
+      "main": [
+        [
+          {
+            "node": "Carimbar envio e limpar agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "kommo"
+    },
+    {
+      "name": "boa-vista"
+    }
+  ]
+}

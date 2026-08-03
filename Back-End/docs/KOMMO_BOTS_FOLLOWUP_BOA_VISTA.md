@@ -81,6 +81,40 @@ Blocos usados: `send_message`, `wait` (por tempo e por resposta), `conditions` +
 **Gotchas do fluxo:** bloco `finish` não pode ter entrada no `text` (400); cada bloco
 precisa de `step` ÚNICO — steps repetidos fazem um ramo inteiro sumir em silêncio.
 
+## 2-B. Mensagem agendada pela SDR
+
+A Kommo não tem "agendar mensagem". O que existe é o evento `121 relative_date` (relativo a
+um campo de data), e a configuração dele **não é alcançável por API**: testei três formatos
+e a Kommo gravou `relative_date: null` nos três, sem erro. Precisa de um exemplo criado na
+interface para ler o JSON e replicar.
+
+A saída foi outra, e é melhor: **`POST /api/v2/salesbot/run`** dispara qualquer bot em
+qualquer lead, sob comando, com o token público. Com isso o agendamento é por lead e quem
+decide é a pessoa, não uma regra de funil.
+
+**Como a SDR usa:** abre o cartão, preenche `◷ Enviar mensagem em` (data e hora) e escolhe
+em `⬢ Mensagem a enviar` uma das 30 mensagens rápidas. Só isso.
+
+**O que roda por trás** (`docs/n8n/kommo-mensagens-agendadas-boa-vista.json`, a cada 5 min):
+
+1. Busca leads com `Enviar mensagem em <= agora` (filtro por campo de data na API v4).
+2. Descarta quem não escolheu mensagem ou já tem `Mensagem enviada em` — essa é a trava
+   contra reenvio.
+3. Resolve o bot da mensagem escolhida (mapa de 30 entradas embutido no fluxo).
+4. `salesbot/run` no lead.
+5. Carimba `◷ Mensagem enviada em` e limpa os dois campos de agendamento.
+
+Campos criados em Boa Vista: `496166` (enviar em), `496168` (qual mensagem, 30 opções),
+`496170` (enviado em). Toda mensagem rápida tem um bot correspondente — 20 criados para
+isso, 10 reaproveitados dos que já existiam.
+
+Opção sem bot correspondente não fica em silêncio: o fluxo emite um item de erro em vez de
+engolir o disparo.
+
+**Pré-requisito para ligar:** variável `KOMMO_TOKEN_BOA_VISTA` no n8n. E vale um teste
+supervisionado com um número da equipe antes de liberar — o `salesbot/run` não foi executado
+contra lead real, justamente para não mandar mensagem a paciente sem você ver.
+
 ## 3. Por que cada escolha
 
 **Um bot por mensagem, e não um bot com vários passos.** A Kommo permite blocos de

@@ -102,11 +102,22 @@ public class DashboardOverviewDto
     /// que muda a ação da equipe.
     /// </summary>
     [JsonPropertyName("motivos_perda")]
-    public List<MotivoPerdaDto> MotivosPerda { get; set; } = new();
+    public List<MotivoPerdaDto> MotivosPerda { get; set; } = [];
+
+    /// <summary>
+    /// De cada origem: quantos leads, quantos agendaram e quantos fecharam. Volume por
+    /// mídia engana — a que traz mais lead raramente é a que traz mais paciente.
+    /// </summary>
+    [JsonPropertyName("funil_por_origem")]
+    public List<FunilOrigemDto> FunilPorOrigem { get; set; } = [];
+
+    /// <summary>Mix de tratamento indicado no período (multiselect da Kommo).</summary>
+    [JsonPropertyName("tratamentos_indicados")]
+    public List<TratamentoIndicadoDto> TratamentosIndicados { get; set; } = [];
 
     // ─── Distribuições ─────────────────────────────────────────────
-    public List<EtapaAgrupadaDto> Etapas { get; set; } = new();
-    public List<OrigemAgrupadaDto> Origens { get; set; } = new();
+    public List<EtapaAgrupadaDto> Etapas { get; set; } = [];
+    public List<OrigemAgrupadaDto> Origens { get; set; } = [];
 
     /// <summary>Origens dos leads que chegaram a alguma consulta (agendados+).</summary>
     [JsonPropertyName("origens_consultas")]

@@ -51,3 +51,33 @@ public class MotivoPerdaDto
     public string Motivo { get; set; } = "";
     public int Quantidade { get; set; }
 }
+
+/// <summary>
+/// Funil condensado por origem: de cada mídia, quantos leads chegaram a agendar e
+/// quantos fecharam tratamento.
+///
+/// Volume de lead por origem engana — a mídia que traz mais lead costuma não ser a
+/// que traz mais paciente. Este recorte é o que separa custo de aquisição barato de
+/// aquisição eficaz. A origem vem do custom field da Kommo, não de
+/// <c>Lead.Source</c> (essa coluna guarda o sistema de origem do dado e é constante).
+/// </summary>
+public class FunilOrigemDto
+{
+    public string Origem { get; set; } = "";
+
+    /// <summary>Leads da origem no período.</summary>
+    public int Total { get; set; }
+
+    /// <summary>Quantos chegaram a ter consulta agendada (ou passaram disso).</summary>
+    public int Agendados { get; set; }
+
+    /// <summary>Quantos fecharam tratamento.</summary>
+    public int Fechados { get; set; }
+}
+
+/// <summary>Um tipo de tratamento indicado e quantas vezes foi indicado no período.</summary>
+public class TratamentoIndicadoDto
+{
+    public string Tratamento { get; set; } = "";
+    public int Quantidade { get; set; }
+}

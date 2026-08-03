@@ -2147,6 +2147,73 @@ public class LeadService(
             }
         }
 
+        // ── Funil por origem e mix de tratamento indicado ───────────────────
+        // Mesma estratégia dos motivos: agregação no Postgres sobre os ids já
+        // filtrados. A origem sai do custom field — Lead.Source é constante ("Kommo").
+        var funilPorOrigem = new List<FunilOrigemDto>();
+        var tratamentosIndicados = new List<TratamentoIndicadoDto>();
+        if (idsPeriodo.Count > 0)
+        {
+            var idsCsv2 = string.Join(",", idsPeriodo);
+            var agendadosMais = string.Join(",", new[]
+            {
+                LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento,
+                LeadStages.Compareceu, LeadStages.Negociacao, LeadStages.Alta,
+                LeadStages.FechouTratamento, LeadStages.EmTratamento, LeadStages.NaoFechouTratamento,
+            }.Select(s => $"'{s}'"));
+            var fechados = string.Join(",", new[]
+            {
+                LeadStages.FechouTratamento, LeadStages.EmTratamento,
+            }.Select(s => $"'{s}'"));
+
+            var sqlOrigem = $@"
+                with x as (
+                  select l.""CurrentStage"",
+                    (select e->>'value' from jsonb_array_elements(l.""CustomFieldsJson"") e
+                       where lower(e->>'field_name') like '%origem%' limit 1) as origem
+                  from leads l
+                  where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
+                )
+                select coalesce(nullif(origem,''),'Sem origem') as ""Origem"",
+                       count(*)::int as ""Total"",
+                       count(*) filter (where ""CurrentStage"" in ({agendadosMais}))::int as ""Agendados"",
+                       count(*) filter (where ""CurrentStage"" in ({fechados}))::int as ""Fechados""
+                from x group by 1 order by 2 desc limit 12";
+
+            // Tratamento indicado é multiselect: o valor pode vir como array JSON.
+            var sqlTratamento = $@"
+                with v as (
+                  select case when jsonb_typeof(e->'value') = 'array'
+                              then jsonb_array_elements_text(e->'value')
+                              else e->>'value' end as tratamento
+                  from leads l, lateral jsonb_array_elements(l.""CustomFieldsJson"") e
+                  where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
+                    and lower(e->>'field_name') like '%tratamento%indicado%'
+                )
+                select tratamento as ""Tratamento"", count(*)::int as ""Quantidade""
+                from v where coalesce(tratamento,'') <> ''
+                group by 1 order by 2 desc limit 12";
+
+            try
+            {
+                funilPorOrigem = await _db.Database.SqlQueryRaw<FunilOrigemDto>(sqlOrigem).ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao agregar funil por origem");
+            }
+
+            try
+            {
+                tratamentosIndicados = await _db.Database
+                    .SqlQueryRaw<TratamentoIndicadoDto>(sqlTratamento).ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao agregar tratamentos indicados");
+            }
+        }
+
         var fimDeSemana = new FimDeSemanaDto
         {
             Total = fimDeSemanaRows.Count,
@@ -2222,6 +2289,8 @@ public class LeadService(
             FimDeSemana = fimDeSemana,
             Receita = receita,
             MotivosPerda = motivosPerda,
+            FunilPorOrigem = funilPorOrigem,
+            TratamentosIndicados = tratamentosIndicados,
             Origens = origens,
             OrigensConsultas = origensConsultas,
             OrigensTratamentos = origensTratamentos,

@@ -1,0 +1,463 @@
+{
+  "name": "Rastreio de Campanhas — WhatsApp → Kommo (Boa Vista)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "ctwa-kommo-boa-vista",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "verify",
+      "name": "Meta · verificação (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -200
+      ],
+      "webhookId": "ctwa-kommo-bv-get"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "id": "challenge",
+      "name": "Devolver hub.challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ctwa-kommo-boa-vista",
+        "responseMode": "onReceived",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "eventos",
+      "name": "Meta · eventos (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        60
+      ],
+      "webhookId": "ctwa-kommo-bv-post"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida a assinatura X-Hub-Signature-256 da Meta antes de olhar o conteúdo.\n// Sem isso qualquer um posta atribuição falsa no CRM.\nconst crypto = require('crypto');\nconst segredo = $env.META_APP_SECRET;\nconst assinatura = $input.first().json.headers?.['x-hub-signature-256'] ?? '';\nconst corpo = JSON.stringify($input.first().json.body ?? {});\nconst esperado = 'sha256=' + crypto.createHmac('sha256', segredo).update(corpo).digest('hex');\nconst ok = assinatura.length === esperado.length &&\n           crypto.timingSafeEqual(Buffer.from(assinatura), Buffer.from(esperado));\nif (!ok) throw new Error('Assinatura da Meta inválida — evento descartado');\nreturn $input.all();"
+      },
+      "id": "assin",
+      "name": "Validar assinatura da Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fica só com a 1ª mensagem que carrega `referral` (o clique no anúncio).\n// Mensagem normal, status de entrega e evento repetido saem aqui — a Kommo continua\n// recebendo tudo por conta dela; este fluxo é só leitura paralela.\nconst saida = [];\nfor (const item of $input.all()) {\n  for (const entry of (item.json.body?.entry ?? [])) {\n    for (const ch of (entry.changes ?? [])) {\n      const v = ch.value ?? {};\n      for (const msg of (v.messages ?? [])) {\n        const ref = msg.referral;\n        if (!ref) continue;                       // mensagem sem origem de anúncio\n        if (ref.source_type && ref.source_type !== 'ad') continue;\n        const tel = String(msg.from || '').replace(/\\D/g, '');\n        if (!tel) continue;                       // dado incompleto\n        saida.push({ json: {\n          telefone: tel,\n          messageId: msg.id,                      // chave de deduplicação\n          quando: Number(msg.timestamp || 0),\n          ctwaClid: ref.ctwa_clid ?? null,\n          anuncioId: ref.source_id ?? null,\n          titulo: ref.headline ?? null,\n          corpo: ref.body ?? null,\n          sourceUrl: ref.source_url ?? null,\n          phoneNumberId: v.metadata?.phone_number_id ?? null,\n        }});\n      }\n    }\n  }\n}\nreturn saida;"
+      },
+      "id": "extr",
+      "name": "Extrair referral do anúncio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicação por message_id: a Meta reenvia o mesmo evento quando não recebe 2xx\n// a tempo, e vários apps inscritos no WABA amplificam isso.\nconst vistos = $getWorkflowStaticData('global');\nvistos.ids = vistos.ids || {};\nconst agora = Date.now();\nfor (const k of Object.keys(vistos.ids)) {          // janela de 24h\n  if (agora - vistos.ids[k] > 86400000) delete vistos.ids[k];\n}\nconst novos = [];\nfor (const item of $input.all()) {\n  const id = item.json.messageId;\n  if (vistos.ids[id]) continue;\n  vistos.ids[id] = agora;\n  novos.push(item);\n}\nreturn novos;"
+      },
+      "id": "dedup",
+      "name": "Deduplicar por message_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/contacts",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.telefone }}"
+            },
+            {
+              "name": "with",
+              "value": "leads"
+            }
+          ]
+        }
+      },
+      "id": "kommo_·_achar_contat",
+      "name": "Kommo · achar contato pelo telefone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        60
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "id": "esperar",
+      "name": "Esperar a Kommo criar o lead",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        220
+      ],
+      "webhookId": "ctwa-espera"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/leads",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Deduplicar por message_id').item.json.telefone }}"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "id": "kommo_·_buscar_lead_",
+      "name": "Kommo · buscar lead do contato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        60
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Primeiro toque vence: só grava campo que está VAZIO no lead.\n// Reatribuir um lead que já veio de outra campanha destrói o histórico de origem.\nconst F = { ad: 498572, titulo: 498574, clid: 498576, url: 498578, campanha: 397126, conjunto: 397128, primeiro: 397114 };\nconst rastreio = $('Deduplicar por message_id').item.json;\nconst leads = $input.first().json?._embedded?.leads ?? [];\nif (!leads.length) return [{ json: { semLead: true, telefone: rastreio.telefone } }];\n\nconst lead = leads[0];\nconst atual = (id) => (lead.custom_fields_values ?? [])\n  .find((c) => c.field_id === id)?.values?.[0]?.value ?? null;\n\nconst valores = [];\nconst por = (id, valor) => {\n  if (valor === null || valor === undefined || valor === '') return;\n  if (atual(id)) return;                       // já atribuído — não sobrescreve\n  valores.push({ field_id: id, values: [{ value: String(valor) }] });\n};\npor(F.ad, rastreio.anuncioId);\npor(F.titulo, rastreio.titulo);\npor(F.clid, rastreio.ctwaClid);\npor(F.url, rastreio.sourceUrl);\npor(F.campanha, rastreio.anuncioId);           // sem nome da campanha no referral: fica o id\nif (!atual(F.primeiro) && rastreio.quando) {\n  valores.push({ field_id: F.primeiro, values: [{ value: rastreio.quando }] });\n}\nif (!valores.length) return [{ json: { semMudanca: true, leadId: lead.id } }];\nreturn [{ json: { leadId: lead.id, telefone: rastreio.telefone, valores } }];"
+      },
+      "id": "montar",
+      "name": "Montar atribuição (primeiro toque)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valores }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "exists"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tem",
+      "name": "Tem campo a gravar?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/leads",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ id: $json.leadId, custom_fields_values: $json.valores }]) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "kommo_·_gravar_atrib",
+      "name": "Kommo · gravar atribuição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        60
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://boavistarrdoutorhernia.kommo.com/api/v4/leads/notes",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "kommoLongLivedApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ entity_id: $('Montar atribuição (primeiro toque)').item.json.leadId, note_type: 'common', params: { text: 'Rastreio CTWA gravado — anúncio ' + ($('Deduplicar por message_id').item.json.anuncioId || '?') + ' · ctwa_clid ' + ($('Deduplicar por message_id').item.json.ctwaClid || '?') } }]) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "kommo_·_nota_de_audi",
+      "name": "Kommo · nota de auditoria",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        60
+      ],
+      "credentials": {
+        "kommoLongLivedApi": {
+          "id": "REPLACE_ME",
+          "name": "Kommo · Boa Vista (long-lived)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Meta · verificação (GET)": {
+      "main": [
+        [
+          {
+            "node": "Devolver hub.challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta · eventos (POST)": {
+      "main": [
+        [
+          {
+            "node": "Validar assinatura da Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar assinatura da Meta": {
+      "main": [
+        [
+          {
+            "node": "Extrair referral do anúncio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair referral do anúncio": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar por message_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar por message_id": {
+      "main": [
+        [
+          {
+            "node": "Kommo · achar contato pelo telefone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kommo · achar contato pelo telefone": {
+      "main": [
+        [
+          {
+            "node": "Esperar a Kommo criar o lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar a Kommo criar o lead": {
+      "main": [
+        [
+          {
+            "node": "Kommo · buscar lead do contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kommo · buscar lead do contato": {
+      "main": [
+        [
+          {
+            "node": "Montar atribuição (primeiro toque)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar atribuição (primeiro toque)": {
+      "main": [
+        [
+          {
+            "node": "Tem campo a gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem campo a gravar?": {
+      "main": [
+        [
+          {
+            "node": "Kommo · gravar atribuição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kommo · gravar atribuição": {
+      "main": [
+        [
+          {
+            "node": "Kommo · nota de auditoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "kommo"
+    },
+    {
+      "name": "boa-vista"
+    },
+    {
+      "name": "rastreio-campanhas"
+    }
+  ]
+}

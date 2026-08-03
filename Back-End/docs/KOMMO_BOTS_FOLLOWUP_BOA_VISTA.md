@@ -56,6 +56,31 @@ régua de *silêncio comercial*; quem já compareceu recebe a régua de *decisã
 | QLF 02 · Perguntas de qualificação | Deixado manual para a SDR usar quando o lead responde |
 | QLF 03 · Convite para agendar | Idem — disparar automaticamente antes de qualificar queima o convite |
 
+## 2-A. Os cinco fluxos ramificados
+
+Cada etapa tem um **fluxo**, não uma mensagem solta: envia → espera → lê a resposta →
+ramifica → grava campo → avisa a SDR. Total: 34 blocos, 83 ações.
+
+| Etapa | Fluxo | Blocos | Campos que grava |
+|---|---|---|---|
+| Entrada | ENT 01 · Boas-vindas | 6 | Tipo de lead, Data do primeiro contato, Interação |
+| EM QUALIFICAÇÃO | QLF 01 · Qualificação | 10 | Status da conversa, Data da qualificação, Interação, Queixa, Plano de saúde, Qualificação Q/M/F, Intenção, Nº de tentativas |
+| COMPARECEU | NEG 01 · Pós-consulta | 6 | Status da conversa, Intenção, Qualificação |
+| EM NEGOCIAÇÃO | NEG 02 · Negociação | 8 | Status da conversa, Intenção, Motivo de não fechamento |
+| Régua 15 dias | FUP 05 · Break-up | 4 | Status da conversa, Motivo do não agendamento, Interação |
+
+O ganho: a queixa do paciente entra no campo certo, o termômetro Quente/Morno/Frio é
+preenchido pela própria resposta, e o motivo de não fechamento nasce classificado a
+partir do que o paciente escreveu — é isso que alimenta o card de motivos do dashboard
+sem depender de digitação da SDR.
+
+Blocos usados: `send_message`, `wait` (por tempo e por resposta), `conditions` + `goto`,
+`action → set_custom_fields`, `send_internal`. Detalhe bloco a bloco no PDF
+`Manual_Bots_Doutor_Hernia_Boa_Vista.pdf`.
+
+**Gotchas do fluxo:** bloco `finish` não pode ter entrada no `text` (400); cada bloco
+precisa de `step` ÚNICO — steps repetidos fazem um ramo inteiro sumir em silêncio.
+
 ## 3. Por que cada escolha
 
 **Um bot por mensagem, e não um bot com vários passos.** A Kommo permite blocos de

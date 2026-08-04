@@ -72,6 +72,12 @@ public class SpineApiClient
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        // A API da franquia mistura os tipos: `price` vem como "3680.00" (texto) enquanto
+        // outros números vêm como número. Sem essa tolerância, um único campo assim
+        // derruba a resposta inteira por exceção de desserialização — e o efeito visível
+        // não é erro na tela, é o dashboard caindo em silêncio para a fonte reserva com
+        // outro número.
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
     private readonly HttpClient _http;

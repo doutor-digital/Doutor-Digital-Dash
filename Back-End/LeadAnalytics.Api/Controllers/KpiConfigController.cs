@@ -27,10 +27,16 @@ public class KpiConfigController(
     private readonly ICurrentUser _currentUser = currentUser;
     private readonly AppDbContext _db = db;
 
+    /// <summary>
+    /// Só a conta dona do produto configura de onde o KPI é puxado.
+    ///
+    /// Papel não serve aqui: analista_ti é concedido por convite e mudar o mapeamento de
+    /// um KPI muda o número que a rede inteira lê, sem deixar cara de erro. Fica nominal.
+    /// </summary>
     private IActionResult? RequireAnalyst() =>
-        _currentUser.IsAdminLevel
+        _currentUser.IsOwner
             ? null
-            : StatusCode(403, new { message = "Acesso restrito ao analista de TI." });
+            : StatusCode(403, new { message = "Configurar a fonte dos KPIs é restrito à conta responsável." });
 
     /// <summary>Catálogo dos KPIs que podem ser mapeados (chave + rótulo amigável).</summary>
     [HttpGet("catalog")]

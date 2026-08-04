@@ -34,6 +34,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         public string? Email => null;
         public bool IsSuperAdmin => false;
         public bool IsAdminLevel => false;
+        public bool IsOwner => false;
         public bool IsReadOnly => false;
         public bool IsAuthenticated => false;
         public long? SessionId => null;

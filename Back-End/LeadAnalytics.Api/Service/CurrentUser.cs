@@ -16,11 +16,31 @@ public interface ICurrentUser
     bool IsAuthenticated { get; }
     /// <summary>Id da sessão de login (claim <c>sid</c>), quando presente.</summary>
     long? SessionId { get; }
+
+    /// <summary>
+    /// É a conta dona do produto — a única que pode alterar de onde cada KPI é puxado.
+    ///
+    /// Mapear KPI para etapa muda o número que TODA a rede enxerga, e um mapeamento
+    /// errado não parece erro: parece queda de desempenho. Por isso essa configuração
+    /// não segue papel (analista_ti pode ser concedido a qualquer pessoa) e sim uma
+    /// conta nominal, definida em <c>Security:OwnerEmail</c>.
+    /// </summary>
+    bool IsOwner { get; }
 }
 
-public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
+public class CurrentUser(IHttpContextAccessor accessor, IConfiguration config) : ICurrentUser
 {
     private readonly IHttpContextAccessor _accessor = accessor;
+    private readonly IConfiguration _config = config;
+
+    /// <summary>Conta dona do produto. Configurável para não amarrar o código a um e-mail.</summary>
+    private string OwnerEmail =>
+        _config["Security:OwnerEmail"] ?? "doutordigitalconsultoria@gmail.com";
+
+    public bool IsOwner =>
+        IsAuthenticated
+        && !string.IsNullOrWhiteSpace(Email)
+        && string.Equals(Email!.Trim(), OwnerEmail.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private ClaimsPrincipal? Principal => _accessor.HttpContext?.User;
 

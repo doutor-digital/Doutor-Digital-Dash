@@ -202,6 +202,52 @@ public class SpineApiClient
         return env?.Data?.Data;
     }
 
+    /// <summary>
+    /// Tratamentos da unidade pela rota oficial (<c>POST /api/treatments/search</c>).
+    ///
+    /// A janela é enviada no mesmo formato de <c>schedules/search</c>, mas hoje a API
+    /// devolve o mesmo conjunto para qualquer intervalo — ela ignora o filtro. Por isso o
+    /// recorte por data é refeito aqui, sobre <c>dateBegin</c>: sem isso o card mostraria
+    /// o mesmo número em todo período escolhido, o que é pior do que mostrar menos.
+    /// </summary>
+    public async Task<IReadOnlyList<SpineTreatment>> SearchTreatmentsAsync(
+        string token, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        if (to < from) (from, to) = (to, from);
+
+        var all = new List<SpineTreatment>();
+        var page = 1;
+        var totalPages = 1;
+
+        while (page <= totalPages && page <= 40)
+        {
+            var body = new Dictionary<string, object?>
+            {
+                ["initialDate"] = from.ToString("yyyy-MM-dd"),
+                ["endDate"] = to.AddDays(1).ToString("yyyy-MM-dd"),
+                ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
+            };
+
+            var envelope = await PostAsync<SpineSearchEnvelope<SpineTreatment>>(
+                "/api/treatments/search", body, token, ct);
+
+            var rows = envelope?.Data?.Data;
+            if (rows is null || rows.Count == 0) break;
+
+            all.AddRange(rows);
+            totalPages = envelope!.Data!.TotalPages ?? 1;
+            page++;
+        }
+
+        // Recorte local da janela. Tratamento sem data de início fica de fora: não dá
+        // para afirmar que pertence ao período.
+        return all
+            .Where(t => t.DateBegin is not null
+                     && DateOnly.FromDateTime(t.DateBegin.Value) >= from
+                     && DateOnly.FromDateTime(t.DateBegin.Value) <= to)
+            .ToList();
+    }
+
     private string Base => _options.BaseUrl.TrimEnd('/');
 
     private async Task<T?> GetAsync<T>(string path, string token, CancellationToken ct)
@@ -357,4 +403,31 @@ public class SpineSchedule
     [JsonPropertyName("statusName")] public string? StatusName { get; set; }
     [JsonPropertyName("modified")] public DateTime? Modified { get; set; }
     [JsonPropertyName("modifiedBy")] public string? ModifiedBy { get; set; }
+}
+
+/// <summary>
+/// Um tratamento como a API oficial devolve (<c>/api/treatments/search</c>).
+///
+/// Mais rico que o export raspado do CRM web: traz categoria, local, grau,
+/// profissional e preço em campo próprio, sem parse de planilha. O que ele NÃO traz é
+/// a situação financeira (pago/pendente) — essa só existe no export.
+/// </summary>
+public class SpineTreatment
+{
+    [JsonPropertyName("idTreatment")] public long IdTreatment { get; set; }
+    [JsonPropertyName("idClient")] public long IdClient { get; set; }
+    [JsonPropertyName("clientName")] public string? ClientName { get; set; }
+    [JsonPropertyName("category")] public string? Category { get; set; }
+    [JsonPropertyName("local")] public string? Local { get; set; }
+    [JsonPropertyName("degree")] public string? Degree { get; set; }
+    [JsonPropertyName("staffName")] public string? StaffName { get; set; }
+
+    /// <summary>EM ANDAMENTO · FINALIZADO · NÃO INICIADO · DESISTÊNCIA.</summary>
+    [JsonPropertyName("statusName")] public string? StatusName { get; set; }
+
+    [JsonPropertyName("companyName")] public string? CompanyName { get; set; }
+    [JsonPropertyName("dateBegin")] public DateTime? DateBegin { get; set; }
+    [JsonPropertyName("dateFinish")] public DateTime? DateFinish { get; set; }
+    [JsonPropertyName("price")] public decimal? Price { get; set; }
+    [JsonPropertyName("created")] public DateTime? Created { get; set; }
 }

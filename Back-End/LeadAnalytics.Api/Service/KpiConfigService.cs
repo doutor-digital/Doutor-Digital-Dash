@@ -200,7 +200,11 @@ public class KpiConfigService(
                             .Where(s => s.Situacao.Contains("EM ANDAMENTO", StringComparison.OrdinalIgnoreCase)
                                      || s.Situacao.Contains("NÃO INICIADO", StringComparison.OrdinalIgnoreCase))
                             .Sum(s => s.Quantidade);
-                        return (ativos, sample, "fonte: CRM da franquia (ativos)");
+                        // A nota diz QUAL fonte respondeu: rota oficial e export do CRM
+                        // web dão números diferentes (a rota só expõe o pós-liberação), e
+                        // sem isso um número que muda sozinho vira mistério.
+                        var fonteNome = t.Fonte == "api" ? "rota oficial" : "export do CRM web";
+                        return (ativos, sample, $"fonte: franquia · {fonteNome} (ativos)");
                     }
                     var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
                     if (av is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);

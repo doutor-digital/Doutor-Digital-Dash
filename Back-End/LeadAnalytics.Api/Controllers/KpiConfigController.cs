@@ -36,7 +36,15 @@ public class KpiConfigController(
     private IActionResult? RequireAnalyst() =>
         _currentUser.IsOwner
             ? null
-            : StatusCode(403, new { message = "Configurar a fonte dos KPIs é restrito à conta responsável." });
+            : StatusCode(403, new
+            {
+                // Diz qual conta está autenticada: quase todo 403 aqui é alguém logado
+                // em outra conta sem perceber, e sem essa linha o diagnóstico vira
+                // adivinhação. Só devolve o e-mail de quem já está autenticado — nunca
+                // qual é a conta responsável.
+                message = "Configurar a fonte dos KPIs é restrito à conta responsável.",
+                conta = _currentUser.Email,
+            });
 
     /// <summary>Catálogo dos KPIs que podem ser mapeados (chave + rótulo amigável).</summary>
     [HttpGet("catalog")]

@@ -393,7 +393,23 @@ public class KommoApiClient
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
-            _logger.LogWarning("Kommo API {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
+            // Impressão digital do token no 401: todos os tokens gravados respondem 200
+            // quando testados isolados, então o 401 vem de OUTRA credencial chegando aqui.
+            // Sem saber qual, o diagnóstico é adivinhação. Nunca loga o token — só
+            // tamanho e as pontas, que bastam para casar com a linha do banco.
+            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning(
+                    "Kommo API 401 em {Url} — token len={Len} {Ini}…{Fim}: {Body}",
+                    url, token?.Length ?? 0,
+                    token is { Length: > 6 } ? token[..6] : "(vazio)",
+                    token is { Length: > 6 } ? token[^6..] : "",
+                    body);
+            }
+            else
+            {
+                _logger.LogWarning("Kommo API {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
+            }
             throw new HttpRequestException($"Kommo API retornou {(int)resp.StatusCode}: {body}");
         }
 

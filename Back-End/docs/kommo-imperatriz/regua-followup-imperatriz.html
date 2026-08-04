@@ -1,0 +1,812 @@
+<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Régua de follow-up — Doutor Hérnia Imperatriz</title></head><body><style>
+@page { size: A4; margin: 18mm 15mm; }
+* { box-sizing: border-box; }
+body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.5; color: #1a1a1a; }
+h1 { font-size: 21pt; margin: 0 0 4px; letter-spacing: -0.4px; }
+h2 { font-size: 13pt; margin: 26px 0 8px; padding-bottom: 5px; border-bottom: 1.5px solid #1a1a1a; page-break-after: avoid; }
+h3 { font-size: 10.5pt; margin: 16px 0 6px; color: #333; page-break-after: avoid; }
+p { margin: 0 0 8px; }
+.sub { color: #666; font-size: 9pt; margin-bottom: 2px; }
+.capa { border-bottom: 2px solid #1a1a1a; padding-bottom: 14px; margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 8.5pt; }
+th { text-align: left; background: #f2f2f2; border-bottom: 1px solid #ccc; padding: 5px 6px; font-weight: 600; }
+td { border-bottom: 1px solid #e6e6e6; padding: 5px 6px; vertical-align: top; }
+tr { page-break-inside: avoid; }
+code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8pt; background: #f2f2f2; padding: 1px 4px; }
+.msg { border: 1px solid #ddd; padding: 9px 11px; margin: 0 0 9px; page-break-inside: avoid; }
+.msg .cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.msg .cod { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8pt; font-weight: 600; }
+.msg .meta { font-size: 7.5pt; color: #777; }
+.msg .corpo { background: #fafafa; border-left: 2px solid #bbb; padding: 7px 9px; font-size: 8.5pt; white-space: normal; }
+.tag { display: inline-block; font-size: 7pt; padding: 1px 5px; border: 1px solid #999; text-transform: uppercase; letter-spacing: 0.4px; }
+.tag.u { border-color: #2b6b3f; color: #2b6b3f; }
+.tag.m { border-color: #8a5a1a; color: #8a5a1a; }
+.tag.auto { border-color: #2b4f7a; color: #2b4f7a; }
+.tag.sdr { border-color: #777; color: #777; }
+.nota { border-left: 3px solid #1a1a1a; padding: 8px 11px; background: #f7f7f7; font-size: 9pt; margin: 10px 0; }
+.quebra { page-break-before: always; }
+ul { margin: 4px 0 10px; padding-left: 17px; }
+li { margin-bottom: 3px; }
+.kv { font-size: 8.5pt; color: #555; }
+</style>
+
+<div class="capa">
+  <div class="sub">Doutor Hérnia Imperatriz · conta Kommo attivacorpoementeitz (36459431)</div>
+  <h1>Régua de follow-up no WhatsApp</h1>
+  <div class="sub">Catálogo de mensagens, templates para aprovação e automações · 4 de agosto de 2026</div>
+</div>
+<p>Este documento parte da estrutura real da conta: dois funis, onze etapas e 155 campos
+customizados, lidos direto da API da Kommo. A partir dela, define o que cada etapa precisa
+comunicar, quais mensagens cobrem essa necessidade e qual automação dispara cada uma.</p>
+<div class="nota"><strong>O que já está feito:</strong> as 43 mensagens rápidas descritas na
+seção 4 foram criadas na conta e já aparecem para a equipe.
+<strong>O que depende de aprovação:</strong> os 32 templates da seção 5, que precisam ir
+para a Meta antes de qualquer envio fora da janela de 24 horas.</div>
+
+<h2>1. A estrutura encontrada</h2>
+<h3>Funil COMERCIAL <span class='kv'>(14091100)</span></h3>
+<table><tr><th>ID</th><th>Etapa</th><th>Campos obrigatórios para entrar</th></tr><tr><td><code>108772996</code></td><td>Etapa de leads de entrada</td><td>—</td></tr><tr><td><code>108773004</code></td><td>EM QUALIFICAÇÃO</td><td>⚑ Origem · ⬢ Tipo de lead</td></tr><tr><td><code>108773008</code></td><td>AGENDADO</td><td>★ Qualificação · ☻ Responsável agendamento · ◷ Data da Consulta · ◷ Data de agendamento</td></tr><tr><td><code>108773012</code></td><td>COMPARECEU</td><td>—</td></tr><tr><td><code>108773016</code></td><td>EM NEGOCIAÇÃO</td><td>¤ Valor do tratamento · ⚕ Tratamento indicado</td></tr><tr><td><code>142</code></td><td>GANHO / CONCLUÍDO</td><td>¤ Pagamento antecipado · ⚕ Fisioterapeuta · ⚕ Tratamento fechado · ¤ Valor da Consulta</td></tr><tr><td><code>143</code></td><td>PERDIDO</td><td>—</td></tr></table>
+<h3>Funil TRATAMENTO <span class='kv'>(14091116)</span></h3>
+<table><tr><th>ID</th><th>Etapa</th><th>Campos obrigatórios para entrar</th></tr><tr><td><code>108773164</code></td><td>Etapa de leads de entrada</td><td>—</td></tr><tr><td><code>108773168</code></td><td>EM TRATAMENTO</td><td>¤ Valor do tratamento · ¤ Valor da Consulta</td></tr><tr><td><code>142</code></td><td>ALTA</td><td>—</td></tr><tr><td><code>143</code></td><td>TRATAMENTO CANCELADO</td><td>—</td></tr></table>
+<p class='kv'>Existe ainda o funil arquivado <strong>NÂO USAR</strong> (13713915), fora de qualquer automação.</p>
+<h3>Os 155 campos, por grupo</h3>
+<table><tr><th>Grupo</th><th>Campos</th><th>Do que trata</th></tr><tr><td>Cartão do lead (comercial)</td><td>85</td><td>origem, cidade, qualificação, queixa, datas, valores, tratamento indicado/fechado, métricas da IA</td></tr><tr><td>Tratamento</td><td>33</td><td>sessões previstas/realizadas, faltas, alta, cancelamento, NPS, transferência entre clínicas</td></tr><tr><td>ASAAS — Financeiro</td><td>14</td><td>cobrança, vencimento, status do pagamento, boleto/PIX, valor líquido</td></tr><tr><td>Info agente (IA)</td><td>3</td><td>resposta da IA, pausar IA</td></tr><tr><td>Telefonia 3C</td><td>8</td><td>última ligação, resultado, duração, gravação</td></tr><tr><td>Tracking (UTM)</td><td>12</td><td>utm_*, gclid, fbclid, ttad_id</td></tr></table>
+<h2>2. O que precisa ser resolvido antes</h2>
+<p>Seis pontos apareceram na leitura da conta. Os dois primeiros condicionam boa parte da régua.</p>
+<h3>1. ◷ Data da Consulta está vazia em 100% da amostra</h3><p>Em 750 leads lidos, o campo não aparece nenhuma vez; ◷ Data de agendamento aparece em 8%. Toda a faixa de lembrete de consulta (véspera, dia, no-show) fica bloqueada até isso ser preenchido na rotina.</p>
+<h3>2. Não existe campo de opt-out</h3><p>Há template pedindo para o paciente responder SAIR, mas nada registra esse pedido. Na prática, quem pede para parar continua elegível para a próxima régua.</p>
+<h3>3. 62 dos 76 templates WABA legados estão como MARKETING</h3><p>Vários são transacionais (confirmação de agendamento, remarcação, primeira sessão). Categoria errada custa mais caro e arrisca reprovação na Meta.</p>
+<h3>4. 58 templates de MARKETING sem opt-out</h3><p>Só um template legado tem botão de parar mensagens. A Meta penaliza a qualidade do número quando falta saída.</p>
+<h3>5. Dois templates WABA usam a variável da linguagem errada</h3><p>Mensagem rápida e template do WhatsApp falam línguas diferentes: a primeira usa <code>[Nome de contato]</code> (52 das 55 da conta), o segundo usa <code>{{contact.name}}</code> (61 dos 76). E01_REFORCO_2H e E02_RET_DUVIDAS são templates do WhatsApp escritos na sintaxe da mensagem rápida — nesses dois, o texto vai para o paciente como está.</p>
+<h3>6. Uma duplicata real, não quatro</h3><p>E06_NOSHOW_MESMO_DIA, E07_POS_CONSULTA_D1 e DISPARO_VIDEO_FRANQUIA_DH são pares template + mensagem rápida de mesmo nome, o que é o padrão da casa — faltou apenas o sufixo <code>_MSG_RAPIDA</code>. Duplicata de verdade só há uma: E04_DADOS_PIX, dois templates de conteúdo idêntico, um como Marketing e outro como Utility.</p>
+<h3>7. Nada disso se corrige pela API</h3><p>O endpoint de templates só enxerga o que ele mesmo criou: <code>PATCH</code> em um template legado responde <code>EntityNotFound</code>. Os cinco pontos acima são trabalho na interface da Kommo e, no caso de categoria, reenvio à Meta.</p>
+<h2>3. O que cada etapa precisa comunicar</h2>
+<table><tr><th>Funil</th><th>Etapa</th><th>Objetivo da comunicação</th><th>Categoria</th><th>Campos usados</th><th>Mensagens</th></tr><tr><td>COMERCIAL</td><td>Etapa de entrada</td><td>Acolher e abrir a qualificação</td><td>Marketing</td><td>Nome do contato</td><td><code>C01</code></td></tr><tr><td>COMERCIAL</td><td>EM QUALIFICAÇÃO</td><td>Retomar quem parou de responder — Sofia dentro de 24h, template depois</td><td>Marketing</td><td>Nome do contato</td><td><code>C02, C03, C08, C09</code></td></tr><tr><td>COMERCIAL</td><td>EM QUALIFICAÇÃO</td><td>Coletar queixa, tempo de dor e exames</td><td>Utility</td><td>✎ Queixa, ★ Qualificação</td><td><code>C04</code></td></tr><tr><td>COMERCIAL</td><td>EM QUALIFICAÇÃO</td><td>Explicar o método e convidar para consulta</td><td>Marketing</td><td>—</td><td><code>C05, C07</code></td></tr><tr><td>COMERCIAL</td><td>EM QUALIFICAÇÃO</td><td>Recuperar ligação não atendida</td><td>Utility</td><td>☎ Última ligação, ☎ Resultado</td><td><code>C06</code></td></tr><tr><td>COMERCIAL</td><td>AGENDADO</td><td>Confirmar consulta e orientar preparo</td><td>Utility</td><td>◷ Data de agendamento, ⌂ Unidade</td><td><code>C10, C13</code></td></tr><tr><td>COMERCIAL</td><td>AGENDADO</td><td>Lembrar na véspera e no dia</td><td>Utility</td><td>◷ Data de agendamento</td><td><code>C11, C12</code></td></tr><tr><td>COMERCIAL</td><td>AGENDADO</td><td>Remarcar e recuperar falta</td><td>Utility</td><td>◷ Data do reagendamento, ⊘ Motivo do no-show</td><td><code>C14, C15, C16</code></td></tr><tr><td>COMERCIAL</td><td>COMPARECEU</td><td>Abrir espaço para dúvidas no dia seguinte</td><td>Utility</td><td>—</td><td><code>C17</code></td></tr><tr><td>COMERCIAL</td><td>EM NEGOCIAÇÃO</td><td>Registrar plano e condições por escrito</td><td>Marketing</td><td>⚕ Tratamento indicado, ¤ Valor do tratamento</td><td><code>C18, C21</code></td></tr><tr><td>COMERCIAL</td><td>EM NEGOCIAÇÃO</td><td>Tratar objeção de valor e de decisão compartilhada</td><td>Marketing</td><td>—</td><td><code>C19, C20</code></td></tr><tr><td>COMERCIAL</td><td>EM NEGOCIAÇÃO</td><td>Retomar em D+4 e encerrar em D+7 (degraus da Sofia fora da janela)</td><td>Marketing</td><td>—</td><td><code>C22, C23</code></td></tr><tr><td>COMERCIAL</td><td>PERDIDO</td><td>Reengajar 30 dias depois</td><td>Marketing</td><td>◷ Data da perda, motivo de perda</td><td><code>C24</code></td></tr><tr><td>COMERCIAL</td><td>GANHO</td><td>Acolher e informar a primeira sessão</td><td>Utility</td><td>◷ Próxima sessão, ⌂ Unidade</td><td><code>C26, C27</code></td></tr><tr><td>TRATAMENTO</td><td>EM TRATAMENTO</td><td>Lembrar sessão na véspera e no dia</td><td>Utility</td><td>◷ Próxima sessão</td><td><code>T01, T02</code></td></tr><tr><td>TRATAMENTO</td><td>EM TRATAMENTO</td><td>Recuperar falta e sustentar aderência</td><td>Utility</td><td>✓ Compareceu à última sessão, # Sessões realizadas</td><td><code>T03, T04</code></td></tr><tr><td>TRATAMENTO</td><td>EM TRATAMENTO</td><td>Cobrar exame ou documento pendente</td><td>Utility</td><td>◷ Data de retorno com exames</td><td><code>T05</code></td></tr><tr><td>TRATAMENTO</td><td>EM TRATAMENTO</td><td>Acolher cancelamento e reter</td><td>Utility / Marketing</td><td>◷ Data solicitação de cancelamento, ⊘ Motivo</td><td><code>T06, T07</code></td></tr><tr><td>TRATAMENTO</td><td>CANCELADO</td><td>Oferecer retorno clínico antes de encerrar</td><td>Utility</td><td>—</td><td><code>T08</code></td></tr><tr><td>TRATAMENTO</td><td>ALTA</td><td>Comunicar conclusão e medir satisfação</td><td>Utility</td><td>◷ Data de alta, ★ Satisfação / NPS</td><td><code>R01, R02</code></td></tr><tr><td>TRATAMENTO</td><td>ALTA</td><td>Pedir avaliação pública (só promotor) e retorno em 60 dias</td><td>Marketing</td><td>★ NPS, ✓ Deixou avaliação</td><td><code>R03, R04</code></td></tr><tr><td>TRATAMENTO</td><td>EM TRATAMENTO</td><td>Lembrar vencimento, cobrar atraso e confirmar pagamento</td><td>Utility</td><td>◷ Vencimento, ⬢ Status do pagamento, ↗ Boleto / PIX</td><td><code>F01–F04</code></td></tr></table>
+<h2 class='quebra'>4. Mensagens rápidas criadas na Kommo</h2>
+<p>São as mensagens que a equipe escolhe dentro da conversa. Onde existia campo no cartão,
+a mensagem passou a puxar o valor sozinha — a SDR não digita nem consulta.
+<span class="tag auto">auto</span> não pede nada; <span class="tag sdr">sdr</span> ainda tem um dado
+que só quem está na conversa sabe (dois horários à escolha, por exemplo).</p>
+<h3>Funil COMERCIAL</h3>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C01 · ITZ_C01_BOAS_VINDAS_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68463</span></span>
+      </div>
+      <div class="meta">Etapa de leads de entrada (108772996) — Primeiro contato: acolher e abrir a qualificação.</div>
+      <div class="corpo">Olá, [Nome de contato]. Aqui é da Doutor Hérnia Imperatriz.<br><br>Recebemos o seu contato e queremos te orientar da melhor forma.<br><br>Para começar, me conta: em que região da coluna o incômodo aparece com mais frequência?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C02 · ITZ_C02_RETOMADA_2H_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68465</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Reengajar quem não respondeu em 2h.</div>
+      <div class="corpo">Olá, [Nome de contato]. Passando para retomar a nossa conversa.<br><br>Quando puder responder, me diga onde a dor aparece com mais frequência. Assim consigo te orientar com mais precisão.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C03 · ITZ_C03_RETOMADA_24H_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68467</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Segunda tentativa, oferecendo troca de canal (ligação).</div>
+      <div class="corpo">Olá, [Nome de contato], tudo bem?<br><br>Continuo à disposição para entender o seu caso e explicar como funciona a consulta com o nosso especialista.<br><br>Se preferir, posso te retornar por ligação. Qual período é melhor para você?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C04 · ITZ_C04_PERGUNTAS_QUALIFICACAO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68469</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Coletar dados clínicos que alimentam ✎ Queixa e ★ Qualificação.</div>
+      <div class="corpo">Para encaminhar o seu caso ao nosso especialista, preciso de três informações:<br><br>1. Há quanto tempo você sente esse incômodo?<br>2. Já realizou algum exame de imagem da coluna?<br>3. A dor limita alguma atividade do seu dia, como dormir, trabalhar ou dirigir?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C05 · ITZ_C05_METODO_AUTORIDADE_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68471</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Explicar o método e conduzir ao agendamento.</div>
+      <div class="corpo">Olá, [Nome de contato], a Doutor Hérnia é especializada no tratamento de hérnia de disco e dores na coluna sem cirurgia.<br><br>O primeiro passo é uma consulta presencial, em que o nosso especialista examina o seu caso e explica quais opções fazem sentido para você.<br><br>Posso verificar os horários disponíveis?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C06 · ITZ_C06_LIGACAO_SEM_SUCESSO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68473</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Recuperar tentativa de ligação não atendida (integração 3C).</div>
+      <div class="corpo">Olá, [Nome de contato], tentei falar com você por telefone agora há pouco e não consegui.<br><br>Podemos seguir por aqui mesmo, se for mais prático. Qual o melhor horário para eu te retornar?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C07 · ITZ_C07_CONVITE_AGENDAR_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68475</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Oferecer dois horários concretos. · a SDR informa: data 1, data 2</div>
+      <div class="corpo">Olá, [Nome de contato], consigo reservar um horário para a sua consulta.<br><br>Tenho disponibilidade em [data 1] e em [data 2].<br><br>Qual fica melhor para você?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C08 · ITZ_C08_TERMOMETRO_72H_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68477</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Pergunta de baixo atrito para reabrir conversa.</div>
+      <div class="corpo">Olá, [Nome de contato], tudo bem?<br><br>Revendo os atendimentos da semana, lembrei do seu caso. Como está o seu incômodo hoje: melhor, igual ou pior?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C09 · ITZ_C09_PORTA_ABERTA_120H_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68479</span></span>
+      </div>
+      <div class="meta">EM QUALIFICAÇÃO (108773004) — Encerrar a régua sem queimar o lead.</div>
+      <div class="corpo">Olá, [Nome de contato], para não te incomodar, vou pausar os meus contatos por aqui.<br><br>Se em algum momento quiser retomar o cuidado com a sua coluna, é só responder esta mensagem. Ficamos à disposição.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C10 · ITZ_C10_CONFIRMACAO_AGENDAMENTO_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68481</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Confirmar consulta com data, hora e endereço. · a SDR informa: data e horário da consulta</div>
+      <div class="corpo">Olá, [Nome de contato], a sua consulta está confirmada.<br><br>Data e horário: [data e horário da consulta]<br>Endereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA<br><br>Pedimos que chegue com 10 minutos de antecedência. Se tiver exames de imagem recentes, leve-os.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C11 · ITZ_C11_LEMBRETE_VESPERA_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68483</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Lembrete na véspera, reduzir no-show. · a SDR informa: data e horário da consulta</div>
+      <div class="corpo">Olá, [Nome de contato], lembrando que a sua consulta é amanhã.<br><br>Data e horário: [data e horário da consulta]<br>Endereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA<br><br>Se precisar remarcar, responda esta mensagem.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C12 · ITZ_C12_CONFIRMACAO_DIA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68485</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Confirmação no dia, pela manhã. · a SDR informa: data e horário da consulta</div>
+      <div class="corpo">Bom dia, [Nome de contato]. A sua consulta está marcada para [data e horário da consulta].<br><br>Está tudo certo para o seu comparecimento?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C13 · ITZ_C13_PREPARO_CONSULTA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68487</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Orientar o que levar. Não depende de data.</div>
+      <div class="corpo">Olá, [Nome de contato], para a sua consulta, leve:<br><br>- documento com foto;<br>- exames de imagem da coluna, se tiver (raio-X, tomografia ou ressonância);<br>- roupa confortável, se possível.<br><br>Qualquer dúvida, é só responder aqui.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C14 · ITZ_C14_REAGENDAMENTO_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68489</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Reagendar sem atrito. · a SDR informa: data 1, data 2</div>
+      <div class="corpo">Olá, [Nome de contato], sem problema. Consigo remarcar a sua consulta para [data 1] ou [data 2].<br><br>Qual das opções fica melhor?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C15 · ITZ_C15_NO_SHOW_MESMO_DIA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68491</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Recuperar falta no mesmo dia.</div>
+      <div class="corpo">Olá, [Nome de contato], notamos que não foi possível comparecer à sua consulta hoje.<br><br>Imprevistos acontecem. Quer que eu verifique um novo horário para você?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C16 · ITZ_C16_NO_SHOW_48H_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68493</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Segunda e última tentativa de remarcação.</div>
+      <div class="corpo">Olá, [Nome de contato], a sua consulta continua disponível para remarcação.<br><br>Se ainda fizer sentido para você, me avisa que eu verifico os horários desta semana.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C17 · ITZ_C17_POS_CONSULTA_D1_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68495</span></span>
+      </div>
+      <div class="meta">COMPARECEU (108773012) — Abrir espaço para dúvidas no dia seguinte à consulta.</div>
+      <div class="corpo">Olá, [Nome de contato], foi bom te receber ontem.<br><br>Ficou alguma dúvida sobre o que o nosso especialista explicou na consulta? Posso esclarecer por aqui.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C18 · ITZ_C18_RESUMO_PLANO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68497</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Registrar por escrito o plano indicado e o valor. · a SDR informa: tratamento indicado, valor do tratamento, forma de pagamento</div>
+      <div class="corpo">Olá, [Nome de contato], conforme a consulta, o plano indicado para o seu caso foi: [tratamento indicado].<br><br>Investimento: [valor do tratamento]<br>Formas de pagamento: [forma de pagamento]<br><br>Se quiser, explico cada ponto com calma.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C19 · ITZ_C19_OBJECAO_VALOR_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68499</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Tratar objeção de preço sem pressão.</div>
+      <div class="corpo">Olá, [Nome de contato], entendo a sua consideração sobre o valor.<br><br>O plano é definido pelo seu quadro clínico, e não por um pacote padrão. Se ajudar, podemos revisar as condições de pagamento para caber no seu orçamento.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C20 · ITZ_C20_OBJECAO_FAMILIA_MEDICO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68501</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Apoiar a decisão compartilhada.</div>
+      <div class="corpo">Olá, [Nome de contato], decisão de saúde merece conversa com calma.<br><br>Se quiser, posso enviar por escrito o resumo do que foi indicado na consulta, para você apresentar a quem for decidir com você.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C21 · ITZ_C21_CONDICOES_PAGAMENTO_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68503</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Fechar com condições explícitas. · a SDR informa: valor do tratamento, nº de parcelas, valor da parcela, data e horário da consulta</div>
+      <div class="corpo">Olá, [Nome de contato], seguem as condições disponíveis para o plano indicado:<br><br>- à vista: [valor do tratamento]<br>- parcelado: [nº de parcelas] x [valor da parcela]<br><br>Posso reservar o início do tratamento para [data e horário da consulta]?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C22 · ITZ_C22_RETOMADA_NEGOCIACAO_D3_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68505</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Retomar decisão 3 dias após a consulta.</div>
+      <div class="corpo">Olá, [Nome de contato], passando para saber se conseguiu avaliar o plano indicado na consulta.<br><br>Se tiver qualquer dúvida sobre o tratamento ou sobre as condições, estou à disposição.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C23 · ITZ_C23_ENCERRAMENTO_D7_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68507</span></span>
+      </div>
+      <div class="meta">EM NEGOCIAÇÃO (108773016) — Encerrar a régua de negociação com respeito.</div>
+      <div class="corpo">Olá, [Nome de contato], não quero te incomodar, então encerro os meus contatos por aqui.<br><br>A consulta que você fez continua registrada. Quando decidir dar seguimento, é só responder esta mensagem.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C24 · ITZ_C24_CHECKIN_30D_PERDIDO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68509</span></span>
+      </div>
+      <div class="meta">PERDIDO (143) — Win-back 30 dias após a perda.</div>
+      <div class="corpo">Olá, [Nome de contato], tudo bem?<br><br>Faz cerca de um mês que conversamos sobre a sua coluna. Se o incômodo persistir, podemos retomar a consulta.<br><br>Se preferir não receber mais mensagens, responda SAIR.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C25 · ITZ_C25_OPT_OUT_CONFIRMADO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68511</span></span>
+      </div>
+      <div class="meta">qualquer — Confirmar o descadastro quando o paciente responde SAIR.</div>
+      <div class="corpo">Entendido, [Nome de contato]. Não enviaremos mais mensagens.<br><br>Se um dia precisar da nossa equipe, é só chamar. Cuide-se.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C26 · ITZ_C26_BOAS_VINDAS_TRATAMENTO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68513</span></span>
+      </div>
+      <div class="meta">GANHO / CONCLUÍDO (142) — Acolher quem fechou o tratamento.</div>
+      <div class="corpo">Olá, [Nome de contato], seja bem-vindo(a) ao tratamento na Doutor Hérnia Imperatriz.<br><br>A partir de agora a nossa equipe acompanha cada etapa do seu plano. Qualquer dúvida entre as sessões, pode falar por aqui.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C27 · ITZ_C27_ORGANIZACAO_INICIO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68515</span></span>
+      </div>
+      <div class="meta">GANHO / CONCLUÍDO (142) — Informar data da primeira sessão. · a SDR informa: data e horário da sessão, unidade</div>
+      <div class="corpo">Olá, [Nome de contato], a sua primeira sessão ficou assim:<br><br>Data e horário: [data e horário da sessão]<br>Unidade: [unidade]<br><br>Chegue com 10 minutos de antecedência.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C28 · ITZ_C28_OFERTA_PREPAGAMENTO_SDR</span>
+        <span><span class="tag sdr">SDR</span> <span class="meta">id 68679</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Oferecer o pré-pagamento da consulta, 3 dias antes. · a SDR informa: data e horário da consulta</div>
+      <div class="corpo">Olá, [Nome de contato], a sua consulta está pré-agendada.<br><br>Data e horário: [data e horário da consulta]<br><br>A consulta é R$ 350. Garantindo agora no PIX, fica R$ 150.<br><br>Quer que eu reserve o seu horário?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">C29 · ITZ_C29_DADOS_PIX_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68681</span></span>
+      </div>
+      <div class="meta">AGENDADO (108773008) — Enviar os dados do PIX depois que o paciente aceita garantir o horário.</div>
+      <div class="corpo">Perfeito, [Nome de contato]. Seguem os dados para garantir o seu horário:<br><br>Chave PIX (CNPJ): 52.419.807/0001-67<br>Favorecido: Attiva Corpo e Mente Clinica de Fisioterapia Ltda<br><br>Assim que enviar o comprovante, eu confirmo a sua reserva.</div>
+    </div>
+<h3>Funil TRATAMENTO</h3>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T01 · ITZ_T01_SESSAO_VESPERA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68517</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Lembrete de sessão na véspera. · a SDR informa: data e horário da sessão</div>
+      <div class="corpo">Olá, [Nome de contato], lembrando da sua sessão de amanhã.<br><br>Data e horário: [data e horário da sessão]<br><br>Se precisar remarcar, responda esta mensagem.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T02 · ITZ_T02_SESSAO_DIA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68519</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Confirmação de sessão no dia. · a SDR informa: data e horário da sessão</div>
+      <div class="corpo">Bom dia, [Nome de contato]. A sua sessão de hoje está marcada para [data e horário da sessão].<br><br>Está tudo certo?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T03 · ITZ_T03_FALTA_SESSAO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68521</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Recuperar falta em sessão.</div>
+      <div class="corpo">Olá, [Nome de contato], sentimos a sua falta na sessão de hoje.<br><br>A constância é parte importante do resultado. Quer que eu verifique um horário de reposição?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T04 · ITZ_T04_INCENTIVO_MEIO_PLANO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68523</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Reforçar aderência na metade do plano.</div>
+      <div class="corpo">Olá, [Nome de contato], você já concluiu boa parte das sessões previstas.<br><br>Continue mantendo a frequência: é ela que sustenta a evolução do tratamento. Qualquer dúvida, estou à disposição.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T05 · ITZ_T05_PENDENCIA_EXAME_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68525</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Cobrar exame ou documento pendente. · a SDR informa: pendência</div>
+      <div class="corpo">Olá, [Nome de contato], para seguirmos com o seu acompanhamento, ainda falta: [pendência].<br><br>Consegue providenciar? Se precisar de ajuda, me avisa.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T06 · ITZ_T06_CANCELAMENTO_ACOLHIMENTO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68527</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Acolher pedido de cancelamento e capturar o motivo.</div>
+      <div class="corpo">Olá, [Nome de contato], recebemos a sua solicitação de cancelamento e respeitamos a sua decisão.<br><br>Antes de concluir, gostaríamos de entender o que motivou. A sua resposta nos ajuda a melhorar.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T07 · ITZ_T07_RETENCAO_FINANCEIRA_SDR</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68529</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Oferecer alternativa quando o motivo é financeiro.</div>
+      <div class="corpo">Olá, [Nome de contato], se o motivo for financeiro, podemos conversar sobre alternativas.<br><br>A intenção é que você não perca a evolução já conquistada. Quer que eu veja o que é possível?</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">T08 · ITZ_T08_RETORNO_ANTES_ENCERRAR_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68531</span></span>
+      </div>
+      <div class="meta">TRATAMENTO CANCELADO (143) — Oferecer retorno clínico antes do encerramento.</div>
+      <div class="corpo">Olá, [Nome de contato], respeitamos a sua decisão.<br><br>Antes de encerrarmos, faz parte do nosso cuidado um retorno com o nosso especialista, para revisar a sua evolução e orientar os próximos passos. Posso agendar?</div>
+    </div>
+<h3>Pós-alta e reputação</h3>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">R01 · ITZ_R01_PARABENS_ALTA_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68533</span></span>
+      </div>
+      <div class="meta">ALTA (142) — Reconhecer a conclusão do tratamento.</div>
+      <div class="corpo">Olá, [Nome de contato], parabéns pela conclusão do seu tratamento.<br><br>A constância que você manteve foi decisiva no resultado. Seguimos à disposição para o acompanhamento.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">R02 · ITZ_R02_NPS_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68535</span></span>
+      </div>
+      <div class="meta">ALTA (142) — Coletar NPS 2 dias após a alta.</div>
+      <div class="corpo">Olá, [Nome de contato], de 0 a 10, o quanto você recomendaria a Doutor Hérnia Imperatriz a um amigo ou familiar?<br><br>A sua resposta é usada apenas internamente, para melhorarmos o atendimento.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">R03 · ITZ_R03_AVALIACAO_GOOGLE_SDR</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68537</span></span>
+      </div>
+      <div class="meta">ALTA (142) — Pedir avaliação pública apenas de promotores (NPS &gt;= 9).</div>
+      <div class="corpo">Olá, [Nome de contato], se a sua experiência foi positiva, o seu relato ajuda outras pessoas que convivem com dor na coluna a decidir com mais segurança.<br><br>Se puder deixar uma avaliação: https://share.google/87sdyben7QkIa7Es5<br><br>Para não receber mais mensagens deste tipo, responda SAIR.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">R04 · ITZ_R04_RETORNO_60D_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68539</span></span>
+      </div>
+      <div class="meta">ALTA (142) — Retorno de acompanhamento 60 dias após a alta.</div>
+      <div class="corpo">Olá, [Nome de contato], já se passaram cerca de 60 dias desde a sua alta.<br><br>Faz parte do nosso acompanhamento verificar como está a sua coluna. Quer agendar uma consulta de retorno?<br><br>Para não receber mais mensagens deste tipo, responda SAIR.</div>
+    </div>
+<h3>Financeiro (ASAAS)</h3>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">F01 · ITZ_F01_VENCIMENTO_D3_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68541</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Lembrar vencimento 3 dias antes (grupo ASAAS). · a SDR informa: data de vencimento, valor da cobrança, link de pagamento</div>
+      <div class="corpo">Olá, [Nome de contato], lembrando que a parcela do seu tratamento vence em [data de vencimento].<br><br>Valor: [valor da cobrança]<br>Link para pagamento: [link de pagamento]<br><br>Se já tiver pago, desconsidere esta mensagem.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">F02 · ITZ_F02_VENCIMENTO_HOJE_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68543</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Lembrar vencimento no dia. · a SDR informa: valor da cobrança, link de pagamento</div>
+      <div class="corpo">Olá, [Nome de contato], a parcela do seu tratamento vence hoje.<br><br>Valor: [valor da cobrança]<br>Link para pagamento: [link de pagamento]<br><br>Qualquer dúvida, é só responder aqui.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">F03 · ITZ_F03_EM_ATRASO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68545</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Cobrança de parcela vencida, sem constranger. · a SDR informa: data de vencimento, valor da cobrança, link de pagamento</div>
+      <div class="corpo">Olá, [Nome de contato], identificamos que a parcela com vencimento em [data de vencimento] ainda consta em aberto.<br><br>Valor: [valor da cobrança]<br>Link para pagamento: [link de pagamento]<br><br>Se houver algum impedimento, me avisa para encontrarmos uma solução.</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">F04 · ITZ_F04_PAGAMENTO_CONFIRMADO_AUTO</span>
+        <span><span class="tag auto">AUTO</span> <span class="meta">id 68547</span></span>
+      </div>
+      <div class="meta">EM TRATAMENTO (108773168) — Confirmar recebimento (webhook Asaas). · a SDR informa: valor da cobrança, descrição</div>
+      <div class="corpo">Olá, [Nome de contato], recebemos a confirmação do seu pagamento de [valor da cobrança], referente a [descrição].<br><br>Obrigado.</div>
+    </div>
+<h2 class='quebra'>5. Como escrever um template que passa</h2>
+<p>As regras abaixo valem para todo template novo desta unidade. As três primeiras são motivo de reprovação automática na Meta; as demais são o que mantém a qualidade do número.</p>
+<h3>Categoria</h3><ul><li>Utility é o que decorre de um compromisso marcado ou de um serviço já contratado: confirmação, lembrete, remarcação, sessão, cobrança, pesquisa pós-alta.</li><li>Marketing é o que busca trazer alguém de volta ou apresentar oferta: primeiro contato, reengajamento por silêncio, win-back, convite para avaliação.</li><li>Classificar marketing como utility para pagar menos é o erro que derruba template na revisão. Na dúvida, marketing.</li></ul>
+<h3>Variáveis</h3><ul><li>Nunca começar nem terminar o corpo com variável — reprovação automática.</li><li>Nunca duas variáveis coladas: <code>{{1}} {{2}}</code> vira “conteúdo indefinido” para o revisor.</li><li>Numerar em sequência a partir de {{1}}, sem pular número.</li><li>Na submissão, preencher o exemplo de cada variável com um valor real e plausível.</li><li>Mensagem rápida usa <code>[Nome de contato]</code>; template do WhatsApp usa <code>{{1}}</code>. As duas sintaxes não se misturam.</li></ul>
+<h3>Botões</h3><ul><li>No máximo três botões de resposta rápida, texto curto (até 20 caracteres) e sem emoji.</li><li>O botão precisa ser resposta à pergunta do corpo: “Melhor / Igual / Pior” para uma pergunta sobre a dor, não “Saiba mais”.</li><li>Todo template de marketing carrega um botão de saída (“Parar mensagens”), além do rodapé.</li><li>Confirmação e lembrete usam o par “Confirmar presença” / “Preciso remarcar”, que alimenta o campo de comparecimento.</li></ul>
+<h3>Conteúdo, numa clínica</h3><ul><li>Sem promessa de resultado, sem a palavra cura, sem urgência inventada (“últimas vagas”).</li><li>Sem diagnóstico, exame ou queixa no corpo da mensagem: WhatsApp não é prontuário, e um template aprovado fica registrado na Meta.</li><li>Três a quatro linhas. O que não couber, a SDR fala na conversa.</li><li>Valor e condição de pagamento só em template de marketing, nunca em utility.</li></ul>
+<h3>Versionamento</h3><ul><li>Nome em minúsculo, sem acento: <code>imperatriz_&lt;categoria&gt;_&lt;assunto&gt;_v&lt;n&gt;</code>.</li><li>Template aprovado não se edita: mudou o texto, sobe <code>_v2</code> e o anterior é aposentado.</li><li>Um idioma por template (pt_BR). Nada de misturar variantes na mesma entrada.</li><li>Antes de liberar para a equipe, um envio supervisionado para um número da casa.</li></ul>
+<h2 class='quebra'>6. Templates de WhatsApp para aprovação</h2>
+<p>Estes 35 templates precisam ser cadastrados e aprovados pela Meta —
+são os únicos que podem ser enviados fora da janela de 24 horas desde a última mensagem do paciente.
+Foram separados por categoria conforme a política: <span class="tag u">utility</span> para o que é
+serviço já contratado ou compromisso marcado, <span class="tag m">marketing</span> para reengajamento
+e oferta. Nenhum começa ou termina com variável, e todo template de marketing traz a saída no rodapé.</p>
+<table><tr><th>Categoria</th><th>Quantidade</th><th>O que entra aqui</th></tr><tr><td><span class='tag u'>utility</span></td><td>23</td><td>confirmação, lembrete, remarcação, sessão, pendência, financeiro, pesquisa de satisfação</td></tr><tr><td><span class='tag m'>marketing</span></td><td>9</td><td>primeiro contato, reengajamento por silêncio, win-back, avaliação no Google, retorno de 60 dias</td></tr></table>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_boas_vindas_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · Etapa de leads de entrada (108772996) — Primeiro contato com lead vindo de anúncio ou formulário. · botões: “Lombar”, “Cervical”, “Outro ponto”</div>
+      <div class="corpo">Olá, {{1}}. Aqui é da Doutor Hérnia Imperatriz.<br><br>Recebemos o seu contato e queremos te orientar da melhor forma.<br><br>Para começar, me conta: em que região da coluna o incômodo aparece com mais frequência?<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_metodo_autoridade_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · EM QUALIFICAÇÃO (108773004) — Explicação do método e convite para consulta. · botões: “Ver horários”, “Tenho dúvidas”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, a Doutor Hérnia é especializada no tratamento de hérnia de disco e dores na coluna sem cirurgia.<br><br>O primeiro passo é uma consulta presencial, em que o nosso especialista examina o seu caso e explica quais opções fazem sentido para você.<br><br>Posso verificar os horários disponíveis?<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_termometro_72h_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · EM QUALIFICAÇÃO (108773004) — Reengajamento de quem parou de responder. · botões: “Melhor”, “Igual”, “Pior”</div>
+      <div class="corpo">Olá, {{1}}, tudo bem?<br><br>Revendo os atendimentos da semana, lembrei do seu caso. Como está o seu incômodo hoje: melhor, igual ou pior?<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_porta_aberta_120h_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · EM QUALIFICAÇÃO (108773004) — Encerramento da régua comercial após 120h. · botões: “Quero retomar”, “Pode pausar”</div>
+      <div class="corpo">Olá, {{1}}, para não te incomodar, vou pausar os meus contatos por aqui.<br><br>Se em algum momento quiser retomar o cuidado com a sua coluna, é só responder esta mensagem. Ficamos à disposição.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_oferta_prepagamento_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Oferta de pré-pagamento da consulta. · botões: “Quero garantir”, “Tenho uma dúvida”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, a sua consulta está pré-agendada.<br><br>Data e horário: {{2}}<br><br>A consulta é R$ 350. Garantindo agora no PIX, fica R$ 150.<br><br>Quer que eu reserve o seu horário?<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da consulta</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_dados_pix_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Dados do PIX para garantir o horário. · botões: “Já enviei”, “Preciso de ajuda”</div>
+      <div class="corpo">Perfeito, {{1}}. Seguem os dados para garantir o seu horário:<br><br>Chave PIX (CNPJ): 52.419.807/0001-67<br>Favorecido: Attiva Corpo e Mente Clinica de Fisioterapia Ltda<br><br>Assim que enviar o comprovante, eu confirmo a sua reserva.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_confirmacao_agendamento_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Confirmação de consulta agendada. · botões: “Confirmar presença”, “Preciso remarcar”</div>
+      <div class="corpo">Olá, {{1}}, a sua consulta está confirmada.<br><br>Data e horário: {{2}}<br>Endereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA<br><br>Pedimos que chegue com 10 minutos de antecedência. Se tiver exames de imagem recentes, leve-os.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da consulta</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_lembrete_vespera_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Lembrete de consulta na véspera. · botões: “Confirmar presença”, “Preciso remarcar”</div>
+      <div class="corpo">Olá, {{1}}, lembrando que a sua consulta é amanhã.<br><br>Data e horário: {{2}}<br>Endereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA<br><br>Se precisar remarcar, responda esta mensagem.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da consulta</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_confirmacao_dia_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Confirmação de consulta no dia. · botões: “Confirmar presença”, “Preciso remarcar”</div>
+      <div class="corpo">Bom dia, {{1}}. A sua consulta está marcada para {{2}}.<br><br>Está tudo certo para o seu comparecimento?</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da consulta</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_preparo_consulta_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Orientação de preparo para a consulta.</div>
+      <div class="corpo">Olá, {{1}}, para a sua consulta, leve:<br><br>- documento com foto;<br>- exames de imagem da coluna, se tiver (raio-X, tomografia ou ressonância);<br>- roupa confortável, se possível.<br><br>Qualquer dúvida, é só responder aqui.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_no_show_mesmo_dia_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Recuperação de falta na consulta, no mesmo dia. · botões: “Quero remarcar”, “Agora não”</div>
+      <div class="corpo">Olá, {{1}}, notamos que não foi possível comparecer à sua consulta hoje.<br><br>Imprevistos acontecem. Quer que eu verifique um novo horário para você?</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_no_show_48h_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · AGENDADO (108773008) — Segunda tentativa de remarcação. · botões: “Quero remarcar”, “Sem interesse”</div>
+      <div class="corpo">Olá, {{1}}, a sua consulta continua disponível para remarcação.<br><br>Se ainda fizer sentido para você, me avisa que eu verifico os horários desta semana.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_pos_consulta_d1_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · COMPARECEU (108773012) — Acompanhamento no dia seguinte à consulta. · botões: “Tenho dúvida”, “Está tudo claro”</div>
+      <div class="corpo">Olá, {{1}}, foi bom te receber ontem.<br><br>Ficou alguma dúvida sobre o que o nosso especialista explicou na consulta? Posso esclarecer por aqui.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_retomada_negociacao_d3_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · EM NEGOCIAÇÃO (108773016) — Retomada de decisão 3 dias após a consulta. · botões: “Quero iniciar”, “Ainda pensando”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, passando para saber se conseguiu avaliar o plano indicado na consulta.<br><br>Se tiver qualquer dúvida sobre o tratamento ou sobre as condições, estou à disposição.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_encerramento_d7_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · EM NEGOCIAÇÃO (108773016) — Encerramento respeitoso da negociação. · botões: “Quero retomar”, “Pode encerrar”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, não quero te incomodar, então encerro os meus contatos por aqui.<br><br>A consulta que você fez continua registrada. Quando decidir dar seguimento, é só responder esta mensagem.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_checkin_30d_perdido_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · PERDIDO (143) — Reengajamento 30 dias após a perda. · botões: “Quero retomar”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, tudo bem?<br><br>Faz cerca de um mês que conversamos sobre a sua coluna. Se o incômodo persistir, podemos retomar a consulta.<br><br>Se preferir não receber mais mensagens, responda SAIR.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_opt_out_confirmado_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · qualquer — Confirmação de descadastro.</div>
+      <div class="corpo">Entendido, {{1}}. Não enviaremos mais mensagens.<br><br>Se um dia precisar da nossa equipe, é só chamar. Cuide-se.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_boas_vindas_tratamento_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · GANHO / CONCLUÍDO (142) — Boas-vindas ao tratamento contratado.</div>
+      <div class="corpo">Olá, {{1}}, seja bem-vindo(a) ao tratamento na Doutor Hérnia Imperatriz.<br><br>A partir de agora a nossa equipe acompanha cada etapa do seu plano. Qualquer dúvida entre as sessões, pode falar por aqui.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_organizacao_inicio_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">COMERCIAL · GANHO / CONCLUÍDO (142) — Informação da primeira sessão. · botões: “Confirmar”, “Preciso remarcar”</div>
+      <div class="corpo">Olá, {{1}}, a sua primeira sessão ficou assim:<br><br>Data e horário: {{2}}<br>Unidade: {{3}}<br><br>Chegue com 10 minutos de antecedência.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da sessão<br><code>{{3}}</code> unidade</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_sessao_vespera_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Lembrete de sessão na véspera. · botões: “Confirmar presença”, “Preciso remarcar”</div>
+      <div class="corpo">Olá, {{1}}, lembrando da sua sessão de amanhã.<br><br>Data e horário: {{2}}<br><br>Se precisar remarcar, responda esta mensagem.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da sessão</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_sessao_dia_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Confirmação de sessão no dia. · botões: “Confirmar”, “Preciso remarcar”</div>
+      <div class="corpo">Bom dia, {{1}}. A sua sessão de hoje está marcada para {{2}}.<br><br>Está tudo certo?</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data e horário da sessão</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_falta_sessao_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Falta em sessão de tratamento contratado. · botões: “Quero repor”, “Não vou continuar”</div>
+      <div class="corpo">Olá, {{1}}, sentimos a sua falta na sessão de hoje.<br><br>A constância é parte importante do resultado. Quer que eu verifique um horário de reposição?</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_incentivo_meio_plano_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Acompanhamento de aderência no meio do plano.</div>
+      <div class="corpo">Olá, {{1}}, você já concluiu boa parte das sessões previstas.<br><br>Continue mantendo a frequência: é ela que sustenta a evolução do tratamento. Qualquer dúvida, estou à disposição.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_pendencia_exame_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Pendência de exame ou documento. · botões: “Já providenciei”, “Preciso de ajuda”</div>
+      <div class="corpo">Olá, {{1}}, para seguirmos com o seu acompanhamento, ainda falta: {{2}}.<br><br>Consegue providenciar? Se precisar de ajuda, me avisa.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> pendência</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_cancelamento_acolhimento_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Confirmação de pedido de cancelamento. · botões: “Financeiro”, “Horários”, “Outro motivo”</div>
+      <div class="corpo">Olá, {{1}}, recebemos a sua solicitação de cancelamento e respeitamos a sua decisão.<br><br>Antes de concluir, gostaríamos de entender o que motivou. A sua resposta nos ajuda a melhorar.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_retencao_financeira_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Alternativa financeira para retenção. · botões: “Quero conversar”, “Manter cancelam.”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, se o motivo for financeiro, podemos conversar sobre alternativas.<br><br>A intenção é que você não perca a evolução já conquistada. Quer que eu veja o que é possível?<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_retorno_antes_encerrar_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · TRATAMENTO CANCELADO (143) — Retorno clínico antes do encerramento. · botões: “Quero agendar”, “Não, obrigado”</div>
+      <div class="corpo">Olá, {{1}}, respeitamos a sua decisão.<br><br>Antes de encerrarmos, faz parte do nosso cuidado um retorno com o nosso especialista, para revisar a sua evolução e orientar os próximos passos. Posso agendar?</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_parabens_alta_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · ALTA (142) — Comunicado de conclusão do tratamento.</div>
+      <div class="corpo">Olá, {{1}}, parabéns pela conclusão do seu tratamento.<br><br>A constância que você manteve foi decisiva no resultado. Seguimos à disposição para o acompanhamento.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_nps_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · ALTA (142) — Pesquisa de satisfação pós-alta.</div>
+      <div class="corpo">Olá, {{1}}, de 0 a 10, o quanto você recomendaria a Doutor Hérnia Imperatriz a um amigo ou familiar?<br><br>A sua resposta é usada apenas internamente, para melhorarmos o atendimento.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_avaliacao_google_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · ALTA (142) — Convite para avaliação pública no Google. · botões: “Vou avaliar”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, se a sua experiência foi positiva, o seu relato ajuda outras pessoas que convivem com dor na coluna a decidir com mais segurança.<br><br>Se puder deixar uma avaliação: https://share.google/87sdyben7QkIa7Es5<br><br>Para não receber mais mensagens deste tipo, responda SAIR.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_marketing_retorno_60d_v1</span>
+        <span><span class="tag m">MARKETING</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · ALTA (142) — Reengajamento 60 dias após a alta. · botões: “Quero agendar”, “Parar mensagens”</div>
+      <div class="corpo">Olá, {{1}}, já se passaram cerca de 60 dias desde a sua alta.<br><br>Faz parte do nosso acompanhamento verificar como está a sua coluna. Quer agendar uma consulta de retorno?<br><br>Para não receber mais mensagens deste tipo, responda SAIR.<br><em>Rodapé: Para não receber mais mensagens deste tipo, responda SAIR.</em></div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_vencimento_d3_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Lembrete de vencimento 3 dias antes. · botões: “Já paguei”, “Preciso de ajuda”</div>
+      <div class="corpo">Olá, {{1}}, lembrando que a parcela do seu tratamento vence em {{2}}.<br><br>Valor: {{3}}<br>Link para pagamento: {{4}}<br><br>Se já tiver pago, desconsidere esta mensagem.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data de vencimento<br><code>{{3}}</code> valor da cobrança<br><code>{{4}}</code> link de pagamento</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_vencimento_hoje_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Lembrete de vencimento no dia. · botões: “Já paguei”, “Preciso de ajuda”</div>
+      <div class="corpo">Olá, {{1}}, a parcela do seu tratamento vence hoje.<br><br>Valor: {{2}}<br>Link para pagamento: {{3}}<br><br>Qualquer dúvida, é só responder aqui.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> valor da cobrança<br><code>{{3}}</code> link de pagamento</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_em_atraso_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Aviso de parcela em aberto. · botões: “Já paguei”, “Quero negociar”</div>
+      <div class="corpo">Olá, {{1}}, identificamos que a parcela com vencimento em {{2}} ainda consta em aberto.<br><br>Valor: {{3}}<br>Link para pagamento: {{4}}<br><br>Se houver algum impedimento, me avisa para encontrarmos uma solução.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> data de vencimento<br><code>{{3}}</code> valor da cobrança<br><code>{{4}}</code> link de pagamento</div>
+    </div>
+<div class="msg">
+      <div class="cab">
+        <span class="cod">imperatriz_utility_pagamento_confirmado_v1</span>
+        <span><span class="tag u">UTILITY</span> <span class="meta">pt_BR</span></span>
+      </div>
+      <div class="meta">TRATAMENTO · EM TRATAMENTO (108773168) — Confirmação de pagamento recebido.</div>
+      <div class="corpo">Olá, {{1}}, recebemos a confirmação do seu pagamento de {{2}}, referente a {{3}}.<br><br>Obrigado.</div>
+      <div class="meta" style="margin-top:5px"><code>{{1}}</code> Nome de contato<br><code>{{2}}</code> valor da cobrança<br><code>{{3}}</code> descrição</div>
+    </div>
+<h2 class='quebra'>7. A régua e a Sofia: um cérebro só</h2>
+<p>A Sofia já reengaja quem some. Existe uma escada em produção no <code>agente-dt</code> que
+vai de 5 minutos a 20 horas, e cada degrau não é texto pronto: o modelo lê a conversa real e escreve
+a mensagem a partir do que aquele paciente disse. Cinco mensagens fixas em sequência são reconhecíveis
+como robô já na segunda.</p>
+<p>O que limita essa escada não é estratégia, é o WhatsApp: <strong>texto livre só é entregue dentro de
+24 horas desde a última fala do paciente</strong>. Por isso o último degrau da Sofia é em 20h — última
+chance antes de a porta fechar. Depois disso, só template aprovado.</p>
+<div class="nota"><strong>É exatamente aí que a régua entra.</strong> Ela não é um segundo motor de
+follow-up: é o repertório de fora da janela. Quem continua decidindo quando e qual mensagem sai é o
+worker da Sofia — o Kommo só entrega.</div>
+<p>Essa regra não é preferência minha: está escrita no próprio <code>follow-up-worker.ts</code>. Dois
+relógios mirando o mesmo lead disparam sem se ver, e mensagem duplicada no WhatsApp não tem desfazer.
+Por isso <strong>sete automações de silêncio que eu tinha desenhado no Salesbot foram removidas</strong> —
+elas seriam esse segundo relógio.</p>
+<table><tr><th>Quando</th><th>Quem fala</th><th>Como</th><th>Custo</th></tr><tr><td>Até 20h de silêncio</td><td>Sofia (agente-dt)</td><td>texto livre, escrito na hora a partir da conversa</td><td>tokens</td></tr><tr><td>Depois de 24h</td><td>Sofia decide, template entrega</td><td>escolhe um dos templates ITZ_* aprovados</td><td>por envio</td></tr><tr><td>Evento de serviço</td><td>n8n</td><td>vencimento, sessão, alta, NPS, no-show por data</td><td>por envio</td></tr><tr><td>Entrada em etapa</td><td>Salesbot</td><td>só o transacional que não compete com conversa</td><td>por envio</td></tr></table>
+<h3>O que precisa ser acrescentado no agente-dt</h3>
+<p>Quatro degraus novos em <code>follow-up-presets.ts</code>, apontando para template em vez de texto
+livre. O comentário do arquivo já os previa como “possíveis quando a clínica aprovar templates na Meta”:</p>
+<table><tr><th>Degrau</th><th>Etapa</th><th>Template</th></tr><tr><td>D+2</td><td>EM QUALIFICAÇÃO</td><td><code>ITZ_C08_TERMOMETRO_72H_AUTO</code></td></tr><tr><td>D+4</td><td>COMPARECEU / EM NEGOCIAÇÃO</td><td><code>ITZ_C22_RETOMADA_NEGOCIACAO_D3_AUTO</code></td></tr><tr><td>D+7</td><td>COMPARECEU / EM NEGOCIAÇÃO</td><td><code>ITZ_C23_ENCERRAMENTO_D7_AUTO</code></td></tr><tr><td>D+30</td><td>PERDIDO, por motivo</td><td><code>ITZ_C24_CHECKIN_30D_PERDIDO_AUTO</code></td></tr></table>
+<p>E uma trava que já existe na Sofia e a régua passa a herdar: os <strong>dez motivos de perda
+intocáveis</strong> — quem declarou não ter condições financeiras, bandeira vermelha clínica, sem interesse,
+clicou por engano, mora em outra cidade. Insistir aí não é conversão, é dano, e bloqueio no WhatsApp
+derruba a reputação do número inteiro.</p>
+<h2>8. A Sofia no dashboard</h2>
+<p>Hoje o dashboard mede a IA por dentro: conversas, mensagens, taxa de handoff, tokens.
+São números de operação — respondem “a IA está rodando?”, não “a IA está trazendo paciente?”.
+Como cada conversa já guarda o lead a que pertence, dá para cruzar com o funil e responder a segunda
+pergunta. Abaixo o que eu recomendo medir, em ordem de valor.</p>
+<table><tr><th>Métrica</th><th>O que responde</th><th>De onde sai</th></tr><tr><td>Agendamento após conversa com IA</td><td>de cada 100 conversas, quantas viraram consulta marcada</td><td>AgentConversations.LeadId → etapa AGENDADO</td></tr><tr><td>IA × humano no agendamento</td><td>quanto do resultado é da IA e quanto é da equipe</td><td>campo 2443031 ⬢ Agendamento feito por</td></tr><tr><td>Degrau que trouxe de volta</td><td>qual passo da escada converte — permite cortar os que não servem</td><td>follow-up-worker + etapa do lead</td></tr><tr><td>Dentro × fora da janela</td><td>quantos toques foram grátis e quantos foram template pago, e a conversão de cada</td><td>timestamp do toque vs última fala do paciente</td></tr><tr><td>Handoff por motivo</td><td>onde a IA trava: pedido do lead, não soube, fora do horário</td><td>campo 2443037 ⬢ Motivo do handoff</td></tr><tr><td>Resgate × cadastro</td><td>separa quem a IA trouxe de volta de quem já ia agendar</td><td>campo 2443059 ⬢ Tipo de agendamento</td></tr><tr><td>Tempo até 1ª resposta e até agendar</td><td>a velocidade que justifica a IA existir</td><td>campos 2443015 e 2443019</td></tr><tr><td>Custo por agendamento</td><td>tokens + envios de template dividido por consulta marcada</td><td>TokensIn/Out + contagem de disparos</td></tr><tr><td>Sentimento × desfecho</td><td>se conversa que azedou perde mais, e em que etapa</td><td>campos 2443039 e 2443041</td></tr><tr><td>Conversas paradas</td><td>ativas há dias sem agendar nem handoff — fila que ninguém está olhando</td><td>AgentConversations.Status + última mensagem</td></tr></table>
+<div class="nota">As três primeiras linhas são as que mudam decisão de gestão. As demais
+explicam o porquê quando o número cai. A implementação é um endpoint novo em <code>/api/agent</code>
+cruzando conversa com etapa do lead — não depende de nada da Meta nem do session_id.</div>
+<h2 class='quebra'>9. As automações</h2>
+<p>Dois motores, escolhidos pelo tipo de gatilho. <strong>Salesbot</strong> cobre evento:
+o lead entrou numa etapa, ou o paciente parou de responder há N horas. <strong>n8n</strong> cobre data e
+condição: véspera da consulta, vencimento em três dias, NPS abaixo de 6. Essa divisão não é preferência —
+o gatilho por data da Kommo não é configurável por API, então ele vira rotina no n8n.</p>
+<table><tr><th>Workflow</th><th>Motor</th><th>Gatilho</th><th>Mensagem</th><th>Situação</th></tr><tr><td><code>itz_wf_ent_boas_vindas_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 1_lead_added, etapas: [108772996, 108773004]</td><td><code>ITZ_C01_BOAS_VINDAS_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_qlf_ligacao_nao_atendida_v1</code></td><td>N8N</td><td>tipo: condicao_campo quando: &quot;2443369 ☎ Resultado = &#x27;Não atendida&#x27; e 2443367 ☎ Última ligação nos últimos 15 m</td><td><code>ITZ_C06_LIGACAO_SEM_SUCESSO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_agd_confirmacao_imediata_v1</code></td><td>N8N</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773008]</td><td><code>ITZ_C10_CONFIRMACAO_AGENDAMENTO_SDR</code></td><td><strong>bloqueado</strong></td></tr><tr><td><code>itz_wf_agd_preparo_consulta_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773008], delay_segundos: 3600</td><td><code>ITZ_C13_PREPARO_CONSULTA_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_agd_lembrete_vespera_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;NOVO ◷ Data e hora da consulta&quot;, offset_horas: -24</td><td><code>ITZ_C11_LEMBRETE_VESPERA_SDR</code></td><td><strong>bloqueado</strong></td></tr><tr><td><code>itz_wf_agd_confirmacao_dia_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;NOVO ◷ Data e hora da consulta&quot;, offset_horas: -3</td><td><code>ITZ_C12_CONFIRMACAO_DIA_AUTO</code></td><td><strong>bloqueado</strong></td></tr><tr><td><code>itz_wf_agd_no_show_mesmo_dia_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;NOVO ◷ Data e hora da consulta&quot;, offset_horas: 4</td><td><code>ITZ_C15_NO_SHOW_MESMO_DIA_AUTO</code></td><td><strong>bloqueado</strong></td></tr><tr><td><code>itz_wf_agd_no_show_48h_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;NOVO ◷ Data e hora da consulta&quot;, offset_horas: 48</td><td><code>ITZ_C16_NO_SHOW_48H_AUTO</code></td><td><strong>bloqueado</strong></td></tr><tr><td><code>itz_wf_neg_pos_consulta_d1_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773012], delay_segundos: 86400</td><td><code>ITZ_C17_POS_CONSULTA_D1_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_gan_boas_vindas_tratamento_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [142]</td><td><code>ITZ_C26_BOAS_VINDAS_TRATAMENTO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_per_winback_30d_v1</code></td><td>N8N</td><td>tipo: tempo_relativo campo_data_hora: &quot;2440873 ◷ Data da perda&quot; offset_horas: 720</td><td><code>ITZ_C24_CHECKIN_30D_PERDIDO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_optout_confirmacao_v1</code></td><td>N8N</td><td>tipo: mensagem_recebida, regex: &quot;(?i)^\\s*(sair|parar|pare|não quero|nao quero|descadastrar)\\b&quot;</td><td><code>ITZ_C25_OPT_OUT_CONFIRMADO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_sessao_vespera_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2440965 ◷ Próxima sessão&quot;, offset_horas: -24</td><td><code>ITZ_T01_SESSAO_VESPERA_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_sessao_dia_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2440965 ◷ Próxima sessão&quot;, offset_horas: -3</td><td><code>ITZ_T02_SESSAO_DIA_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_falta_sessao_v1</code></td><td>N8N</td><td>tipo: condicao_campo quando: &quot;2440987 ✓ Compareceu à última sessão marcada = Não e 2440973 ◷ Última sessão mar</td><td><code>ITZ_T03_FALTA_SESSAO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_incentivo_meio_v1</code></td><td>N8N</td><td>tipo: condicao_campo quando: &quot;2442733 # Sessões realizadas &gt;= 50% de 2442731 # Sessões previstas&quot;</td><td><code>ITZ_T04_INCENTIVO_MEIO_PLANO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_cancelamento_acolhimento_v1</code></td><td>N8N</td><td>tipo: condicao_campo, quando: &quot;2440967 ◷ Data solicitação de cancelamento preenchida hoje&quot;</td><td><code>ITZ_T06_CANCELAMENTO_ACOLHIMENTO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_trt_retorno_antes_encerrar_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [143], delay_segundos: 86400</td><td><code>ITZ_T08_RETORNO_ANTES_ENCERRAR_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_alt_parabens_v1</code></td><td>SALESBOT</td><td>tipo: evento, evento: 15_lead_appeared_in_status, etapas: [142]</td><td><code>ITZ_R01_PARABENS_ALTA_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_alt_nps_d2_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2440875 ◷ Data de alta&quot;, offset_horas: 48</td><td><code>ITZ_R02_NPS_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_alt_avaliacao_google_v1</code></td><td>N8N</td><td>tipo: condicao_campo, quando: &quot;2440971 ★ Satisfação / NPS &gt;= 9 e 2442745 ✓ Deixou avaliação (Google) != Sim&quot;</td><td><code>ITZ_R03_AVALIACAO_GOOGLE_SDR</code></td><td>pronto</td></tr><tr><td><code>itz_wf_alt_acolhimento_detrator_v1</code></td><td>N8N</td><td>tipo: condicao_campo, quando: &quot;2440971 ★ Satisfação / NPS &lt;= 6&quot;</td><td><code>—</code></td><td>pronto</td></tr><tr><td><code>itz_wf_alt_retorno_60d_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2440875 ◷ Data de alta&quot;, offset_horas: 1440</td><td><code>ITZ_R04_RETORNO_60D_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_fin_vencimento_d3_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2442955 ◷ Vencimento&quot;, offset_horas: -72</td><td><code>ITZ_F01_VENCIMENTO_D3_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_fin_vencimento_hoje_v1</code></td><td>N8N</td><td>tipo: tempo_relativo, campo_data_hora: &quot;2442955 ◷ Vencimento&quot;, offset_horas: 0</td><td><code>ITZ_F02_VENCIMENTO_HOJE_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_fin_atraso_d2_v1</code></td><td>N8N</td><td>tipo: condicao_campo, quando: &quot;2442949 ⬢ Status do pagamento = Vencido há 2 dias&quot;</td><td><code>ITZ_F03_EM_ATRASO_AUTO</code></td><td>pronto</td></tr><tr><td><code>itz_wf_fin_pagamento_confirmado_v1</code></td><td>N8N</td><td>tipo: webhook, origem: &quot;Asaas PAYMENT_CONFIRMED / PAYMENT_RECEIVED&quot;</td><td><code>ITZ_F04_PAGAMENTO_CONFIRMADO_AUTO</code></td><td>pronto</td></tr></table>
+<div class="nota"><strong>Por que seis workflows estão bloqueados:</strong> todos dependem
+da data e hora da consulta, que hoje não é preenchida. Não é limitação técnica — é dado que falta.
+Assim que o agendamento passar a gravar esse campo, os seis entram sem mudança de código.</div>
+<h3>Regras que valem para toda a régua</h3><ul><li>Nenhum temporizador de silêncio vive no Kommo: quem decide o quando é a Sofia.</li><li>Quem pediu para sair não recebe mais nada, de nenhuma régua.</li><li>No máximo uma mensagem de marketing a cada 72 horas, e três em 30 dias, por paciente.</li><li>Qualquer resposta do paciente zera a régua de silêncio em andamento.</li><li>Envio só entre 8h e 20h.</li><li>IA pausada ou conversa assumida por humano: nenhum reengajamento automático.</li><li>Paciente com NPS 6 ou menos não recebe automação: vai para contato humano em 24 horas.</li><li>Lead importado, sem conversa, nunca entra em régua de silêncio.</li></ul>
+<h2>10. Campos que precisam ser criados</h2>
+<table><tr><th>Campo</th><th>Tipo</th><th>Prioridade</th><th>Por quê</th></tr><tr><td><strong>✓ Opt-out WhatsApp &lt;em&gt;(criado — 2444107)&lt;/em&gt;</strong></td><td><code>select (Sim/Não)</code></td><td>Feito</td><td>O descadastro passa a ter registro no cartão. Toda régua consulta esse campo antes de disparar.</td></tr><tr><td><strong>◷ Data do opt-out &lt;em&gt;(criado — 2444109)&lt;/em&gt;</strong></td><td><code>date_time</code></td><td>Feito</td><td>Auditoria de quando o paciente pediu para sair.</td></tr><tr><td><strong>⌂ Endereço da unidade</strong></td><td><code>text (ou constante no n8n)</code></td><td>Alta</td><td>Confirmação e lembrete de consulta precisam do endereço. Não existe campo — hoje seria digitado à mão.</td></tr><tr><td><strong>◷ Data e hora da consulta</strong></td><td><code>date_time</code></td><td>Alta</td><td>Existem dois campos concorrentes e nenhum serve: ◷ Data da Consulta está vazio em 100% da amostra, e ◷ Data de agendamento só tem valor nos 67 leads da migração, todos às 00:00 — sem hora. Ou se padroniza um dos dois com data e hora, ou nenhum lembrete de consulta pode ser automático.</td></tr><tr><td><strong>◷ Última mensagem automática em</strong></td><td><code>date_time</code></td><td>Média</td><td>Trava de reenvio sem depender de leitura de notas.</td></tr><tr><td><strong># Mensagens marketing nos últimos 30d</strong></td><td><code>numeric</code></td><td>Média</td><td>Aplica o teto de 3 por 30 dias sem consultar histórico.</td></tr><tr><td><strong>✎ Pendência do paciente</strong></td><td><code>text</code></td><td>Baixa</td><td>Hoje T05 usa ✎ Observações de consulta, que tem outra finalidade.</td></tr><tr><td><strong>◷ Enviar mensagem em / ⬢ Mensagem a enviar / ◷ Mensagem enviada em</strong></td><td><code>date_time, select, date_time</code></td><td>Média</td><td>Trio que existe em Boa Vista e permite a SDR agendar uma mensagem pelo próprio cartão.</td></tr></table>
+<h2>11. O que falta para ligar</h2>
+<h3>1. session_id da conta de Imperatriz</h3><p>Salesbot e automação de funil não existem na API pública da Kommo. São API privada, autenticada por cookie de sessão. Sem ele, os bots ficam desenhados mas não entram no ar.</p>
+<h3>2. Endereço da unidade e link de avaliação do Google</h3><p>São duas constantes. Com elas, C10, C11 e R03 deixam de precisar de digitação.</p>
+<h3>3. Validar a macro {{lead.cf.&amp;lt;id&amp;gt;}}</h3><p>As mensagens rápidas passaram a puxar campo do cartão automaticamente. Antes de liberar para a equipe, um envio supervisionado para um número da casa confirma que a Kommo substitui o valor. Se não substituir, o texto volta para colchetes com um PATCH.</p>
+<h3>4. Padronizar o preenchimento da data da consulta</h3><p>É a decisão operacional que destrava sete workflows de uma vez.</p></body></html>

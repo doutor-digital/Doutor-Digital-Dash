@@ -1,0 +1,1102 @@
+{
+  "conta": {
+    "subdominio": "attivacorpoementeitz",
+    "account_id": 36459431,
+    "unidade": "Doutor Hérnia Imperatriz",
+    "gerado_em": "2026-08-04",
+    "convencao_nome": "ITZ_<BLOCO><NN>_<SLUG>_<AUTO|SDR>",
+    "legenda": {
+      "AUTO": "Sem placeholder manual. Pode ser disparada por bot/n8n sem risco de enviar campo vazio.",
+      "SDR": "Contém [campos] entre colchetes. Uso manual pela SDR até existir campo Kommo confiável para preencher."
+    },
+    "variavel_suportada": "[Nome de contato] — macro nativa das mensagens rápidas (type amocrm). {{contact.name}} é a forma dos templates WABA, não das mensagens rápidas.",
+    "criadas_em": "2026-08-04",
+    "total_criadas": 45,
+    "regras_meta": [
+      "Template WABA não pode começar nem terminar com variável.",
+      "Macro de campo customizado nas mensagens rápidas: {{lead.cf.<field_id>}} — VALIDAR com 1 envio supervisionado antes de liberar para a equipe."
+    ],
+    "botoes": "máx 3 por mensagem, texto curto (limite prático de 20 caracteres no WhatsApp)",
+    "campos_automaticos": "A substituição de campo do cartão é feita pelo n8n no envio automático. Na mensagem rápida o valor fica entre colchetes até a sintaxe de macro da Kommo ser confirmada na interface.",
+    "constantes_da_unidade": {
+      "endereco": "Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA",
+      "link_google": "https://share.google/87sdyben7QkIa7Es5",
+      "pix_chave": "52.419.807/0001-67 (CNPJ)",
+      "pix_favorecido": "Attiva Corpo e Mente Clinica de Fisioterapia Ltda",
+      "consulta": "R$ 350 · R$ 150 no PIX antecipado",
+      "pendencia": "CEP informado com 7 dígitos (65903-07); omitido do texto até confirmação"
+    }
+  },
+  "mensagens": [
+    {
+      "codigo": "C01",
+      "nome_kommo": "ITZ_C01_BOAS_VINDAS_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "Etapa de leads de entrada (108772996)",
+      "objetivo": "Primeiro contato: acolher e abrir a qualificação.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato]. Aqui é da Doutor Hérnia Imperatriz.\n\nRecebemos o seu contato e queremos te orientar da melhor forma.\n\nPara começar, me conta: em que região da coluna o incômodo aparece com mais frequência?",
+      "kommo_template_id": 68463,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Lombar",
+          "type": "inline"
+        },
+        {
+          "text": "Cervical",
+          "type": "inline"
+        },
+        {
+          "text": "Outro ponto",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C02",
+      "nome_kommo": "ITZ_C02_RETOMADA_2H_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Reengajar quem não respondeu em 2h.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato]. Passando para retomar a nossa conversa.\n\nQuando puder responder, me diga onde a dor aparece com mais frequência. Assim consigo te orientar com mais precisão.",
+      "kommo_template_id": 68465,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Lombar",
+          "type": "inline"
+        },
+        {
+          "text": "Cervical",
+          "type": "inline"
+        },
+        {
+          "text": "Outro ponto",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C03",
+      "nome_kommo": "ITZ_C03_RETOMADA_24H_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Segunda tentativa, oferecendo troca de canal (ligação).",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], tudo bem?\n\nContinuo à disposição para entender o seu caso e explicar como funciona a consulta com o nosso especialista.\n\nSe preferir, posso te retornar por ligação. Qual período é melhor para você?",
+      "kommo_template_id": 68467,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Manhã",
+          "type": "inline"
+        },
+        {
+          "text": "Tarde",
+          "type": "inline"
+        },
+        {
+          "text": "Só WhatsApp",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C04",
+      "nome_kommo": "ITZ_C04_PERGUNTAS_QUALIFICACAO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Coletar dados clínicos que alimentam ✎ Queixa e ★ Qualificação.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_destino": [
+        "2440811 ✎ Queixa",
+        "2440809 ★ Qualificação (Quente/Morno/Frio)"
+      ],
+      "corpo": "Para encaminhar o seu caso ao nosso especialista, preciso de três informações:\n\n1. Há quanto tempo você sente esse incômodo?\n2. Já realizou algum exame de imagem da coluna?\n3. A dor limita alguma atividade do seu dia, como dormir, trabalhar ou dirigir?",
+      "kommo_template_id": 68469,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "C05",
+      "nome_kommo": "ITZ_C05_METODO_AUTORIDADE_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Explicar o método e conduzir ao agendamento.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], a Doutor Hérnia é especializada no tratamento de hérnia de disco e dores na coluna sem cirurgia.\n\nO primeiro passo é uma consulta presencial, em que o nosso especialista examina o seu caso e explica quais opções fazem sentido para você.\n\nPosso verificar os horários disponíveis?",
+      "kommo_template_id": 68471,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Ver horários",
+          "type": "inline"
+        },
+        {
+          "text": "Tenho dúvidas",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C06",
+      "nome_kommo": "ITZ_C06_LIGACAO_SEM_SUCESSO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Recuperar tentativa de ligação não atendida (integração 3C).",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2443367 ☎ Última ligação",
+        "2443369 ☎ Resultado = Não atendida"
+      ],
+      "corpo": "Olá, [Nome de contato], tentei falar com você por telefone agora há pouco e não consegui.\n\nPodemos seguir por aqui mesmo, se for mais prático. Qual o melhor horário para eu te retornar?",
+      "kommo_template_id": 68473,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Manhã",
+          "type": "inline"
+        },
+        {
+          "text": "Tarde",
+          "type": "inline"
+        },
+        {
+          "text": "Só WhatsApp",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C07",
+      "nome_kommo": "ITZ_C07_CONVITE_AGENDAR_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Oferecer dois horários concretos.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], consigo reservar um horário para a sua consulta.\n\nTenho disponibilidade em [data 1] e em [data 2].\n\nQual fica melhor para você?",
+      "kommo_template_id": 68475,
+      "preenchimento_manual": [
+        "data 1",
+        "data 2"
+      ],
+      "botoes": [
+        {
+          "text": "Primeira opção",
+          "type": "inline"
+        },
+        {
+          "text": "Segunda opção",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C08",
+      "nome_kommo": "ITZ_C08_TERMOMETRO_72H_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Pergunta de baixo atrito para reabrir conversa.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], tudo bem?\n\nRevendo os atendimentos da semana, lembrei do seu caso. Como está o seu incômodo hoje: melhor, igual ou pior?",
+      "kommo_template_id": 68477,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Melhor",
+          "type": "inline"
+        },
+        {
+          "text": "Igual",
+          "type": "inline"
+        },
+        {
+          "text": "Pior",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C09",
+      "nome_kommo": "ITZ_C09_PORTA_ABERTA_120H_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "objetivo": "Encerrar a régua sem queimar o lead.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], para não te incomodar, vou pausar os meus contatos por aqui.\n\nSe em algum momento quiser retomar o cuidado com a sua coluna, é só responder esta mensagem. Ficamos à disposição.",
+      "kommo_template_id": 68479,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero retomar",
+          "type": "inline"
+        },
+        {
+          "text": "Pode pausar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C10",
+      "nome_kommo": "ITZ_C10_CONFIRMACAO_AGENDAMENTO_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Confirmar consulta com data, hora e endereço.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_origem": [
+        "2440871 ◷ Data da Consulta (hoje 0% preenchido)",
+        "2442765 ⌂ Unidade"
+      ],
+      "corpo": "Olá, [Nome de contato], a sua consulta está confirmada.\n\nData e horário: [data e horário da consulta]\nEndereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA\n\nPedimos que chegue com 10 minutos de antecedência. Se tiver exames de imagem recentes, leve-os.",
+      "kommo_template_id": 68481,
+      "preenchimento_manual": [
+        "data e horário da consulta"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar presença",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C11",
+      "nome_kommo": "ITZ_C11_LEMBRETE_VESPERA_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Lembrete na véspera, reduzir no-show.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], lembrando que a sua consulta é amanhã.\n\nData e horário: [data e horário da consulta]\nEndereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA\n\nSe precisar remarcar, responda esta mensagem.",
+      "kommo_template_id": 68483,
+      "preenchimento_manual": [
+        "data e horário da consulta"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar presença",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C12",
+      "nome_kommo": "ITZ_C12_CONFIRMACAO_DIA_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Confirmação no dia, pela manhã.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Bom dia, [Nome de contato]. A sua consulta está marcada para [data e horário da consulta].\n\nEstá tudo certo para o seu comparecimento?",
+      "kommo_template_id": 68485,
+      "preenchimento_manual": [
+        "data e horário da consulta"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar presença",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C13",
+      "nome_kommo": "ITZ_C13_PREPARO_CONSULTA_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Orientar o que levar. Não depende de data.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], para a sua consulta, leve:\n\n- documento com foto;\n- exames de imagem da coluna, se tiver (raio-X, tomografia ou ressonância);\n- roupa confortável, se possível.\n\nQualquer dúvida, é só responder aqui.",
+      "kommo_template_id": 68487,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "C14",
+      "nome_kommo": "ITZ_C14_REAGENDAMENTO_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Reagendar sem atrito.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_destino": [
+        "2442699 ◷ Data do reagendamento",
+        "2442701 # Nº de reagendamentos"
+      ],
+      "corpo": "Olá, [Nome de contato], sem problema. Consigo remarcar a sua consulta para [data 1] ou [data 2].\n\nQual das opções fica melhor?",
+      "kommo_template_id": 68489,
+      "preenchimento_manual": [
+        "data 1",
+        "data 2"
+      ],
+      "botoes": [
+        {
+          "text": "Primeira opção",
+          "type": "inline"
+        },
+        {
+          "text": "Segunda opção",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C15",
+      "nome_kommo": "ITZ_C15_NO_SHOW_MESMO_DIA_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Recuperar falta no mesmo dia.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_destino": [
+        "2442705 ⊘ Motivo do no-show"
+      ],
+      "corpo": "Olá, [Nome de contato], notamos que não foi possível comparecer à sua consulta hoje.\n\nImprevistos acontecem. Quer que eu verifique um novo horário para você?",
+      "kommo_template_id": 68491,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero remarcar",
+          "type": "inline"
+        },
+        {
+          "text": "Agora não",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C16",
+      "nome_kommo": "ITZ_C16_NO_SHOW_48H_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Segunda e última tentativa de remarcação.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], a sua consulta continua disponível para remarcação.\n\nSe ainda fizer sentido para você, me avisa que eu verifico os horários desta semana.",
+      "kommo_template_id": 68493,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero remarcar",
+          "type": "inline"
+        },
+        {
+          "text": "Sem interesse",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C17",
+      "nome_kommo": "ITZ_C17_POS_CONSULTA_D1_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "COMPARECEU (108773012)",
+      "objetivo": "Abrir espaço para dúvidas no dia seguinte à consulta.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], foi bom te receber ontem.\n\nFicou alguma dúvida sobre o que o nosso especialista explicou na consulta? Posso esclarecer por aqui.",
+      "kommo_template_id": 68495,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Tenho dúvida",
+          "type": "inline"
+        },
+        {
+          "text": "Está tudo claro",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C18",
+      "nome_kommo": "ITZ_C18_RESUMO_PLANO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Registrar por escrito o plano indicado e o valor.",
+      "categoria_waba_equivalente": "MARKETING",
+      "campos_kommo_origem": [
+        "2440847 ⚕ Tratamento indicado",
+        "2440829 ¤ Valor do tratamento"
+      ],
+      "corpo": "Olá, [Nome de contato], conforme a consulta, o plano indicado para o seu caso foi: [tratamento indicado].\n\nInvestimento: [valor do tratamento]\nFormas de pagamento: [forma de pagamento]\n\nSe quiser, explico cada ponto com calma.",
+      "kommo_template_id": 68497,
+      "preenchimento_manual": [
+        "tratamento indicado",
+        "valor do tratamento",
+        "forma de pagamento"
+      ],
+      "botoes": [
+        {
+          "text": "Quero iniciar",
+          "type": "inline"
+        },
+        {
+          "text": "Tenho dúvida",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C19",
+      "nome_kommo": "ITZ_C19_OBJECAO_VALOR_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Tratar objeção de preço sem pressão.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], entendo a sua consideração sobre o valor.\n\nO plano é definido pelo seu quadro clínico, e não por um pacote padrão. Se ajudar, podemos revisar as condições de pagamento para caber no seu orçamento.",
+      "kommo_template_id": 68499,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Ver condições",
+          "type": "inline"
+        },
+        {
+          "text": "Tenho dúvida",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C20",
+      "nome_kommo": "ITZ_C20_OBJECAO_FAMILIA_MEDICO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Apoiar a decisão compartilhada.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], decisão de saúde merece conversa com calma.\n\nSe quiser, posso enviar por escrito o resumo do que foi indicado na consulta, para você apresentar a quem for decidir com você.",
+      "kommo_template_id": 68501,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Pode enviar",
+          "type": "inline"
+        },
+        {
+          "text": "Depois eu retorno",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C21",
+      "nome_kommo": "ITZ_C21_CONDICOES_PAGAMENTO_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Fechar com condições explícitas.",
+      "categoria_waba_equivalente": "MARKETING",
+      "campos_kommo_origem": [
+        "2442715 ⬢ Forma de pagamento",
+        "2442717 # Nº de parcelas"
+      ],
+      "corpo": "Olá, [Nome de contato], seguem as condições disponíveis para o plano indicado:\n\n- à vista: [valor do tratamento]\n- parcelado: [nº de parcelas] x [valor da parcela]\n\nPosso reservar o início do tratamento para [data e horário da consulta]?",
+      "kommo_template_id": 68503,
+      "preenchimento_manual": [
+        "valor do tratamento",
+        "nº de parcelas",
+        "valor da parcela",
+        "data e horário da consulta"
+      ],
+      "botoes": [
+        {
+          "text": "Quero à vista",
+          "type": "inline"
+        },
+        {
+          "text": "Quero parcelado",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C22",
+      "nome_kommo": "ITZ_C22_RETOMADA_NEGOCIACAO_D3_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Retomar decisão 3 dias após a consulta.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], passando para saber se conseguiu avaliar o plano indicado na consulta.\n\nSe tiver qualquer dúvida sobre o tratamento ou sobre as condições, estou à disposição.",
+      "kommo_template_id": 68505,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero iniciar",
+          "type": "inline"
+        },
+        {
+          "text": "Ainda pensando",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C23",
+      "nome_kommo": "ITZ_C23_ENCERRAMENTO_D7_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "objetivo": "Encerrar a régua de negociação com respeito.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], não quero te incomodar, então encerro os meus contatos por aqui.\n\nA consulta que você fez continua registrada. Quando decidir dar seguimento, é só responder esta mensagem.",
+      "kommo_template_id": 68507,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero retomar",
+          "type": "inline"
+        },
+        {
+          "text": "Pode encerrar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C24",
+      "nome_kommo": "ITZ_C24_CHECKIN_30D_PERDIDO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "PERDIDO (143)",
+      "objetivo": "Win-back 30 dias após a perda.",
+      "categoria_waba_equivalente": "MARKETING",
+      "campos_kommo_gatilho": [
+        "2440873 ◷ Data da perda",
+        "motivo de perda ≠ Não perturbar / Lead morto"
+      ],
+      "corpo": "Olá, [Nome de contato], tudo bem?\n\nFaz cerca de um mês que conversamos sobre a sua coluna. Se o incômodo persistir, podemos retomar a consulta.\n\nSe preferir não receber mais mensagens, responda SAIR.",
+      "kommo_template_id": 68509,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero retomar",
+          "type": "inline"
+        },
+        {
+          "text": "Parar mensagens",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "C25",
+      "nome_kommo": "ITZ_C25_OPT_OUT_CONFIRMADO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "qualquer",
+      "objetivo": "Confirmar o descadastro quando o paciente responde SAIR.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_destino": [
+        "NOVO: ✓ Opt-out WhatsApp"
+      ],
+      "corpo": "Entendido, [Nome de contato]. Não enviaremos mais mensagens.\n\nSe um dia precisar da nossa equipe, é só chamar. Cuide-se.",
+      "kommo_template_id": 68511,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "C26",
+      "nome_kommo": "ITZ_C26_BOAS_VINDAS_TRATAMENTO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "GANHO / CONCLUÍDO (142)",
+      "objetivo": "Acolher quem fechou o tratamento.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], seja bem-vindo(a) ao tratamento na Doutor Hérnia Imperatriz.\n\nA partir de agora a nossa equipe acompanha cada etapa do seu plano. Qualquer dúvida entre as sessões, pode falar por aqui.",
+      "kommo_template_id": 68513,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "C27",
+      "nome_kommo": "ITZ_C27_ORGANIZACAO_INICIO_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "GANHO / CONCLUÍDO (142)",
+      "objetivo": "Informar data da primeira sessão.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_origem": [
+        "2440965 ◷ Próxima sessão",
+        "2442765 ⌂ Unidade"
+      ],
+      "corpo": "Olá, [Nome de contato], a sua primeira sessão ficou assim:\n\nData e horário: [data e horário da sessão]\nUnidade: [unidade]\n\nChegue com 10 minutos de antecedência.",
+      "kommo_template_id": 68515,
+      "preenchimento_manual": [
+        "data e horário da sessão",
+        "unidade"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T01",
+      "nome_kommo": "ITZ_T01_SESSAO_VESPERA_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Lembrete de sessão na véspera.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_origem": [
+        "2440965 ◷ Próxima sessão"
+      ],
+      "corpo": "Olá, [Nome de contato], lembrando da sua sessão de amanhã.\n\nData e horário: [data e horário da sessão]\n\nSe precisar remarcar, responda esta mensagem.",
+      "kommo_template_id": 68517,
+      "preenchimento_manual": [
+        "data e horário da sessão"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar presença",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T02",
+      "nome_kommo": "ITZ_T02_SESSAO_DIA_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Confirmação de sessão no dia.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Bom dia, [Nome de contato]. A sua sessão de hoje está marcada para [data e horário da sessão].\n\nEstá tudo certo?",
+      "kommo_template_id": 68519,
+      "preenchimento_manual": [
+        "data e horário da sessão"
+      ],
+      "botoes": [
+        {
+          "text": "Confirmar",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso remarcar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T03",
+      "nome_kommo": "ITZ_T03_FALTA_SESSAO_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Recuperar falta em sessão.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2440987 ✓ Compareceu à última sessão marcada = Não",
+        "2442737 # Nº de faltas em sessão"
+      ],
+      "corpo": "Olá, [Nome de contato], sentimos a sua falta na sessão de hoje.\n\nA constância é parte importante do resultado. Quer que eu verifique um horário de reposição?",
+      "kommo_template_id": 68521,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero repor",
+          "type": "inline"
+        },
+        {
+          "text": "Não vou continuar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T04",
+      "nome_kommo": "ITZ_T04_INCENTIVO_MEIO_PLANO_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Reforçar aderência na metade do plano.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2442733 # Sessões realizadas >= 50% de 2442731 # Sessões previstas"
+      ],
+      "corpo": "Olá, [Nome de contato], você já concluiu boa parte das sessões previstas.\n\nContinue mantendo a frequência: é ela que sustenta a evolução do tratamento. Qualquer dúvida, estou à disposição.",
+      "kommo_template_id": 68523,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "T05",
+      "nome_kommo": "ITZ_T05_PENDENCIA_EXAME_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Cobrar exame ou documento pendente.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_origem": [
+        "2442757 ◷ Data de retorno com exames"
+      ],
+      "corpo": "Olá, [Nome de contato], para seguirmos com o seu acompanhamento, ainda falta: [pendência].\n\nConsegue providenciar? Se precisar de ajuda, me avisa.",
+      "kommo_template_id": 68525,
+      "preenchimento_manual": [
+        "pendência"
+      ],
+      "botoes": [
+        {
+          "text": "Já providenciei",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso de ajuda",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T06",
+      "nome_kommo": "ITZ_T06_CANCELAMENTO_ACOLHIMENTO_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Acolher pedido de cancelamento e capturar o motivo.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2440967 ◷ Data solicitação de cancelamento"
+      ],
+      "campos_kommo_destino": [
+        "2442739 ⊘ Motivo do cancelamento do tratamento"
+      ],
+      "corpo": "Olá, [Nome de contato], recebemos a sua solicitação de cancelamento e respeitamos a sua decisão.\n\nAntes de concluir, gostaríamos de entender o que motivou. A sua resposta nos ajuda a melhorar.",
+      "kommo_template_id": 68527,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Financeiro",
+          "type": "inline"
+        },
+        {
+          "text": "Horários",
+          "type": "inline"
+        },
+        {
+          "text": "Outro motivo",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T07",
+      "nome_kommo": "ITZ_T07_RETENCAO_FINANCEIRA_SDR",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Oferecer alternativa quando o motivo é financeiro.",
+      "categoria_waba_equivalente": "MARKETING",
+      "campos_kommo_gatilho": [
+        "2442739 ⊘ Motivo do cancelamento = Financeiro"
+      ],
+      "corpo": "Olá, [Nome de contato], se o motivo for financeiro, podemos conversar sobre alternativas.\n\nA intenção é que você não perca a evolução já conquistada. Quer que eu veja o que é possível?",
+      "kommo_template_id": 68529,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero conversar",
+          "type": "inline"
+        },
+        {
+          "text": "Manter cancelam.",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "T08",
+      "nome_kommo": "ITZ_T08_RETORNO_ANTES_ENCERRAR_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "TRATAMENTO CANCELADO (143)",
+      "objetivo": "Oferecer retorno clínico antes do encerramento.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], respeitamos a sua decisão.\n\nAntes de encerrarmos, faz parte do nosso cuidado um retorno com o nosso especialista, para revisar a sua evolução e orientar os próximos passos. Posso agendar?",
+      "kommo_template_id": 68531,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero agendar",
+          "type": "inline"
+        },
+        {
+          "text": "Não, obrigado",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "R01",
+      "nome_kommo": "ITZ_R01_PARABENS_ALTA_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "objetivo": "Reconhecer a conclusão do tratamento.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2440875 ◷ Data de alta",
+        "2440905 ✓ Alta"
+      ],
+      "corpo": "Olá, [Nome de contato], parabéns pela conclusão do seu tratamento.\n\nA constância que você manteve foi decisiva no resultado. Seguimos à disposição para o acompanhamento.",
+      "kommo_template_id": 68533,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "R02",
+      "nome_kommo": "ITZ_R02_NPS_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "objetivo": "Coletar NPS 2 dias após a alta.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_destino": [
+        "2440971 ★ Satisfação / NPS (Tratamento)",
+        "2442751 ◷ Data da pesquisa NPS"
+      ],
+      "corpo": "Olá, [Nome de contato], de 0 a 10, o quanto você recomendaria a Doutor Hérnia Imperatriz a um amigo ou familiar?\n\nA sua resposta é usada apenas internamente, para melhorarmos o atendimento.",
+      "kommo_template_id": 68535,
+      "preenchimento_manual": [],
+      "botoes": []
+    },
+    {
+      "codigo": "R03",
+      "nome_kommo": "ITZ_R03_AVALIACAO_GOOGLE_SDR",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "objetivo": "Pedir avaliação pública apenas de promotores (NPS >= 9).",
+      "categoria_waba_equivalente": "MARKETING",
+      "campos_kommo_destino": [
+        "2442745 ✓ Deixou avaliação (Google)"
+      ],
+      "corpo": "Olá, [Nome de contato], se a sua experiência foi positiva, o seu relato ajuda outras pessoas que convivem com dor na coluna a decidir com mais segurança.\n\nSe puder deixar uma avaliação: https://share.google/87sdyben7QkIa7Es5\n\nPara não receber mais mensagens deste tipo, responda SAIR.",
+      "kommo_template_id": 68537,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Vou avaliar",
+          "type": "inline"
+        },
+        {
+          "text": "Parar mensagens",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "R04",
+      "nome_kommo": "ITZ_R04_RETORNO_60D_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "objetivo": "Retorno de acompanhamento 60 dias após a alta.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], já se passaram cerca de 60 dias desde a sua alta.\n\nFaz parte do nosso acompanhamento verificar como está a sua coluna. Quer agendar uma consulta de retorno?\n\nPara não receber mais mensagens deste tipo, responda SAIR.",
+      "kommo_template_id": 68539,
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Quero agendar",
+          "type": "inline"
+        },
+        {
+          "text": "Parar mensagens",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "F01",
+      "nome_kommo": "ITZ_F01_VENCIMENTO_D3_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Lembrar vencimento 3 dias antes (grupo ASAAS).",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_origem": [
+        "2442955 ◷ Vencimento",
+        "2442967 ¤ Valor da cobrança",
+        "2442963 ↗ Boleto / PIX"
+      ],
+      "corpo": "Olá, [Nome de contato], lembrando que a parcela do seu tratamento vence em [data de vencimento].\n\nValor: [valor da cobrança]\nLink para pagamento: [link de pagamento]\n\nSe já tiver pago, desconsidere esta mensagem.",
+      "kommo_template_id": 68541,
+      "preenchimento_manual": [
+        "data de vencimento",
+        "valor da cobrança",
+        "link de pagamento"
+      ],
+      "botoes": [
+        {
+          "text": "Já paguei",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso de ajuda",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "F02",
+      "nome_kommo": "ITZ_F02_VENCIMENTO_HOJE_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Lembrar vencimento no dia.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Olá, [Nome de contato], a parcela do seu tratamento vence hoje.\n\nValor: [valor da cobrança]\nLink para pagamento: [link de pagamento]\n\nQualquer dúvida, é só responder aqui.",
+      "kommo_template_id": 68543,
+      "preenchimento_manual": [
+        "valor da cobrança",
+        "link de pagamento"
+      ],
+      "botoes": [
+        {
+          "text": "Já paguei",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso de ajuda",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "F03",
+      "nome_kommo": "ITZ_F03_EM_ATRASO_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Cobrança de parcela vencida, sem constranger.",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2442949 ⬢ Status do pagamento = Vencido"
+      ],
+      "corpo": "Olá, [Nome de contato], identificamos que a parcela com vencimento em [data de vencimento] ainda consta em aberto.\n\nValor: [valor da cobrança]\nLink para pagamento: [link de pagamento]\n\nSe houver algum impedimento, me avisa para encontrarmos uma solução.",
+      "kommo_template_id": 68545,
+      "preenchimento_manual": [
+        "data de vencimento",
+        "valor da cobrança",
+        "link de pagamento"
+      ],
+      "botoes": [
+        {
+          "text": "Já paguei",
+          "type": "inline"
+        },
+        {
+          "text": "Quero negociar",
+          "type": "inline"
+        }
+      ]
+    },
+    {
+      "codigo": "F04",
+      "nome_kommo": "ITZ_F04_PAGAMENTO_CONFIRMADO_AUTO",
+      "modo": "AUTO",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "objetivo": "Confirmar recebimento (webhook Asaas).",
+      "categoria_waba_equivalente": "UTILITY",
+      "campos_kommo_gatilho": [
+        "2442949 ⬢ Status do pagamento = Confirmado / Recebido"
+      ],
+      "corpo": "Olá, [Nome de contato], recebemos a confirmação do seu pagamento de [valor da cobrança], referente a [descrição].\n\nObrigado.",
+      "kommo_template_id": 68547,
+      "preenchimento_manual": [
+        "valor da cobrança",
+        "descrição"
+      ],
+      "botoes": []
+    },
+    {
+      "codigo": "C28",
+      "nome_kommo": "ITZ_C28_OFERTA_PREPAGAMENTO_SDR",
+      "modo": "SDR",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Oferecer o pré-pagamento da consulta, 3 dias antes.",
+      "categoria_waba_equivalente": "MARKETING",
+      "corpo": "Olá, [Nome de contato], a sua consulta está pré-agendada.\n\nData e horário: [data e horário da consulta]\n\nA consulta é R$ 350. Garantindo agora no PIX, fica R$ 150.\n\nQuer que eu reserve o seu horário?",
+      "preenchimento_manual": [
+        "data e horário da consulta"
+      ],
+      "botoes": [
+        {
+          "text": "Quero garantir",
+          "type": "inline"
+        },
+        {
+          "text": "Tenho uma dúvida",
+          "type": "inline"
+        }
+      ],
+      "kommo_template_id": 68679
+    },
+    {
+      "codigo": "C29",
+      "nome_kommo": "ITZ_C29_DADOS_PIX_AUTO",
+      "modo": "AUTO",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "objetivo": "Enviar os dados do PIX depois que o paciente aceita garantir o horário.",
+      "categoria_waba_equivalente": "UTILITY",
+      "corpo": "Perfeito, [Nome de contato]. Seguem os dados para garantir o seu horário:\n\nChave PIX (CNPJ): 52.419.807/0001-67\nFavorecido: Attiva Corpo e Mente Clinica de Fisioterapia Ltda\n\nAssim que enviar o comprovante, eu confirmo a sua reserva.",
+      "preenchimento_manual": [],
+      "botoes": [
+        {
+          "text": "Já enviei",
+          "type": "inline"
+        },
+        {
+          "text": "Preciso de ajuda",
+          "type": "inline"
+        }
+      ],
+      "kommo_template_id": 68681
+    }
+  ]
+}

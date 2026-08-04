@@ -3,13 +3,15 @@ using LeadAnalytics.Api.Service.Spine;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace LeadAnalytics.Api.Controllers;
 
 /// <summary>
 /// Dados operacionais vindos do sistema clínico (API Spine do Doutor Hérnia).
-/// Somente leitura: o Spine é a fonte de verdade do que aconteceu na clínica —
-/// agenda, comparecimento, falta — enquanto a Kommo continua dona do comercial.
+/// O Spine é a fonte de verdade do que aconteceu na clínica — agenda, comparecimento,
+/// falta — enquanto a Kommo continua dona do comercial. Escrita só em duas rotas:
+/// confirmar e cancelar agendamento, que são o par dos botões dos templates de WhatsApp.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -338,6 +340,122 @@ public class SpineController(
         };
         problema.Extensions["codigo"] = CodigoSemAutorizacao;
         return StatusCode(StatusCodes.Status503ServiceUnavailable, problema);
+    }
+
+    /// <summary>
+    /// Leads por origem pelo registro da franquia (<c>POST /api/bi/leads/sources</c>).
+    ///
+    /// Serve de contraponto ao card de origens do dashboard, que sai do campo
+    /// <c>⚑ Origem</c> do Kommo — dependente de a SDR digitar, e preenchido em ~30% dos
+    /// leads. Dois números comparáveis sustentam a conversa com a franqueada; um número
+    /// nosso sozinho, não.
+    ///
+    /// CACHE DE 12 HORAS, E NÃO É ZELO: a franquia pede consulta 1–2× ao dia. Sem cache,
+    /// cada clique no filtro de período viraria uma rodada de chamadas.
+    /// </summary>
+    [HttpGet("bi/origens")]
+    public async Task<IActionResult> BiOrigens(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromServices] IMemoryCache cache = null!,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        if (ate < de) (de, ate) = (ate, de);
+
+        var chave = $"spine:bi:origens:{unitId}:{de:yyyyMMdd}:{ate:yyyyMMdd}";
+        if (cache.TryGetValue(chave, out object? cacheado)) return Ok(cacheado);
+
+        var token = await _tokens.GetTokenAsync(unitId, ct);
+        if (string.IsNullOrWhiteSpace(token)) return SemToken(unitId);
+
+        try
+        {
+            var origens = await _client.GetLeadSourcesAsync(token, de, ate, ct);
+            var corpo = new
+            {
+                unitId,
+                de,
+                ate,
+                total = origens.Sum(o => o.Total),
+                origens = origens.Select(o => new { origem = o.SourceName, total = o.Total }),
+            };
+            cache.Set(chave, corpo, TimeSpan.FromHours(12));
+            return Ok(corpo);
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "BI de origens recusado (unidade {UnitId})", unitId);
+            return BadGateway(ex);
+        }
+    }
+
+    /// <summary>
+    /// Confirma a presença em um agendamento — par do botão "Confirmar presença" dos
+    /// templates de WhatsApp. Sem esta rota o paciente clica e a resposta morre no chat.
+    /// </summary>
+    [HttpPatch("agendamentos/{idSchedule:long}/confirmar")]
+    public async Task<IActionResult> ConfirmarAgendamento(
+        [FromQuery] int unitId,
+        long idSchedule,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var token = await _tokens.GetTokenAsync(unitId, ct);
+        if (string.IsNullOrWhiteSpace(token)) return SemToken(unitId);
+
+        try
+        {
+            var ok = await _client.ConfirmScheduleAsync(token, idSchedule, ct);
+            _logger.LogInformation(
+                "Agendamento {IdSchedule} confirmado na franquia (unidade {UnitId}): {Ok}",
+                idSchedule, unitId, ok);
+            return Ok(new { idSchedule, confirmado = ok });
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao confirmar agendamento {IdSchedule}", idSchedule);
+            return BadGateway(ex);
+        }
+    }
+
+    /// <summary>
+    /// Cancela um agendamento — par do botão "Preciso remarcar".
+    ///
+    /// Cancela e só. Remarcar é cancelar mais criar, e criar agendamento é do agente-dt:
+    /// dois caminhos de escrita para a mesma agenda produzem horário duplicado, e a
+    /// franquia não tem desfazer.
+    /// </summary>
+    [HttpDelete("agendamentos/{idSchedule:long}")]
+    public async Task<IActionResult> CancelarAgendamento(
+        [FromQuery] int unitId,
+        long idSchedule,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var token = await _tokens.GetTokenAsync(unitId, ct);
+        if (string.IsNullOrWhiteSpace(token)) return SemToken(unitId);
+
+        try
+        {
+            var ok = await _client.CancelScheduleAsync(token, idSchedule, ct);
+            _logger.LogInformation(
+                "Agendamento {IdSchedule} cancelado na franquia (unidade {UnitId}): {Ok}",
+                idSchedule, unitId, ok);
+            return Ok(new { idSchedule, cancelado = ok });
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao cancelar agendamento {IdSchedule}", idSchedule);
+            return BadGateway(ex);
+        }
     }
 
     private IActionResult SemToken(int unitId) =>

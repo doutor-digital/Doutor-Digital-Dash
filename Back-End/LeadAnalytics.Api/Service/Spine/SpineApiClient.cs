@@ -10,7 +10,12 @@ namespace LeadAnalytics.Api.Service.Spine;
 
 /// <summary>
 /// Cliente da API Spine (sistema clínico do Doutor Hérnia).
-/// Somente leitura — o Spine é dono do dado operacional, a gente só consulta.
+///
+/// Leitura, mais DUAS escritas e só elas: confirmar e cancelar agendamento. O Spine é dono
+/// do dado operacional, e criar paciente/lead/agendamento é competência do agente-dt — que
+/// já tem trava de unique contra o retry do webhook. Um segundo caminho de escrita para o
+/// mesmo CRM criaria duplicata, e a API da franquia NÃO tem exclusão de lead (404): cada
+/// duplicata é permanente e só some na mão.
 ///
 /// Diferenças entre o guia de integração (v1.9.3) e a API real (v1.9.6), medidas em
 /// 23/07/2026 contra produção. O parser abaixo segue a API real:
@@ -55,6 +60,12 @@ public class SpineApiClient
     /// a mais (ver <see cref="SearchSchedulesAsync"/>), o teto efetivo aqui é 99.
     /// </summary>
     public const int MaxDiasJanela = 99;
+
+    /// <summary>
+    /// Janela dos endpoints de BI. Aqui as datas vão exatamente como pedidas — não há o
+    /// dia extra da agenda —, então o teto é o do guia: 100 dias.
+    /// </summary>
+    public const int MaxDiasJanelaBi = 100;
 
     /// <summary>
     /// O Spine devolve dateAttendance em UTC (guia §9.2). Imperatriz é UTC−3 e não
@@ -254,7 +265,144 @@ public class SpineApiClient
             .ToList();
     }
 
+    /// <summary>
+    /// Confirma a presença em um agendamento (<c>PATCH /api/schedules/confirm</c>).
+    ///
+    /// É o par do botão "Confirmar presença" dos templates de WhatsApp: sem esta chamada
+    /// o paciente clica e a resposta morre no chat, com a recepção confirmando por telefone
+    /// do mesmo jeito. A API define <c>SCHEDULE_CONFIRMED</c> e carimba <c>notificationAt</c>.
+    /// </summary>
+    public async Task<bool> ConfirmScheduleAsync(string token, long idSchedule, CancellationToken ct = default)
+    {
+        var env = await SendJsonAsync<SpineWriteEnvelope>(
+            HttpMethod.Patch, "/api/schedules/confirm", new { idSchedule }, token, ct);
+        return env?.Ok ?? false;
+    }
+
+    /// <summary>
+    /// Cancela um agendamento (<c>DELETE /api/schedules</c>) — par do botão "Preciso remarcar".
+    ///
+    /// A API marca o agendamento como <c>DELETED</c>; ela NÃO remarca. Remarcar é cancelar
+    /// e criar outro, e criar é competência do agente-dt — este cliente só cancela, para não
+    /// abrir um segundo caminho de escrita para o mesmo CRM.
+    /// </summary>
+    public async Task<bool> CancelScheduleAsync(string token, long idSchedule, CancellationToken ct = default)
+    {
+        var env = await SendJsonAsync<SpineWriteEnvelope>(
+            HttpMethod.Delete, "/api/schedules", new { idSchedule }, token, ct);
+        return env?.Ok ?? false;
+    }
+
+    /// <summary>
+    /// Leads por origem, pelo número oficial da franquia (<c>POST /api/bi/leads/sources</c>).
+    ///
+    /// Serve de contraponto ao campo <c>⚑ Origem</c> do Kommo, que depende de a SDR digitar
+    /// — e que está preenchido em ~30% dos leads. Dois números comparáveis valem mais do que
+    /// um número nosso sozinho numa conversa com a franqueada.
+    ///
+    /// DUAS RESTRIÇÕES DO GUIA, E POR QUE ELAS APARECEM AQUI
+    ///   • <c>initialDate</c>/<c>endDate</c> são obrigatórios e a janela máxima é de 100 dias.
+    ///     O filtro do dashboard aceita períodos maiores, então a janela é quebrada em blocos
+    ///     e os totais somados — sem isso um trimestre devolveria 400.
+    ///   • a franquia pede consulta 1–2× ao dia. Quem chama isto deve vir por cache/job,
+    ///     nunca a cada clique de filtro.
+    ///
+    /// AINDA NÃO VALIDADO CONTRA A API: o módulo BI segue bloqueado nos tokens das unidades
+    /// (403). O formato abaixo veio do guia de integração v3, não de resposta observada.
+    /// </summary>
+    public async Task<IReadOnlyList<SpineLeadSource>> GetLeadSourcesAsync(
+        string token, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        if (to < from) (from, to) = (to, from);
+
+        // Soma por nome de origem: blocos diferentes trazem a mesma origem repetida.
+        var acumulado = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (blocoDe, blocoAte) in QuebrarEmBlocos(from, to, MaxDiasJanelaBi))
+        {
+            var body = new
+            {
+                initialDate = blocoDe.ToString("yyyy-MM-dd"),
+                endDate = blocoAte.ToString("yyyy-MM-dd"),
+            };
+
+            var env = await PostAsync<SpineBiEnvelope<SpineLeadSourcesData>>(
+                "/api/bi/leads/sources", body, token, ct);
+
+            // 200 com corpo que não entendemos é o pior caso: devolveria "nenhuma origem"
+            // como se a franquia não tivesse leads no período. Como o formato do BI nunca
+            // foi observado (módulo bloqueado no token), isso precisa aparecer no log.
+            if (env?.Data?.Sources is null)
+            {
+                _logger.LogWarning(
+                    "Spine BI /leads/sources respondeu 200 sem 'sources' para {De}→{Ate}. "
+                    + "Formato provavelmente diferente do guia — conferir antes de confiar no número.",
+                    blocoDe, blocoAte);
+            }
+
+            foreach (var row in env?.Data?.Sources ?? [])
+            {
+                var nome = string.IsNullOrWhiteSpace(row.SourceName) ? "Sem origem" : row.SourceName.Trim();
+                acumulado[nome] = acumulado.GetValueOrDefault(nome) + row.Total;
+            }
+        }
+
+        return acumulado
+            .Select(kv => new SpineLeadSource { SourceName = kv.Key, Total = kv.Value })
+            .OrderByDescending(s => s.Total)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Fatia [de, ate] em blocos de no máximo <paramref name="maxDias"/> dias, inclusivo nas pontas.
+    /// </summary>
+    private static IEnumerable<(DateOnly De, DateOnly Ate)> QuebrarEmBlocos(DateOnly de, DateOnly ate, int maxDias)
+    {
+        var cursor = de;
+        while (cursor <= ate)
+        {
+            var fim = cursor.AddDays(maxDias - 1);
+            if (fim > ate) fim = ate;
+            yield return (cursor, fim);
+            cursor = fim.AddDays(1);
+        }
+    }
+
     private string Base => _options.BaseUrl.TrimEnd('/');
+
+    /// <summary>
+    /// PATCH/DELETE com corpo JSON. O <c>DELETE</c> da Spine leva <c>idSchedule</c> no body,
+    /// e não na query — <c>HttpClient.DeleteAsync</c> não serve.
+    /// </summary>
+    private async Task<T?> SendJsonAsync<T>(
+        HttpMethod metodo, string path, object body, string token, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(metodo, $"{Base}{path}")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonOpts), Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var res = await _http.SendAsync(req, ct);
+        var payload = await res.Content.ReadAsStringAsync(ct);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var motivo = res.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized => "token inválido, ausente ou revogado",
+                HttpStatusCode.Forbidden => "módulo não liberado no token desta unidade",
+                HttpStatusCode.NotFound => "agendamento não encontrado",
+                HttpStatusCode.BadRequest => "parâmetros inválidos",
+                _ => "erro na API Spine",
+            };
+            _logger.LogWarning("Spine {Metodo} {Path} → {Status} ({Motivo}): {Payload}",
+                metodo.Method, path, (int)res.StatusCode, motivo, Truncate(payload, 300));
+            throw new SpineApiException(res.StatusCode, motivo, Truncate(payload, 300));
+        }
+
+        return JsonSerializer.Deserialize<T>(payload, JsonOpts);
+    }
 
     private async Task<T?> GetAsync<T>(string path, string token, CancellationToken ct)
     {
@@ -436,4 +584,49 @@ public class SpineTreatment
     [JsonPropertyName("dateFinish")] public DateTime? DateFinish { get; set; }
     [JsonPropertyName("price")] public decimal? Price { get; set; }
     [JsonPropertyName("created")] public DateTime? Created { get; set; }
+}
+
+/// <summary>
+/// Resposta das rotas de escrita da agenda (confirm e cancel). Elas devolvem só
+/// <c>success</c> e o id — não a linha atualizada.
+/// </summary>
+public class SpineWriteEnvelope
+{
+    /// <summary>Forma da API real (v1.9.6): <c>"success"</c>.</summary>
+    [JsonPropertyName("status")] public string? Status { get; set; }
+
+    /// <summary>Forma que o guia documenta. Mantida porque estas duas rotas nunca
+    /// foram exercidas — se a API responder no formato do guia, ainda lemos certo.</summary>
+    [JsonPropertyName("success")] public bool? Success { get; set; }
+
+    [JsonPropertyName("idSchedule")] public long? IdSchedule { get; set; }
+
+    public bool Ok => Success == true
+        || string.Equals(Status, "success", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Envelope dos endpoints de BI. Diferente das buscas, o BI agrupa dentro de
+/// <c>data</c> em vez de devolver um array — por isso não reaproveita
+/// <c>SpineSearchEnvelope</c>.
+/// </summary>
+public class SpineBiEnvelope<T>
+{
+    [JsonPropertyName("status")] public string? Status { get; set; }
+    [JsonPropertyName("success")] public bool? Success { get; set; }
+    [JsonPropertyName("data")] public T? Data { get; set; }
+}
+
+/// <summary>Corpo de <c>/api/bi/leads/sources</c>.</summary>
+public class SpineLeadSourcesData
+{
+    [JsonPropertyName("sources")] public List<SpineLeadSource>? Sources { get; set; }
+    [JsonPropertyName("total")] public int Total { get; set; }
+}
+
+/// <summary>Uma origem e quantos leads vieram dela, pelo registro da franquia.</summary>
+public class SpineLeadSource
+{
+    [JsonPropertyName("sourceName")] public string? SourceName { get; set; }
+    [JsonPropertyName("total")] public int Total { get; set; }
 }

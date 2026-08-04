@@ -1,5 +1,13 @@
-<<<<<<< HEAD
 /home/joaoof/Downloads/Doutor-Digital/Front-End
-=======
 /home/joaoof/Downloads/Doutor-Digital/Teste
->>>>>>> b0b7b181b86cb5396c0fbe2818487ffe17de29a9
+
+# Tokens e dumps de conta — puxados por script, nunca versionados
+Back-End/*token*.txt
+Back-End/acct*.json
+Back-End/dump_*.json
+Back-End/itz_fields.json
+Back-End/st_*.json
+Back-End/*_ids.txt
+
+# Backup de automações da Kommo: o payload da interface traz JWT de sessão
+Back-End/docs/kommo-imperatriz/backup-*/

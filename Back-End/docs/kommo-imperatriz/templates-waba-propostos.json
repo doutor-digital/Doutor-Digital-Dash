@@ -1,0 +1,1109 @@
+{
+  "conta": "attivacorpoementeitz",
+  "total": 35,
+  "regras_aplicadas": [
+    "nenhum corpo começa ou termina com variável",
+    "MARKETING sempre com opt-out no rodapé"
+  ],
+  "templates": [
+    {
+      "id": "imperatriz_marketing_boas_vindas_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Primeiro contato com lead vindo de anúncio ou formulário.",
+      "funil": "COMERCIAL",
+      "etapa": "Etapa de leads de entrada (108772996)",
+      "origem_mensagem_rapida": {
+        "codigo": "C01",
+        "nome_kommo": "ITZ_C01_BOAS_VINDAS_AUTO",
+        "kommo_id": 68463
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}. Aqui é da Doutor Hérnia Imperatriz.\n\nRecebemos o seu contato e queremos te orientar da melhor forma.\n\nPara começar, me conta: em que região da coluna o incômodo aparece com mais frequência?",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Lombar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Cervical"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Outro ponto"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_metodo_autoridade_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Explicação do método e convite para consulta.",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "origem_mensagem_rapida": {
+        "codigo": "C05",
+        "nome_kommo": "ITZ_C05_METODO_AUTORIDADE_AUTO",
+        "kommo_id": 68471
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a Doutor Hérnia é especializada no tratamento de hérnia de disco e dores na coluna sem cirurgia.\n\nO primeiro passo é uma consulta presencial, em que o nosso especialista examina o seu caso e explica quais opções fazem sentido para você.\n\nPosso verificar os horários disponíveis?",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Ver horários"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Tenho dúvidas"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_termometro_72h_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Reengajamento de quem parou de responder.",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "origem_mensagem_rapida": {
+        "codigo": "C08",
+        "nome_kommo": "ITZ_C08_TERMOMETRO_72H_AUTO",
+        "kommo_id": 68477
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, tudo bem?\n\nRevendo os atendimentos da semana, lembrei do seu caso. Como está o seu incômodo hoje: melhor, igual ou pior?",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Melhor"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Igual"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Pior"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_porta_aberta_120h_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Encerramento da régua comercial após 120h.",
+      "funil": "COMERCIAL",
+      "etapa": "EM QUALIFICAÇÃO (108773004)",
+      "origem_mensagem_rapida": {
+        "codigo": "C09",
+        "nome_kommo": "ITZ_C09_PORTA_ABERTA_120H_AUTO",
+        "kommo_id": 68479
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, para não te incomodar, vou pausar os meus contatos por aqui.\n\nSe em algum momento quiser retomar o cuidado com a sua coluna, é só responder esta mensagem. Ficamos à disposição.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero retomar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Pode pausar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_oferta_prepagamento_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Oferta de pré-pagamento da consulta.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C28",
+        "nome_kommo": "ITZ_C28_OFERTA_PREPAGAMENTO_SDR",
+        "kommo_id": 68679
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da consulta"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a sua consulta está pré-agendada.\n\nData e horário: {{2}}\n\nA consulta é R$ 350. Garantindo agora no PIX, fica R$ 150.\n\nQuer que eu reserve o seu horário?",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero garantir"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Tenho uma dúvida"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_dados_pix_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Dados do PIX para garantir o horário.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C29",
+        "nome_kommo": "ITZ_C29_DADOS_PIX_AUTO",
+        "kommo_id": 68681
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Perfeito, {{1}}. Seguem os dados para garantir o seu horário:\n\nChave PIX (CNPJ): 52.419.807/0001-67\nFavorecido: Attiva Corpo e Mente Clinica de Fisioterapia Ltda\n\nAssim que enviar o comprovante, eu confirmo a sua reserva.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Já enviei"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso de ajuda"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_confirmacao_agendamento_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de consulta agendada.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C10",
+        "nome_kommo": "ITZ_C10_CONFIRMACAO_AGENDAMENTO_SDR",
+        "kommo_id": 68481
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da consulta"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a sua consulta está confirmada.\n\nData e horário: {{2}}\nEndereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA\n\nPedimos que chegue com 10 minutos de antecedência. Se tiver exames de imagem recentes, leve-os.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar presença"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_lembrete_vespera_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Lembrete de consulta na véspera.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C11",
+        "nome_kommo": "ITZ_C11_LEMBRETE_VESPERA_SDR",
+        "kommo_id": 68483
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da consulta"
+        }
+      ],
+      "corpo": "Olá, {{1}}, lembrando que a sua consulta é amanhã.\n\nData e horário: {{2}}\nEndereço: Ed. Medical Center — Av. Bernardo Sayão, 3650, Maranhão Novo, Imperatriz/MA\n\nSe precisar remarcar, responda esta mensagem.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar presença"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_confirmacao_dia_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de consulta no dia.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C12",
+        "nome_kommo": "ITZ_C12_CONFIRMACAO_DIA_AUTO",
+        "kommo_id": 68485
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da consulta"
+        }
+      ],
+      "corpo": "Bom dia, {{1}}. A sua consulta está marcada para {{2}}.\n\nEstá tudo certo para o seu comparecimento?",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar presença"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_preparo_consulta_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Orientação de preparo para a consulta.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C13",
+        "nome_kommo": "ITZ_C13_PREPARO_CONSULTA_AUTO",
+        "kommo_id": 68487
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, para a sua consulta, leve:\n\n- documento com foto;\n- exames de imagem da coluna, se tiver (raio-X, tomografia ou ressonância);\n- roupa confortável, se possível.\n\nQualquer dúvida, é só responder aqui."
+    },
+    {
+      "id": "imperatriz_utility_no_show_mesmo_dia_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Recuperação de falta na consulta, no mesmo dia.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C15",
+        "nome_kommo": "ITZ_C15_NO_SHOW_MESMO_DIA_AUTO",
+        "kommo_id": 68491
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, notamos que não foi possível comparecer à sua consulta hoje.\n\nImprevistos acontecem. Quer que eu verifique um novo horário para você?",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero remarcar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Agora não"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_no_show_48h_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Segunda tentativa de remarcação.",
+      "funil": "COMERCIAL",
+      "etapa": "AGENDADO (108773008)",
+      "origem_mensagem_rapida": {
+        "codigo": "C16",
+        "nome_kommo": "ITZ_C16_NO_SHOW_48H_AUTO",
+        "kommo_id": 68493
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a sua consulta continua disponível para remarcação.\n\nSe ainda fizer sentido para você, me avisa que eu verifico os horários desta semana.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero remarcar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Sem interesse"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_pos_consulta_d1_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Acompanhamento no dia seguinte à consulta.",
+      "funil": "COMERCIAL",
+      "etapa": "COMPARECEU (108773012)",
+      "origem_mensagem_rapida": {
+        "codigo": "C17",
+        "nome_kommo": "ITZ_C17_POS_CONSULTA_D1_AUTO",
+        "kommo_id": 68495
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, foi bom te receber ontem.\n\nFicou alguma dúvida sobre o que o nosso especialista explicou na consulta? Posso esclarecer por aqui.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Tenho dúvida"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Está tudo claro"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_retomada_negociacao_d3_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Retomada de decisão 3 dias após a consulta.",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "origem_mensagem_rapida": {
+        "codigo": "C22",
+        "nome_kommo": "ITZ_C22_RETOMADA_NEGOCIACAO_D3_AUTO",
+        "kommo_id": 68505
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, passando para saber se conseguiu avaliar o plano indicado na consulta.\n\nSe tiver qualquer dúvida sobre o tratamento ou sobre as condições, estou à disposição.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero iniciar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Ainda pensando"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_encerramento_d7_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Encerramento respeitoso da negociação.",
+      "funil": "COMERCIAL",
+      "etapa": "EM NEGOCIAÇÃO (108773016)",
+      "origem_mensagem_rapida": {
+        "codigo": "C23",
+        "nome_kommo": "ITZ_C23_ENCERRAMENTO_D7_AUTO",
+        "kommo_id": 68507
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, não quero te incomodar, então encerro os meus contatos por aqui.\n\nA consulta que você fez continua registrada. Quando decidir dar seguimento, é só responder esta mensagem.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero retomar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Pode encerrar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_checkin_30d_perdido_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Reengajamento 30 dias após a perda.",
+      "funil": "COMERCIAL",
+      "etapa": "PERDIDO (143)",
+      "origem_mensagem_rapida": {
+        "codigo": "C24",
+        "nome_kommo": "ITZ_C24_CHECKIN_30D_PERDIDO_AUTO",
+        "kommo_id": 68509
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, tudo bem?\n\nFaz cerca de um mês que conversamos sobre a sua coluna. Se o incômodo persistir, podemos retomar a consulta.\n\nSe preferir não receber mais mensagens, responda SAIR.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero retomar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_opt_out_confirmado_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de descadastro.",
+      "funil": "COMERCIAL",
+      "etapa": "qualquer",
+      "origem_mensagem_rapida": {
+        "codigo": "C25",
+        "nome_kommo": "ITZ_C25_OPT_OUT_CONFIRMADO_AUTO",
+        "kommo_id": 68511
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Entendido, {{1}}. Não enviaremos mais mensagens.\n\nSe um dia precisar da nossa equipe, é só chamar. Cuide-se."
+    },
+    {
+      "id": "imperatriz_utility_boas_vindas_tratamento_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Boas-vindas ao tratamento contratado.",
+      "funil": "COMERCIAL",
+      "etapa": "GANHO / CONCLUÍDO (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "C26",
+        "nome_kommo": "ITZ_C26_BOAS_VINDAS_TRATAMENTO_AUTO",
+        "kommo_id": 68513
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, seja bem-vindo(a) ao tratamento na Doutor Hérnia Imperatriz.\n\nA partir de agora a nossa equipe acompanha cada etapa do seu plano. Qualquer dúvida entre as sessões, pode falar por aqui."
+    },
+    {
+      "id": "imperatriz_utility_organizacao_inicio_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Informação da primeira sessão.",
+      "funil": "COMERCIAL",
+      "etapa": "GANHO / CONCLUÍDO (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "C27",
+        "nome_kommo": "ITZ_C27_ORGANIZACAO_INICIO_AUTO",
+        "kommo_id": 68515
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da sessão"
+        },
+        {
+          "placeholder": "{{3}}",
+          "campo_kommo": "unidade"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a sua primeira sessão ficou assim:\n\nData e horário: {{2}}\nUnidade: {{3}}\n\nChegue com 10 minutos de antecedência.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_sessao_vespera_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Lembrete de sessão na véspera.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T01",
+        "nome_kommo": "ITZ_T01_SESSAO_VESPERA_AUTO",
+        "kommo_id": 68517
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da sessão"
+        }
+      ],
+      "corpo": "Olá, {{1}}, lembrando da sua sessão de amanhã.\n\nData e horário: {{2}}\n\nSe precisar remarcar, responda esta mensagem.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar presença"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_sessao_dia_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de sessão no dia.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T02",
+        "nome_kommo": "ITZ_T02_SESSAO_DIA_AUTO",
+        "kommo_id": 68519
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data e horário da sessão"
+        }
+      ],
+      "corpo": "Bom dia, {{1}}. A sua sessão de hoje está marcada para {{2}}.\n\nEstá tudo certo?",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Confirmar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso remarcar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_falta_sessao_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Falta em sessão de tratamento contratado.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T03",
+        "nome_kommo": "ITZ_T03_FALTA_SESSAO_AUTO",
+        "kommo_id": 68521
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, sentimos a sua falta na sessão de hoje.\n\nA constância é parte importante do resultado. Quer que eu verifique um horário de reposição?",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero repor"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Não vou continuar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_incentivo_meio_plano_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Acompanhamento de aderência no meio do plano.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T04",
+        "nome_kommo": "ITZ_T04_INCENTIVO_MEIO_PLANO_AUTO",
+        "kommo_id": 68523
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, você já concluiu boa parte das sessões previstas.\n\nContinue mantendo a frequência: é ela que sustenta a evolução do tratamento. Qualquer dúvida, estou à disposição."
+    },
+    {
+      "id": "imperatriz_utility_pendencia_exame_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Pendência de exame ou documento.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T05",
+        "nome_kommo": "ITZ_T05_PENDENCIA_EXAME_AUTO",
+        "kommo_id": 68525
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "pendência"
+        }
+      ],
+      "corpo": "Olá, {{1}}, para seguirmos com o seu acompanhamento, ainda falta: {{2}}.\n\nConsegue providenciar? Se precisar de ajuda, me avisa.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Já providenciei"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso de ajuda"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_cancelamento_acolhimento_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de pedido de cancelamento.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T06",
+        "nome_kommo": "ITZ_T06_CANCELAMENTO_ACOLHIMENTO_AUTO",
+        "kommo_id": 68527
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, recebemos a sua solicitação de cancelamento e respeitamos a sua decisão.\n\nAntes de concluir, gostaríamos de entender o que motivou. A sua resposta nos ajuda a melhorar.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Financeiro"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Horários"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Outro motivo"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_retencao_financeira_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Alternativa financeira para retenção.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "T07",
+        "nome_kommo": "ITZ_T07_RETENCAO_FINANCEIRA_SDR",
+        "kommo_id": 68529
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, se o motivo for financeiro, podemos conversar sobre alternativas.\n\nA intenção é que você não perca a evolução já conquistada. Quer que eu veja o que é possível?",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero conversar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Manter cancelam."
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_retorno_antes_encerrar_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Retorno clínico antes do encerramento.",
+      "funil": "TRATAMENTO",
+      "etapa": "TRATAMENTO CANCELADO (143)",
+      "origem_mensagem_rapida": {
+        "codigo": "T08",
+        "nome_kommo": "ITZ_T08_RETORNO_ANTES_ENCERRAR_AUTO",
+        "kommo_id": 68531
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, respeitamos a sua decisão.\n\nAntes de encerrarmos, faz parte do nosso cuidado um retorno com o nosso especialista, para revisar a sua evolução e orientar os próximos passos. Posso agendar?",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero agendar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Não, obrigado"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_parabens_alta_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Comunicado de conclusão do tratamento.",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "R01",
+        "nome_kommo": "ITZ_R01_PARABENS_ALTA_AUTO",
+        "kommo_id": 68533
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, parabéns pela conclusão do seu tratamento.\n\nA constância que você manteve foi decisiva no resultado. Seguimos à disposição para o acompanhamento."
+    },
+    {
+      "id": "imperatriz_utility_nps_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Pesquisa de satisfação pós-alta.",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "R02",
+        "nome_kommo": "ITZ_R02_NPS_AUTO",
+        "kommo_id": 68535
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, de 0 a 10, o quanto você recomendaria a Doutor Hérnia Imperatriz a um amigo ou familiar?\n\nA sua resposta é usada apenas internamente, para melhorarmos o atendimento."
+    },
+    {
+      "id": "imperatriz_marketing_avaliacao_google_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Convite para avaliação pública no Google.",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "R03",
+        "nome_kommo": "ITZ_R03_AVALIACAO_GOOGLE_SDR",
+        "kommo_id": 68537
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, se a sua experiência foi positiva, o seu relato ajuda outras pessoas que convivem com dor na coluna a decidir com mais segurança.\n\nSe puder deixar uma avaliação: https://share.google/87sdyben7QkIa7Es5\n\nPara não receber mais mensagens deste tipo, responda SAIR.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Vou avaliar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_marketing_retorno_60d_v1",
+      "categoria_meta": "MARKETING",
+      "idioma": "pt_BR",
+      "descricao_uso": "Reengajamento 60 dias após a alta.",
+      "funil": "TRATAMENTO",
+      "etapa": "ALTA (142)",
+      "origem_mensagem_rapida": {
+        "codigo": "R04",
+        "nome_kommo": "ITZ_R04_RETORNO_60D_AUTO",
+        "kommo_id": 68539
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        }
+      ],
+      "corpo": "Olá, {{1}}, já se passaram cerca de 60 dias desde a sua alta.\n\nFaz parte do nosso acompanhamento verificar como está a sua coluna. Quer agendar uma consulta de retorno?\n\nPara não receber mais mensagens deste tipo, responda SAIR.",
+      "footer": "Para não receber mais mensagens deste tipo, responda SAIR.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero agendar"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Parar mensagens"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_vencimento_d3_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Lembrete de vencimento 3 dias antes.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "F01",
+        "nome_kommo": "ITZ_F01_VENCIMENTO_D3_AUTO",
+        "kommo_id": 68541
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data de vencimento"
+        },
+        {
+          "placeholder": "{{3}}",
+          "campo_kommo": "valor da cobrança"
+        },
+        {
+          "placeholder": "{{4}}",
+          "campo_kommo": "link de pagamento"
+        }
+      ],
+      "corpo": "Olá, {{1}}, lembrando que a parcela do seu tratamento vence em {{2}}.\n\nValor: {{3}}\nLink para pagamento: {{4}}\n\nSe já tiver pago, desconsidere esta mensagem.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Já paguei"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso de ajuda"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_vencimento_hoje_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Lembrete de vencimento no dia.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "F02",
+        "nome_kommo": "ITZ_F02_VENCIMENTO_HOJE_AUTO",
+        "kommo_id": 68543
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "valor da cobrança"
+        },
+        {
+          "placeholder": "{{3}}",
+          "campo_kommo": "link de pagamento"
+        }
+      ],
+      "corpo": "Olá, {{1}}, a parcela do seu tratamento vence hoje.\n\nValor: {{2}}\nLink para pagamento: {{3}}\n\nQualquer dúvida, é só responder aqui.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Já paguei"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Preciso de ajuda"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_em_atraso_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Aviso de parcela em aberto.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "F03",
+        "nome_kommo": "ITZ_F03_EM_ATRASO_AUTO",
+        "kommo_id": 68545
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "data de vencimento"
+        },
+        {
+          "placeholder": "{{3}}",
+          "campo_kommo": "valor da cobrança"
+        },
+        {
+          "placeholder": "{{4}}",
+          "campo_kommo": "link de pagamento"
+        }
+      ],
+      "corpo": "Olá, {{1}}, identificamos que a parcela com vencimento em {{2}} ainda consta em aberto.\n\nValor: {{3}}\nLink para pagamento: {{4}}\n\nSe houver algum impedimento, me avisa para encontrarmos uma solução.",
+      "botoes": [
+        {
+          "tipo": "quick_reply",
+          "texto": "Já paguei"
+        },
+        {
+          "tipo": "quick_reply",
+          "texto": "Quero negociar"
+        }
+      ]
+    },
+    {
+      "id": "imperatriz_utility_pagamento_confirmado_v1",
+      "categoria_meta": "UTILITY",
+      "idioma": "pt_BR",
+      "descricao_uso": "Confirmação de pagamento recebido.",
+      "funil": "TRATAMENTO",
+      "etapa": "EM TRATAMENTO (108773168)",
+      "origem_mensagem_rapida": {
+        "codigo": "F04",
+        "nome_kommo": "ITZ_F04_PAGAMENTO_CONFIRMADO_AUTO",
+        "kommo_id": 68547
+      },
+      "variaveis": [
+        {
+          "placeholder": "{{1}}",
+          "campo_kommo": "Nome de contato"
+        },
+        {
+          "placeholder": "{{2}}",
+          "campo_kommo": "valor da cobrança"
+        },
+        {
+          "placeholder": "{{3}}",
+          "campo_kommo": "descrição"
+        }
+      ],
+      "corpo": "Olá, {{1}}, recebemos a confirmação do seu pagamento de {{2}}, referente a {{3}}.\n\nObrigado."
+    }
+  ]
+}

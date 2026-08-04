@@ -1,0 +1,304 @@
+// Régua de follow-up — Doutor Hérnia Imperatriz (attivacorpoementeitz, 36459431)
+// Gerado em 2026-08-04. Fonte da verdade dos textos: mensagens-rapidas.json
+//
+// UM CÉREBRO SÓ DECIDE QUANDO FALAR
+// ---------------------------------
+// Quem decide o "quando" de qualquer reengajamento é o follow-up-worker do
+// agente-dt, e SÓ ele. O Salesbot é canal de entrega, nunca um segundo
+// temporizador: dois relógios mirando o mesmo lead disparam sem se ver, e
+// mensagem duplicada no WhatsApp não tem desfazer.
+//
+// A DIVISÃO É PELA JANELA DE 24H, NÃO POR PREFERÊNCIA
+//   dentro de 24h da última fala do paciente → IA escreve texto livre,
+//     contextual, a partir da conversa real (escada de 5min a 20h já em produção)
+//   fora de 24h → só template aprovado pela Meta. A IA continua decidendo
+//     QUANDO e QUAL, mas passa a escolher um template do repertório em vez de
+//     escrever. São os degraus D+2, D+4, D+7 e D+30 que o próprio código do
+//     agente-dt prevê como "possíveis quando a clínica aprovar templates".
+//
+// O QUE O n8n FAZ, E POR QUE NÃO COLIDE
+//   Só eventos de serviço que não nascem da conversa: vencimento de fatura,
+//   sessão marcada, alta, NPS, no-show por data. A IA não enxerga esses
+//   eventos e eles não são reengajamento — por isso não há dois relógios.
+//
+// O QUE O SALESBOT FAZ
+//   Entrega. Mais o punhado de mensagens puramente transacionais de entrada em
+//   etapa que não competem com conversa nenhuma.
+//
+// PRÉ-CONDIÇÃO GLOBAL (todos, sem exceção):
+//   - 2444107 ✓ Opt-out WhatsApp != Sim
+//   - motivo de perda fora da lista MOTIVOS_INTOCAVEIS do agente-dt
+//     (follow-up-presets.ts — 10 motivos que nunca recebem reengajamento)
+//   - janela 08:00–20:00 (America/Araguaina)
+
+meta:
+  unidade: Doutor Hérnia Imperatriz
+  account_id: 36459431
+  funis:
+    COMERCIAL: 14091100
+    TRATAMENTO: 14091116
+  versionamento: "cada workflow tem id estável e sufixo _vN; mudar texto NÃO muda o id, mudar gatilho SIM"
+  idempotencia: >
+    Todo disparo grava uma nota no lead com a marca `fu:<workflow_id>:<YYYY-MM-DD>` e
+    o n8n consulta as notas dos últimos 30 dias antes de enviar. Sem essa marca não há
+    trava contra reenvio, porque a Kommo não expõe histórico de disparo de bot.
+
+divisao_de_trabalho:
+  motor_unico: >
+    follow-up-worker.ts (agente-dt) é o único lugar que decide quando reengajar.
+    Nada neste arquivo cria temporizador de silêncio no Kommo.
+  dentro_da_janela_24h:
+    quem: IA (agente-dt)
+    como: texto livre escrito pelo modelo a partir da conversa
+    escada_em_producao:
+      EM_QUALIFICACAO: [5min, 30min, 2h, 6h, 20h]
+      AGENDADO: [10min, 4h, 20h]
+      PERDIDO: "por motivo de perda (ex.: Achou caro → 2h e 20h)"
+  fora_da_janela_24h:
+    quem: IA decide, template entrega
+    como: >
+      O worker escolhe um template do repertório ITZ_* e dispara via Kommo.
+      Degraus novos a acrescentar no agente-dt quando a Meta aprovar:
+        D+2  → ITZ_C08_TERMOMETRO_72H_AUTO
+        D+4  → ITZ_C22_RETOMADA_NEGOCIACAO_D3_AUTO (COMPARECEU/NEGOCIAÇÃO)
+        D+7  → ITZ_C23_ENCERRAMENTO_D7_AUTO
+        D+30 → ITZ_C24_CHECKIN_30D_PERDIDO_AUTO (segmentado por motivo)
+    onde_implementar: agente-dt/backend/src/lib/follow-up-presets.ts
+  handoff:
+    campos: ["2442727 ✓ Atendimento assumido por humano", "2443055 Pausar IA", "2443037 ⬢ Motivo do handoff"]
+    regra: "IA pausada ou assumida por humano → nenhum disparo automático de reengajamento."
+
+limites_antispam:
+  marketing_por_lead:
+    max_em_72h: 1
+    max_em_30d: 3
+  utility_por_lead:
+    max_em_24h: 2
+  regra_de_saida: >
+    Qualquer mensagem recebida do paciente zera a régua de silêncio em andamento
+    (o relógio é `last_incoming_message`, evento 141 do Salesbot).
+  base_importada: >
+    Leads sem nenhuma mensagem recebida nunca entram em régua de silêncio.
+
+workflows:
+
+  # ─────────────────────────── COMERCIAL · entrada e qualificação
+  - id: itz_wf_ent_boas_vindas_v1
+    motor: SALESBOT
+    descricao: Primeira resposta ao lead que chega.
+    funil: COMERCIAL
+    gatilho: { tipo: evento, evento: 1_lead_added, etapas: [108772996, 108773004] }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C01_BOAS_VINDAS_AUTO, kommo_id: 68463 }
+    grava_campos: ["2442697 ◷ Data do primeiro contato = agora", "2442711 ✓ Interação = Não"]
+    regras: ["respeita regra_ia (prospecção)", "não dispara para lead criado por importação em lote"]
+
+  - id: itz_wf_qlf_ligacao_nao_atendida_v1
+    motor: N8N
+    descricao: Complementa a discadora 3C quando a ligação não é atendida.
+    funil: COMERCIAL
+    gatilho:
+      tipo: condicao_campo
+      quando: "2443369 ☎ Resultado = 'Não atendida' e 2443367 ☎ Última ligação nos últimos 15 min"
+      cron: "*/15 * * * *"
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C06_LIGACAO_SEM_SUCESSO_AUTO, kommo_id: 68473 }
+    regras: ["máx 1 por dia por lead", "não dispara se ☎ Tentativas > 4"]
+
+  # ─────────────────────────── COMERCIAL · agendado
+  - id: itz_wf_agd_confirmacao_imediata_v1
+    motor: N8N
+    status: BLOQUEADO
+    bloqueio: "Depende de ◷ Data e hora da consulta (campo novo). Hoje 2440871 está em 0% dos leads."
+    descricao: Confirma a consulta assim que o lead entra em AGENDADO.
+    funil: COMERCIAL
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773008] }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C10_CONFIRMACAO_AGENDAMENTO_SDR, kommo_id: 68481 }
+    campos_necessarios: ["NOVO ◷ Data e hora da consulta", "NOVO ⌂ Endereço da unidade", "2442765 ⌂ Unidade"]
+
+  - id: itz_wf_agd_preparo_consulta_v1
+    motor: SALESBOT
+    descricao: Orientação do que levar. Único da faixa AGENDADO que já roda hoje, porque não depende de data.
+    funil: COMERCIAL
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773008], delay_segundos: 3600 }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C13_PREPARO_CONSULTA_AUTO, kommo_id: 68487 }
+
+  - id: itz_wf_agd_lembrete_vespera_v1
+    motor: N8N
+    status: BLOQUEADO
+    bloqueio: "Idem: sem data/hora da consulta não há como calcular D-1."
+    funil: COMERCIAL
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "NOVO ◷ Data e hora da consulta", offset_horas: -24, cron: "0 * * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C11_LEMBRETE_VESPERA_SDR, kommo_id: 68483 }
+    regras: ["não enviar se etapa != AGENDADO", "não reenviar em 24h"]
+
+  - id: itz_wf_agd_confirmacao_dia_v1
+    motor: N8N
+    status: BLOQUEADO
+    funil: COMERCIAL
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "NOVO ◷ Data e hora da consulta", offset_horas: -3, cron: "0 * * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C12_CONFIRMACAO_DIA_AUTO, kommo_id: 68485 }
+
+  - id: itz_wf_agd_no_show_mesmo_dia_v1
+    motor: N8N
+    status: BLOQUEADO
+    descricao: >
+      No-show não é evento da Kommo. Deduzido: data da consulta já passou e o lead
+      continua em AGENDADO. Alternativa se o CRM da franquia liberar comparecimento: usar o webhook de lá.
+    funil: COMERCIAL
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "NOVO ◷ Data e hora da consulta", offset_horas: 4, cron: "0 19 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C15_NO_SHOW_MESMO_DIA_AUTO, kommo_id: 68491 }
+    grava_campos: ["2442705 ⊘ Motivo do no-show = Não informou (até a SDR classificar)"]
+
+  - id: itz_wf_agd_no_show_48h_v1
+    motor: N8N
+    status: BLOQUEADO
+    funil: COMERCIAL
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "NOVO ◷ Data e hora da consulta", offset_horas: 48 }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C16_NO_SHOW_48H_AUTO, kommo_id: 68493 }
+    regras: ["só se itz_wf_agd_no_show_mesmo_dia_v1 já disparou e não houve resposta"]
+
+  # ─────────────────────────── COMERCIAL · compareceu e negociação
+  - id: itz_wf_neg_pos_consulta_d1_v1
+    motor: SALESBOT
+    funil: COMERCIAL
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [108773012], delay_segundos: 86400 }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C17_POS_CONSULTA_D1_AUTO, kommo_id: 68495 }
+
+  - id: itz_wf_gan_boas_vindas_tratamento_v1
+    motor: SALESBOT
+    funil: COMERCIAL
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [142] }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C26_BOAS_VINDAS_TRATAMENTO_AUTO, kommo_id: 68513 }
+
+  - id: itz_wf_per_winback_30d_v1
+    motor: N8N
+    descricao: Reengajamento de perdido. É MARKETING — respeita opt-out e o teto de 3/30d.
+    funil: COMERCIAL
+    gatilho:
+      tipo: tempo_relativo
+      campo_data_hora: "2440873 ◷ Data da perda"
+      offset_horas: 720
+      cron: "0 10 * * *"
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C24_CHECKIN_30D_PERDIDO_AUTO, kommo_id: 68509 }
+    regras:
+      - "excluir os 10 MOTIVOS_INTOCAVEIS do agente-dt (follow-up-presets.ts) + Não perturbar + Lead morto"
+      - "excluir 2444107 ✓ Opt-out WhatsApp = Sim"
+      - "máx 1 win-back por lead a cada 90 dias"
+
+  - id: itz_wf_optout_confirmacao_v1
+    motor: N8N
+    descricao: Paciente respondeu SAIR / PARAR / NÃO QUERO.
+    funil: TODOS
+    gatilho: { tipo: mensagem_recebida, regex: "(?i)^\\s*(sair|parar|pare|não quero|nao quero|descadastrar)\\b" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_C25_OPT_OUT_CONFIRMADO_AUTO, kommo_id: 68511 }
+    grava_campos: ["2444107 ✓ Opt-out WhatsApp = Sim", "2444109 ◷ Data do opt-out = agora"]
+    regras: ["prioridade máxima: interrompe todas as réguas em andamento no mesmo lead"]
+
+  # ─────────────────────────── TRATAMENTO
+  - id: itz_wf_trt_sessao_vespera_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2440965 ◷ Próxima sessão", offset_horas: -24, cron: "0 * * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T01_SESSAO_VESPERA_AUTO, kommo_id: 68517 }
+    regras: ["etapa = EM TRATAMENTO (108773168)", "não reenviar em 24h"]
+
+  - id: itz_wf_trt_sessao_dia_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2440965 ◷ Próxima sessão", offset_horas: -3, cron: "0 * * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T02_SESSAO_DIA_AUTO, kommo_id: 68519 }
+
+  - id: itz_wf_trt_falta_sessao_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho:
+      tipo: condicao_campo
+      quando: "2440987 ✓ Compareceu à última sessão marcada = Não e 2440973 ◷ Última sessão marcada foi hoje"
+      cron: "0 19 * * *"
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T03_FALTA_SESSAO_AUTO, kommo_id: 68521 }
+    grava_campos: ["2442737 # Nº de faltas em sessão += 1"]
+
+  - id: itz_wf_trt_incentivo_meio_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho:
+      tipo: condicao_campo
+      quando: "2442733 # Sessões realizadas >= 50% de 2442731 # Sessões previstas"
+      cron: "0 11 * * 1"
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T04_INCENTIVO_MEIO_PLANO_AUTO, kommo_id: 68523 }
+    regras: ["1 vez por tratamento (marca na nota)"]
+
+  - id: itz_wf_trt_cancelamento_acolhimento_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: condicao_campo, quando: "2440967 ◷ Data solicitação de cancelamento preenchida hoje", cron: "0 * * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T06_CANCELAMENTO_ACOLHIMENTO_AUTO, kommo_id: 68527 }
+
+  - id: itz_wf_trt_retorno_antes_encerrar_v1
+    motor: SALESBOT
+    funil: TRATAMENTO
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [143], delay_segundos: 86400 }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_T08_RETORNO_ANTES_ENCERRAR_AUTO, kommo_id: 68531 }
+
+  # ─────────────────────────── PÓS-ALTA / REPUTAÇÃO
+  - id: itz_wf_alt_parabens_v1
+    motor: SALESBOT
+    funil: TRATAMENTO
+    gatilho: { tipo: evento, evento: 15_lead_appeared_in_status, etapas: [142] }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_R01_PARABENS_ALTA_AUTO, kommo_id: 68533 }
+
+  - id: itz_wf_alt_nps_d2_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2440875 ◷ Data de alta", offset_horas: 48, cron: "0 10 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_R02_NPS_AUTO, kommo_id: 68535 }
+    grava_campos: ["2442751 ◷ Data da pesquisa NPS = agora", "2440971 ★ Satisfação / NPS = resposta numérica do paciente"]
+
+  - id: itz_wf_alt_avaliacao_google_v1
+    motor: N8N
+    funil: TRATAMENTO
+    descricao: Só para promotor. Pedir avaliação a detrator é o erro clássico dessa régua.
+    gatilho: { tipo: condicao_campo, quando: "2440971 ★ Satisfação / NPS >= 9 e 2442745 ✓ Deixou avaliação (Google) != Sim", cron: "0 11 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_R03_AVALIACAO_GOOGLE_SDR, kommo_id: 68537 }
+    regras: ["1 pedido por paciente, para sempre"]
+
+  - id: itz_wf_alt_acolhimento_detrator_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: condicao_campo, quando: "2440971 ★ Satisfação / NPS <= 6", cron: "0 9 * * *" }
+    acao: { tipo: notificar_interno, para: "responsável da unidade", mensagem: "NPS detrator — contato humano em até 24h" }
+    regras: ["detrator NÃO recebe mensagem automática; vai para atendimento humano"]
+
+  - id: itz_wf_alt_retorno_60d_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2440875 ◷ Data de alta", offset_horas: 1440, cron: "0 10 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_R04_RETORNO_60D_AUTO, kommo_id: 68539 }
+    regras: ["MARKETING: conta no teto de 3/30d", "excluir ✓ Alta = Insatisfeito"]
+
+  # ─────────────────────────── FINANCEIRO (grupo ASAAS)
+  - id: itz_wf_fin_vencimento_d3_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2442955 ◷ Vencimento", offset_horas: -72, cron: "0 10 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_F01_VENCIMENTO_D3_AUTO, kommo_id: 68541 }
+    regras: ["não enviar se 2442949 ⬢ Status do pagamento in (Confirmado, Recebido, Cancelado)"]
+
+  - id: itz_wf_fin_vencimento_hoje_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: tempo_relativo, campo_data_hora: "2442955 ◷ Vencimento", offset_horas: 0, cron: "0 10 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_F02_VENCIMENTO_HOJE_AUTO, kommo_id: 68543 }
+
+  - id: itz_wf_fin_atraso_d2_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: condicao_campo, quando: "2442949 ⬢ Status do pagamento = Vencido há 2 dias", cron: "0 10 * * *" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_F03_EM_ATRASO_AUTO, kommo_id: 68545 }
+    regras: ["máx 2 cobranças por fatura", "depois disso, tarefa para o financeiro, não mais mensagem"]
+
+  - id: itz_wf_fin_pagamento_confirmado_v1
+    motor: N8N
+    funil: TRATAMENTO
+    gatilho: { tipo: webhook, origem: "Asaas PAYMENT_CONFIRMED / PAYMENT_RECEIVED" }
+    acao: { tipo: enviar_mensagem_rapida, template: ITZ_F04_PAGAMENTO_CONFIRMADO_AUTO, kommo_id: 68547 }
+    grava_campos: ["2442957 ◷ Data do pagamento", "2442949 ⬢ Status do pagamento"]

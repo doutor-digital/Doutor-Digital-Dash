@@ -27,24 +27,37 @@ public class KpiConfigController(
     private readonly ICurrentUser _currentUser = currentUser;
     private readonly AppDbContext _db = db;
 
+    /// <summary>Código estável do bloqueio — o front distingue permissão de falha.</summary>
+    public const string CodigoContaNaoResponsavel = "conta_nao_responsavel";
+
     /// <summary>
-    /// Só a conta dona do produto configura de onde o KPI é puxado.
+    /// Só a conta responsável configura de onde o KPI é puxado.
     ///
     /// Papel não serve aqui: analista_ti é concedido por convite e mudar o mapeamento de
     /// um KPI muda o número que a rede inteira lê, sem deixar cara de erro. Fica nominal.
+    ///
+    /// A recusa sai como ProblemDetails com <see cref="CodigoContaNaoResponsavel"/> e o
+    /// e-mail da sessão. Um 403 nu é indistinguível de bug do lado de fora — quem lê
+    /// precisa saber que a regra funcionou, e em qual conta ela foi avaliada.
     /// </summary>
-    private IActionResult? RequireAnalyst() =>
-        _currentUser.IsOwner
-            ? null
-            : StatusCode(403, new
-            {
-                // Diz qual conta está autenticada: quase todo 403 aqui é alguém logado
-                // em outra conta sem perceber, e sem essa linha o diagnóstico vira
-                // adivinhação. Só devolve o e-mail de quem já está autenticado — nunca
-                // qual é a conta responsável.
-                message = "Configurar a fonte dos KPIs é restrito à conta responsável.",
-                conta = _currentUser.Email,
-            });
+    private IActionResult? RequireAnalyst()
+    {
+        if (_currentUser.IsOwner) return null;
+
+        var problema = new ProblemDetails
+        {
+            Title = "Sem permissão para configurar a fonte dos KPIs.",
+            Detail = string.IsNullOrWhiteSpace(_currentUser.Email)
+                ? "A sessão não traz e-mail; entre novamente."
+                : $"A conta '{_currentUser.Email}' não é a conta responsável por esta configuração. "
+                  + "Mudar a origem de um KPI altera o número que toda a rede enxerga, por isso o "
+                  + "acesso é nominal e não depende de papel.",
+            Status = StatusCodes.Status403Forbidden,
+        };
+        problema.Extensions["codigo"] = CodigoContaNaoResponsavel;
+        problema.Extensions["conta"] = _currentUser.Email;
+        return StatusCode(StatusCodes.Status403Forbidden, problema);
+    }
 
     /// <summary>Catálogo dos KPIs que podem ser mapeados (chave + rótulo amigável).</summary>
     [HttpGet("catalog")]

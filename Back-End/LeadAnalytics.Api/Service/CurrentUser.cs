@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Claims;
 
 namespace LeadAnalytics.Api.Service;
@@ -33,14 +34,18 @@ public class CurrentUser(IHttpContextAccessor accessor, IConfiguration config) :
     private readonly IHttpContextAccessor _accessor = accessor;
     private readonly IConfiguration _config = config;
 
-    /// <summary>Conta dona do produto. Configurável para não amarrar o código a um e-mail.</summary>
-    private string OwnerEmail =>
-        _config["Security:OwnerEmail"] ?? "doutordigitalconsultoria@gmail.com";
+    /// <summary>
+    /// Contas responsáveis, separadas por vírgula. Fica em configuração para que incluir
+    /// alguém seja uma variável de ambiente, e não um deploy de código.
+    /// </summary>
+    private IEnumerable<string> OwnerEmails =>
+        (_config["Security:OwnerEmail"] ?? "doutordigitalconsultoria@gmail.com")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public bool IsOwner =>
         IsAuthenticated
         && !string.IsNullOrWhiteSpace(Email)
-        && string.Equals(Email!.Trim(), OwnerEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+        && OwnerEmails.Any(e => string.Equals(Email!.Trim(), e, StringComparison.OrdinalIgnoreCase));
 
     private ClaimsPrincipal? Principal => _accessor.HttpContext?.User;
 

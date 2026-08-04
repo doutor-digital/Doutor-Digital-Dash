@@ -153,6 +153,7 @@ builder.Services.AddSingleton<ILoggerProvider>(sp => new InMemoryLoggerProvider(
 builder.Services.Configure<LogsAuthOptions>(builder.Configuration.GetSection(LogsAuthOptions.SectionName));
 builder.Services.AddSingleton<LogsAuthService>();
 
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AdCreativeService>();
 builder.Services.AddScoped<LeadService>();
 builder.Services.AddScoped<UnitService>();
 builder.Services.AddScoped<AttendantService>();

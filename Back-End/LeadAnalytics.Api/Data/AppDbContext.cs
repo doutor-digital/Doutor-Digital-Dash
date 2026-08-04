@@ -57,6 +57,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<CampaignDailySpend> CampaignDailySpends { get; set; }
     public DbSet<SpineScheduleSnapshot> SpineScheduleSnapshots { get; set; }
     public DbSet<AdsSetting> AdsSettings { get; set; }
+    public DbSet<AdCreative> AdCreatives { get; set; }
 
     public DbSet<CloudiaImportBatch> CloudiaImportBatches { get; set; }
     public DbSet<CloudiaKommoJob> CloudiaKommoJobs { get; set; }
@@ -201,6 +202,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Provider).IsUnique();
             entity.Property(e => e.Provider).HasMaxLength(16);
+        });
+
+        // ─── AdCreative (cache de nome/miniatura do anúncio) ─────
+        modelBuilder.Entity<AdCreative>(entity =>
+        {
+            entity.ToTable("ad_creatives");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.AdId).IsUnique();
+            entity.Property(e => e.AdId).HasMaxLength(64);
+            entity.Property(e => e.Name).HasMaxLength(300);
         });
 
         // ─── Attendant ───────────────────────────────────────────

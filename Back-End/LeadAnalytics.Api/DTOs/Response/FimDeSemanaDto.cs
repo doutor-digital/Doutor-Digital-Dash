@@ -93,6 +93,15 @@ public class AnuncioDesempenhoDto
 
     /// <summary>Destes, quantos chegaram a agendar consulta.</summary>
     public int Agendados { get; set; }
+
+    /// <summary>Nome do anúncio na Meta, quando a conta de anúncios está conectada.</summary>
+    public string? Nome { get; set; }
+
+    /// <summary>Miniatura do criativo (CDN da Meta). Nulo = card mostra só o texto.</summary>
+    public string? Thumbnail { get; set; }
+
+    /// <summary>Link para a peça no Facebook/Instagram, quando a Meta devolve.</summary>
+    public string? Permalink { get; set; }
 }
 
 /// <summary>Um tipo de tratamento indicado e quantas vezes foi indicado no período.</summary>

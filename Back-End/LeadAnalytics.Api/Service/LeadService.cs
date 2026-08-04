@@ -12,13 +12,15 @@ public class LeadService(
     ILogger<LeadService> logger,
     UnitService unitService,
     AttendantService attendantService,
-    LeadAttributionService attributionService)
+    LeadAttributionService attributionService,
+    Ads.AdCreativeService adCreativeService)
 {
     private readonly AppDbContext _db = db;
     private readonly ILogger<LeadService> _logger = logger;
     private readonly UnitService _unitService = unitService;
     private readonly AttendantService _attendantService = attendantService;
     private readonly LeadAttributionService _attributionService = attributionService;
+    private readonly Ads.AdCreativeService _adCreativeService = adCreativeService;
 
     public async Task<List<Lead>> GetAllLeadsAsync(int? tenantId, int? unitId = null)
     {
@@ -2212,7 +2214,8 @@ public class LeadService(
                     (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
                        where lower(e->>'field_name') like '%título do anúncio%' limit 1) as titulo,
                     (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
-                       where lower(e->>'field_name') like '%anúncio (ad)%' limit 1) as anuncio,
+                       where lower(e->>'field_name') like '%anúncio (ad)%'
+                          or lower(e->>'field_name') like '%id do anúncio%' limit 1) as anuncio,
                     (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
                        where lower(e->>'field_name') like '%campanha%' limit 1) as campanha
                   from leads l
@@ -2233,6 +2236,10 @@ public class LeadService(
             {
                 _logger.LogWarning(ex, "Falha ao agregar desempenho de anúncios");
             }
+
+            // Troca o id pela peça: nome e miniatura vindos da Meta. Depende de a clínica
+            // ter conectado o Meta Ads; sem isso o card segue com o id.
+            await _adCreativeService.EnriquecerAsync(anuncios, clinicId, unitId, ct);
 
             try
             {

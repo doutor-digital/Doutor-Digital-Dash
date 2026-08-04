@@ -6,14 +6,15 @@ namespace LeadAnalytics.Api.Service.Spine;
 /// <summary>
 /// Situação dos tratamentos da unidade, com cache.
 ///
-/// A rota oficial <c>/api/treatments/search</c> já está liberada e é tecnicamente melhor
-/// (uma chamada, campos separados, sem depender de layout de tela). Mas hoje ela expõe
-/// só o que foi cadastrado depois da liberação — em Imperatriz, 2 tratamentos contra o
-/// histórico inteiro do export. Como o KPI conta tratamentos ATIVOS, adotá-la agora faria
-/// o número despencar sem que nada tenha mudado na clínica.
+/// Fonte: a rota oficial <c>/api/treatments/search</c>, com o export raspado do CRM web
+/// como reserva.
 ///
-/// Então a ordem é: export do CRM web primeiro, rota oficial como reserva. Quando a
-/// franquia subir o retroativo, é só inverter as duas chamadas em <c>GetAsync</c>.
+/// A rota devolve poucos tratamentos hoje (2 em Imperatriz), e isso não é defeito: é o
+/// que o sistema da franquia mostra na tela para a unidade. O número do dashboard tem
+/// que bater com o que a clínica vê, não com o que a raspagem conseguia juntar.
+///
+/// A reserva existe para unidade sem token da API — nela o export continua sendo a
+/// única fonte.
 ///
 /// O cache continua por unidade+janela: a situação de tratamento muda devagar, e
 /// nenhuma das duas fontes é barata o bastante para ser consultada a cada request.
@@ -44,7 +45,7 @@ public class FranquiaTratamentosService(
         if (_cache.TryGetValue(key, out FranquiaTratamentosDto? cached) && cached is not null)
             return cached;
 
-        var dto = await PelaRaspagemAsync(unitId, de, ate, ct) ?? await PelaApiAsync(unitId, de, ate, ct);
+        var dto = await PelaApiAsync(unitId, de, ate, ct) ?? await PelaRaspagemAsync(unitId, de, ate, ct);
         if (dto is null) return null;
 
         _cache.Set(key, dto, TimeSpan.FromSeconds(300));
@@ -53,7 +54,7 @@ public class FranquiaTratamentosService(
         return dto;
     }
 
-    /// <summary>Rota oficial. Reserva: entra quando a unidade não tem credencial do CRM web.</summary>
+    /// <summary>Fonte principal. Null = sem token da unidade ou a API recusou.</summary>
     private async Task<FranquiaTratamentosDto?> PelaApiAsync(
         int unitId, DateOnly de, DateOnly ate, CancellationToken ct)
     {
@@ -93,7 +94,7 @@ public class FranquiaTratamentosService(
         }
     }
 
-    /// <summary>Fonte principal hoje: export do CRM web (único com o histórico completo).</summary>
+    /// <summary>Reserva: export do CRM web, para unidade sem token da API.</summary>
     private async Task<FranquiaTratamentosDto?> PelaRaspagemAsync(
         int unitId, DateOnly de, DateOnly ate, CancellationToken ct)
     {

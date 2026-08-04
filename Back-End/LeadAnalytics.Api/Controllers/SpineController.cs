@@ -46,6 +46,7 @@ public class SpineController(
         [FromQuery] int unitId,
         [FromQuery] DateOnly? de,
         [FromQuery] DateOnly? ate,
+        [FromQuery] string? fonte = null,
         CancellationToken ct = default)
     {
         var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
@@ -58,7 +59,7 @@ public class SpineController(
 
         try
         {
-            var dto = await _tratamentos.GetAsync(unitId, inicio, fim, ct);
+            var dto = await _tratamentos.GetAsync(unitId, inicio, fim, ct, fonte);
             if (dto is null)
                 return SemAutorizacaoDaFranquia(
                     $"Cadastre email/senha ('{FranquiaWebStore.EmailKey}'/'{FranquiaWebStore.PasswordKey}') "

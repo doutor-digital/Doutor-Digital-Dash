@@ -38,14 +38,24 @@ public class FranquiaTratamentosService(
     /// Devolve a agregação por situação/valor. Retorna null quando a unidade não tem
     /// nenhuma das duas fontes configurada (o controller vira 503 com instrução).
     /// </summary>
+    /// <param name="fonte">
+    /// <c>api</c> ou <c>web</c> força uma das fontes; vazio usa a ordem padrão. Existe
+    /// para conferir uma contra a outra sem trocar código — as duas divergem, e sem poder
+    /// comparar lado a lado a investigação vira tentativa e erro em produção.
+    /// </param>
     public async Task<FranquiaTratamentosDto?> GetAsync(
-        int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default)
+        int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default, string? fonte = null)
     {
-        var key = $"franquia:trat:{unitId}:{de:yyyyMMdd}:{ate:yyyyMMdd}";
+        var key = $"franquia:trat:{unitId}:{de:yyyyMMdd}:{ate:yyyyMMdd}:{fonte ?? "auto"}";
         if (_cache.TryGetValue(key, out FranquiaTratamentosDto? cached) && cached is not null)
             return cached;
 
-        var dto = await PelaApiAsync(unitId, de, ate, ct) ?? await PelaRaspagemAsync(unitId, de, ate, ct);
+        var dto = fonte switch
+        {
+            "api" => await PelaApiAsync(unitId, de, ate, ct),
+            "web" => await PelaRaspagemAsync(unitId, de, ate, ct),
+            _ => await PelaApiAsync(unitId, de, ate, ct) ?? await PelaRaspagemAsync(unitId, de, ate, ct),
+        };
         if (dto is null) return null;
 
         _cache.Set(key, dto, TimeSpan.FromSeconds(300));

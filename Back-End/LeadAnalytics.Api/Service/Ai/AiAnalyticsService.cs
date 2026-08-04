@@ -69,58 +69,68 @@ public class AiAnalyticsService(
         // "Todas as unidades" não dá pra usar uma etapa só (cada unidade tem a
         // sua), então cai no fallback por CreatedAt.
         var entryStageId = unitId is int u0 ? await entryStageConfig.GetAsync(u0, ct) : null;
-        var currentTotal = await CountLeadsAsync(tenantId, unitId, from, to, entryStageId, ct);
-        var prevTotal = await CountLeadsAsync(tenantId, unitId, prevFrom, prevTo, entryStageId, ct);
 
-        var byStage = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
-                        && l.CreatedAt >= from && l.CreatedAt <= to)
+        // UM ÚNICO UNIVERSO PARA TODO O RELATÓRIO.
+        //
+        // Antes, o total vinha da etapa de entrada (LeadStageHistory) e todas as
+        // distribuições vinham de CreatedAt. Os dois números não fecham: o relatório
+        // dizia "120 leads no período" e listava uma distribuição por etapa que somava
+        // outra coisa. O modelo então calculava percentuais contra um total que não era
+        // o dos itens — e escrevia frase errada com números que existiam de verdade,
+        // que é o tipo de erro difícil de perceber lendo.
+        var baseQuery = LeadsDoPeriodo(tenantId, unitId, from, to, entryStageId);
+
+        var currentTotal = await baseQuery.CountAsync(ct);
+        var prevTotal = await LeadsDoPeriodo(tenantId, unitId, prevFrom, prevTo, entryStageId).CountAsync(ct);
+
+        var byStage = await baseQuery
             .GroupBy(l => l.CurrentStage)
             .Select(g => new { stage = g.Key, count = g.Count() })
             .ToListAsync(ct);
 
-        var byResponsavel = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
-                        && l.CreatedAt >= from && l.CreatedAt <= to
-                        && l.AttendantId != null)
+        // Nome do atendente, não o id. O prompt pede nomes próprios; mandar
+        // "Atendente 42" fazia o modelo repetir o número como se fosse gente.
+        var byResponsavel = await baseQuery
+            .Where(l => l.AttendantId != null)
             .GroupBy(l => l.AttendantId)
             .Select(g => new { att = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count)
             .Take(8)
             .ToListAsync(ct);
 
-        var bySource = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
-                        && l.CreatedAt >= from && l.CreatedAt <= to)
+        var idsAtendentes = byResponsavel.Select(r => r.att!.Value).ToList();
+        var nomesAtendentes = await db.Attendants.AsNoTracking()
+            .Where(a => idsAtendentes.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.Name, ct);
+
+        var bySource = await baseQuery
             .GroupBy(l => l.Source)
             .Select(g => new { source = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count)
             .Take(8)
             .ToListAsync(ct);
 
-        var byCampaign = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
-                        && l.CreatedAt >= from && l.CreatedAt <= to)
+        var byCampaign = await baseQuery
             .GroupBy(l => l.Campaign)
             .Select(g => new { campaign = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count)
             .Take(8)
             .ToListAsync(ct);
 
-        // Distribuição por hora e dia da semana (CreatedAt)
-        var rawTimes = await db.Leads.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
-                        && l.CreatedAt >= from && l.CreatedAt <= to)
-            .Select(l => l.CreatedAt)
-            .ToListAsync(ct);
+        // Hora e dia da semana NO RELÓGIO DA CLÍNICA. CreatedAt é UTC; agrupar direto
+        // jogava o pico três horas para frente e mudava o dia de quem entrou depois
+        // das 21h. "Pico às 15h" virava recomendação de escala em cima de um horário
+        // em que ninguém escreveu.
+        var rawTimes = await baseQuery.Select(l => l.CreatedAt).ToListAsync(ct);
+        var horariosLocais = rawTimes.Select(ParaHorarioLocal).ToList();
 
-        var byHour = rawTimes.GroupBy(t => t.Hour)
+        var byHour = horariosLocais.GroupBy(t => t.Hour)
             .Select(g => new { hour = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count)
             .Take(5)
             .ToList();
 
-        var byWeekday = rawTimes.GroupBy(t => (int)t.DayOfWeek)
+        var byWeekday = horariosLocais.GroupBy(t => (int)t.DayOfWeek)
             .Select(g => new { weekday = g.Key, count = g.Count() })
             .OrderByDescending(x => x.count)
             .ToList();
@@ -136,6 +146,13 @@ public class AiAnalyticsService(
         sb.AppendLine($"Período analisado (BRT): {from.Add(brOffset):dd/MM/yyyy} → {to.Add(brOffset):dd/MM/yyyy} ({(to - from).Days + 1} dias)");
         sb.AppendLine($"Período anterior (comparativo, BRT): {prevFrom.Add(brOffset):dd/MM/yyyy} → {prevTo.Add(brOffset):dd/MM/yyyy}");
         sb.AppendLine();
+        sb.AppendLine(entryStageId is not null
+            ? "Critério: leads que ENTRARAM na etapa de entrada configurada da unidade dentro do período. "
+              + "Todos os blocos abaixo descrevem exatamente esse mesmo conjunto."
+            : "Critério: leads CRIADOS dentro do período. Todos os blocos abaixo descrevem "
+              + "exatamente esse mesmo conjunto.");
+        sb.AppendLine("Horários e dias da semana estão no fuso da clínica (BRT).");
+        sb.AppendLine();
         sb.AppendLine($"## Volume");
         sb.AppendLine($"- Leads no período: **{currentTotal}**");
         sb.AppendLine($"- Leads no período anterior: {prevTotal}");
@@ -149,7 +166,12 @@ public class AiAnalyticsService(
 
         sb.AppendLine("## Top atendentes responsáveis (por volume)");
         foreach (var r in byResponsavel)
-            sb.AppendLine($"- Atendente {r.att}: {r.count} leads");
+        {
+            var nome = r.att is int id && nomesAtendentes.TryGetValue(id, out var n) && !string.IsNullOrWhiteSpace(n)
+                ? n
+                : "(atendente sem cadastro)";
+            sb.AppendLine($"- {nome}: {r.count} leads");
+        }
         sb.AppendLine();
 
         sb.AppendLine("## Top origens (canais)");
@@ -226,6 +248,40 @@ public class AiAnalyticsService(
     /// é o número que bate com o widget "leads de entrada" da Kommo. Senão,
     /// fallback no CreatedAt (qualquer lead criado no período).
     /// </summary>
+    /// <summary>
+    /// O conjunto de leads que o relatório inteiro descreve. Mesma regra do
+    /// <see cref="CountLeadsAsync"/>, mas devolvendo a consulta em vez do total — é o que
+    /// permite que volume, etapas, atendentes, origens e horários falem todos do mesmo
+    /// grupo de pessoas. Sem isso o relatório mistura dois universos e os percentuais
+    /// que o modelo calcula não fecham com nada.
+    /// </summary>
+    private IQueryable<Lead> LeadsDoPeriodo(int tenantId, int? unitId, DateTime from, DateTime to, int? entryStageId)
+    {
+        // entryStageId só vem preenchido quando há uma unidade específica.
+        if (entryStageId is int stageId && unitId is int sUid)
+        {
+            var idsQueEntraram = db.LeadStageHistories.AsNoTracking()
+                .Where(h => h.StageId == stageId
+                            && h.ChangedAt >= from && h.ChangedAt <= to
+                            && h.Lead.TenantId == tenantId
+                            && h.Lead.UnitId == sUid)
+                .Select(h => h.LeadId);
+
+            return db.Leads.AsNoTracking().Where(l => idsQueEntraram.Contains(l.Id));
+        }
+
+        return db.Leads.AsNoTracking().Where(l =>
+            l.TenantId == tenantId && (!unitId.HasValue || l.UnitId == unitId.Value)
+            && l.CreatedAt >= from && l.CreatedAt <= to);
+    }
+
+    /// <summary>Fuso da clínica. Nomeado, e não offset fixo, pelo mesmo motivo do resto do projeto.</summary>
+    private static readonly TimeZoneInfo BrTz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+    /// <summary>UTC do banco → relógio da clínica, que é o único que a equipe reconhece.</summary>
+    private static DateTime ParaHorarioLocal(DateTime utc) =>
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), BrTz);
+
     private async Task<int> CountLeadsAsync(int tenantId, int? unitId, DateTime from, DateTime to, int? entryStageId, CancellationToken ct)
     {
         // entryStageId só vem preenchido quando há uma unidade específica.

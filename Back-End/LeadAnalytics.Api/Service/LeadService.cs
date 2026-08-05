@@ -1827,12 +1827,55 @@ public class LeadService(
             .OrderByDescending(e => e.Quantidade)
             .ToListAsync(ct);
 
-        // Origens agrupadas
-        var origens = await baseQ
-            .GroupBy(l => l.Source)
-            .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
-            .OrderByDescending(o => o.Quantidade)
-            .ToListAsync(ct);
+        // ── Origens agrupadas ───────────────────────────────────────────────
+        // Lead.Source é a origem do SISTEMA e vale "Kommo" em 100% dos leads vindos de
+        // lá. Agrupar por ela devolvia uma fatia só, "Kommo 100%", no donut de origens.
+        //
+        // A origem de marketing mora no campo customizado que a unidade mapeou em
+        // Configurações Técnicas. Sem mapeamento, cai no Source — que ao menos não
+        // inventa —, e a unidade aparece como "Kommo" até alguém configurar.
+        long? origemCfId = null;
+        if (unitId is int uidOrig)
+        {
+            var cfgJson = await _db.KpiConfigurations.AsNoTracking()
+                .Where(k => k.UnitId == uidOrig && k.KpiKey == KpiConfigService.ProfileOrigemKey)
+                .Select(k => k.ConfigJson)
+                .FirstOrDefaultAsync(ct);
+            if (!string.IsNullOrWhiteSpace(cfgJson))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(cfgJson);
+                    if (doc.RootElement.TryGetProperty("fieldId", out var fe)
+                        && fe.TryGetInt64(out var fv) && fv > 0) origemCfId = fv;
+                }
+                catch (System.Text.Json.JsonException) { /* config inválida — cai no Source */ }
+            }
+        }
+
+        List<OrigemAgrupadaDto> origens;
+        if (origemCfId is long ocf)
+        {
+            var brutos = await baseQ
+                .Where(l => l.CustomFieldsJson != null)
+                .Select(l => l.CustomFieldsJson!)
+                .ToListAsync(ct);
+
+            origens = [.. brutos
+                .Select(j => KpiConfigService.ExtractFieldValue(j, ocf, null))
+                .Select(v => string.IsNullOrWhiteSpace(v) ? "Sem origem" : v.Trim())
+                .GroupBy(v => v, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+                .OrderByDescending(o => o.Quantidade)];
+        }
+        else
+        {
+            origens = await baseQ
+                .GroupBy(l => l.Source)
+                .Select(g => new OrigemAgrupadaDto { Origem = g.Key, Quantidade = g.Count() })
+                .OrderByDescending(o => o.Quantidade)
+                .ToListAsync(ct);
+        }
 
         // Origens das consultas (leads agendados+)
         var origensConsultas = await baseQ

@@ -91,6 +91,9 @@ public class SpineApiClient
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
+    /// <summary>Uma vez por processo: só interessa descobrir o formato, não poluir o log.</summary>
+    private bool _camposTratamentoRegistrados;
+
     private readonly HttpClient _http;
     private readonly SpineOptions _options;
     private readonly ILogger<SpineApiClient> _logger;
@@ -262,13 +265,29 @@ public class SpineApiClient
                     ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
                 };
 
-                var envelope = await PostAsync<SpineSearchEnvelope<SpineTreatment>>(
+                // Desserializa em JsonElement antes do tipo: é o que permite registrar os
+                // campos que a rota REALMENTE devolve. O mapa nosso foi escrito a partir
+                // do guia, e o guia não documenta a resposta desta rota — foi assim que
+                // `created` virou nulo silencioso e derrubou o filtro.
+                var envelope = await PostAsync<SpineSearchEnvelope<JsonElement>>(
                     "/api/treatments/search", body, token, ct);
 
                 var rows = envelope?.Data?.Data;
                 if (rows is null || rows.Count == 0) break;
 
-                foreach (var t in rows) porId[t.IdTreatment] = t;
+                if (!_camposTratamentoRegistrados && rows[0].ValueKind == JsonValueKind.Object)
+                {
+                    _camposTratamentoRegistrados = true;
+                    var campos = rows[0].EnumerateObject().Select(p => $"{p.Name}:{p.Value.ValueKind}");
+                    _logger.LogInformation(
+                        "Spine /treatments/search devolve os campos: {Campos}", string.Join(", ", campos));
+                }
+
+                foreach (var el in rows)
+                {
+                    var t = el.Deserialize<SpineTreatment>(JsonOpts);
+                    if (t is not null) porId[t.IdTreatment] = t;
+                }
 
                 totalPages = envelope!.Data!.TotalPages ?? 1;
                 page++;

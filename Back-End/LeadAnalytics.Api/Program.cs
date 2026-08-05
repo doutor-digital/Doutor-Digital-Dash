@@ -162,6 +162,7 @@ builder.Services.AddSingleton<IPdfRelatorioService, PdfRelatorioService>();
 builder.Services.AddScoped<SyncN8N>();
 builder.Services.AddScoped<AlertsService>();
 builder.Services.AddScoped<ScheduledSyncService>();
+builder.Services.AddScoped<QualidadeService>();
 builder.Services.AddScoped<InternalApiKeyGuard>();
 builder.Services.AddScoped<DailyRelatoryService>();
 builder.Services.AddScoped<LeadAttributionService>();

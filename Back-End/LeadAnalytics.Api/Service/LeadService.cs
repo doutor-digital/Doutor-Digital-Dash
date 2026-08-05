@@ -2169,11 +2169,46 @@ public class LeadService(
                 LeadStages.FechouTratamento, LeadStages.EmTratamento,
             }.Select(s => $"'{s}'"));
 
+            // QUAL CAMPO É "ORIGEM" — E POR QUE NÃO DÁ PARA CASAR PELO NOME.
+            //
+            // Casar com like '%origem%' pegava três campos em Imperatriz: ⚑ Origem,
+            // ⌂ URL de origem do clique e ⌂ Plataforma de origem. Com `limit 1`, quem
+            // caísse primeiro no JSON virava a origem — e o funil ganhava linhas como
+            // "https://www.instagram.com/p/DavixQQgmhn/", fragmentando o Instagram em
+            // quatro origens diferentes.
+            //
+            // O id mapeado em Configurações Técnicas é a resposta certa. Sem mapeamento,
+            // volta para o nome, mas excluindo os dois impostores conhecidos.
+            var origemFieldId = unitId is int uidOrigem
+                ? await _db.KpiConfigurations.AsNoTracking()
+                    .Where(k => k.UnitId == uidOrigem && k.KpiKey == KpiConfigService.ProfileOrigemKey)
+                    .Select(k => k.ConfigJson)
+                    .FirstOrDefaultAsync(ct)
+                : null;
+
+            long? origemId = null;
+            if (!string.IsNullOrWhiteSpace(origemFieldId))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(origemFieldId);
+                    if (doc.RootElement.TryGetProperty("fieldId", out var fEl)
+                        && fEl.TryGetInt64(out var fid) && fid > 0) origemId = fid;
+                }
+                catch (System.Text.Json.JsonException) { /* config inválida — cai no nome */ }
+            }
+
+            var filtroOrigem = origemId is long oid
+                ? $"(e->>'field_id')::bigint = {oid}"
+                : "lower(e->>'field_name') like '%origem%' "
+                  + "and lower(e->>'field_name') not like '%url%' "
+                  + "and lower(e->>'field_name') not like '%plataforma%'";
+
             var sqlOrigem = $@"
                 with x as (
                   select l.""CurrentStage"",
                     (select e->>'value' from jsonb_array_elements(l.""CustomFieldsJson"") e
-                       where lower(e->>'field_name') like '%origem%' limit 1) as origem
+                       where {filtroOrigem} limit 1) as origem
                   from leads l
                   where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
                 )

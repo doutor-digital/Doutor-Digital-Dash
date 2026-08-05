@@ -259,8 +259,14 @@ public class SpineApiClient
                 var body = new Dictionary<string, object?>
                 {
                     ["initialCreatedDate"] = blocoDe.ToString("yyyy-MM-dd"),
-                    // Um dia a mais, como na agenda: se o fim for exclusivo aqui também,
-                    // sem isso o último dia do período some. O corte fino é local.
+                    // MEDIDO (04/08/2026): aqui o fim é INCLUSIVO — o oposto de
+                    // /schedules/search, onde é exclusivo. Pedir 01/07→01/08 devolveu as
+                    // duas linhas do próprio 01/08.
+                    //
+                    // Mesmo assim pedimos um dia a mais, de propósito: `created` vem em UTC
+                    // e o corte é pelo dia da clínica. Quem lançou às 22h de 31/07 chega
+                    // como 01/08T01:00Z e o servidor não devolveria essa linha num pedido
+                    // que termina em 31/07. O dia extra entra e o corte local devolve.
                     ["endCreatedDate"] = blocoAte.AddDays(1).ToString("yyyy-MM-dd"),
                     ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
                 };
@@ -296,10 +302,11 @@ public class SpineApiClient
 
         var brutos = porId.Values.ToList();
 
+        // `created` vem em UTC. Um tratamento lançado às 22h de 31/07 (BRT) chega como
+        // 01/08T01:00Z e cairia no mês seguinte se comparado cru — o mesmo erro de fuso
+        // que a agenda já trata.
         bool NoPeriodo(DateTime? d) =>
-            d is not null
-            && DateOnly.FromDateTime(d.Value) >= from
-            && DateOnly.FromDateTime(d.Value) <= to;
+            d is not null && DiaLocal(d.Value) >= from && DiaLocal(d.Value) <= to;
 
         // Corte fino por data de LANÇAMENTO (created) — o eixo que o card anuncia e o
         // mesmo que a tela da franquia usa.
@@ -628,21 +635,65 @@ public class SpineSchedule
 public class SpineTreatment
 {
     [JsonPropertyName("idTreatment")] public long IdTreatment { get; set; }
+
+    // ─── paciente ───────────────────────────────────────────────────────────
     [JsonPropertyName("idClient")] public long IdClient { get; set; }
     [JsonPropertyName("clientName")] public string? ClientName { get; set; }
+    [JsonPropertyName("clientBirthdate")] public DateTime? ClientBirthdate { get; set; }
+
+    /// <summary>M · F.</summary>
+    [JsonPropertyName("clientGender")] public string? ClientGender { get; set; }
+
+    // ─── protocolo ──────────────────────────────────────────────────────────
+    // O guia diz que idCategory é 2=Fisioterapia e 4=Cirurgia. Não é o que a conta
+    // devolve: em Imperatriz, 4 = "PROTOCOLO 03 MESES". A categoria é por unidade,
+    // então agrupe pelo id e mostre o nome — nunca chumbe o significado do id.
+    [JsonPropertyName("idCategory")] public int? IdCategory { get; set; }
     [JsonPropertyName("category")] public string? Category { get; set; }
+    [JsonPropertyName("idLocal")] public int? IdLocal { get; set; }
+
+    /// <summary>LOMBAR · CERVICAL…</summary>
     [JsonPropertyName("local")] public string? Local { get; set; }
+
+    [JsonPropertyName("idType")] public int? IdType { get; set; }
+
+    /// <summary>Vem "N/A" quando idType é 0.</summary>
+    [JsonPropertyName("type")] public string? Type { get; set; }
+
+    [JsonPropertyName("idDegree")] public int? IdDegree { get; set; }
+
+    /// <summary>CRÔNICO · AGUDO…</summary>
     [JsonPropertyName("degree")] public string? Degree { get; set; }
+
+    // ─── responsável e situação ─────────────────────────────────────────────
+    [JsonPropertyName("idStaff")] public int? IdStaff { get; set; }
     [JsonPropertyName("staffName")] public string? StaffName { get; set; }
+
+    /// <summary>44 = NÃO INICIADO · 45 = EM ANDAMENTO. Agrupar por aqui, não pelo texto.</summary>
+    [JsonPropertyName("idStatus")] public int? IdStatus { get; set; }
 
     /// <summary>EM ANDAMENTO · FINALIZADO · NÃO INICIADO · DESISTÊNCIA.</summary>
     [JsonPropertyName("statusName")] public string? StatusName { get; set; }
 
     [JsonPropertyName("companyName")] public string? CompanyName { get; set; }
+    [JsonPropertyName("description")] public string? Description { get; set; }
+
+    // ─── datas ──────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Início do tratamento. VEM NULO na prática — nas 12 linhas de julho de Imperatriz,
+    /// nenhuma tinha valor. Foi por filtrar aqui que o card mostrava 2 de 10.
+    /// </summary>
     [JsonPropertyName("dateBegin")] public DateTime? DateBegin { get; set; }
+
     [JsonPropertyName("dateFinish")] public DateTime? DateFinish { get; set; }
-    [JsonPropertyName("price")] public decimal? Price { get; set; }
+
+    /// <summary>Data de lançamento, em UTC. É o eixo do card e o que a franquia mostra.</summary>
     [JsonPropertyName("created")] public DateTime? Created { get; set; }
+
+    [JsonPropertyName("modified")] public DateTime? Modified { get; set; }
+
+    /// <summary>Chega como texto ("3680.00"), não como número — ver JsonOpts.</summary>
+    [JsonPropertyName("price")] public decimal? Price { get; set; }
 }
 
 /// <summary>

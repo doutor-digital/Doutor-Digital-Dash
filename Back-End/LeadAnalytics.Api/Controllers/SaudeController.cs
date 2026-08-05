@@ -15,10 +15,11 @@ namespace LeadAnalytics.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/saude")]
-public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, TenantUnitGuard tenantGuard) : ControllerBase
+public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, HigieneService higiene, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
     private readonly AgendaDoDiaService _agenda = agenda;
+    private readonly HigieneService _higiene = higiene;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
     /// <summary>Frescor por fonte: Kommo, franquia e Meta Ads.</summary>
@@ -48,5 +49,18 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Tena
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, SpineApiClient.BrTz));
 
         return Ok(await _agenda.GetAsync(tid, unitId, alvo, ct));
+    }
+
+    /// <summary>
+    /// Higiene da base e sanidade da configuração — o que infla ou zera número em silêncio.
+    /// </summary>
+    [HttpGet("higiene")]
+    public async Task<IActionResult> Higiene([FromQuery] int? unitId, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _higiene.GetAsync(tid, unitId, ct));
     }
 }

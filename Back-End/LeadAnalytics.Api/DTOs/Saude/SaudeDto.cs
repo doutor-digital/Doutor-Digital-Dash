@@ -79,3 +79,42 @@ public class AgendaCategoriaDto
     /// <summary>Ainda vai acontecer — é a fila da recepção.</summary>
     public int Pendentes { get; set; }
 }
+
+/// <summary>
+/// Problemas na base e na configuração que inflam ou zeram números em silêncio.
+/// Todos os itens aqui já aconteceram nesta operação sem dar erro em tela.
+/// </summary>
+public class HigieneDto
+{
+    public int TotalLeads { get; set; }
+    public List<HigieneAchadoDto> Achados { get; set; } = [];
+
+    /// <summary>Estado de cada campo mapeado em Configurações Técnicas.</summary>
+    public List<HigieneCampoDto> Configuracao { get; set; } = [];
+
+    public int ConfiguracaoComProblema { get; set; }
+}
+
+public class HigieneAchadoDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Titulo { get; set; } = string.Empty;
+    public int Quantidade { get; set; }
+    public double Percentual { get; set; }
+
+    /// <summary>O que este problema faz com os números.</summary>
+    public string Impacto { get; set; } = string.Empty;
+
+    /// <summary>O que dá para fazer a respeito.</summary>
+    public string Acao { get; set; } = string.Empty;
+}
+
+public class HigieneCampoDto
+{
+    public string Campo { get; set; } = string.Empty;
+
+    /// <summary>ok · sem_mapeamento · nao_encontrado</summary>
+    public string Situacao { get; set; } = "ok";
+
+    public string? Detalhe { get; set; }
+}

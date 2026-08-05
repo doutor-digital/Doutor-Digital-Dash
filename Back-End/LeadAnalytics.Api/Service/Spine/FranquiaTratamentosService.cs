@@ -9,9 +9,11 @@ namespace LeadAnalytics.Api.Service.Spine;
 /// Fonte: a rota oficial <c>/api/treatments/search</c>, com o export raspado do CRM web
 /// como reserva.
 ///
-/// A rota devolve poucos tratamentos hoje (2 em Imperatriz), e isso não é defeito: é o
-/// que o sistema da franquia mostra na tela para a unidade. O número do dashboard tem
-/// que bater com o que a clínica vê, não com o que a raspagem conseguia juntar.
+/// A rota devolvia pouquíssimos tratamentos (2 em Imperatriz) e isso ERA defeito nosso,
+/// ao contrário do que este comentário afirmava antes: mandávamos
+/// <c>initialDate</c>/<c>endDate</c>, que esta rota não conhece, e a API caía no padrão
+/// dela — o mês corrente. O card ficava preso no mesmo número em qualquer período.
+/// Corrigido para <c>initialCreatedDate</c>/<c>endCreatedDate</c> em SpineApiClient.
 ///
 /// A reserva existe para unidade sem token da API — nela o export continua sendo a
 /// única fonte.

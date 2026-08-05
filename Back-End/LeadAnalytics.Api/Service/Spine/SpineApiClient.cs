@@ -222,46 +222,69 @@ public class SpineApiClient
     /// <summary>
     /// Tratamentos da unidade pela rota oficial (<c>POST /api/treatments/search</c>).
     ///
-    /// A janela é enviada no mesmo formato de <c>schedules/search</c>, mas hoje a API
-    /// devolve o mesmo conjunto para qualquer intervalo — ela ignora o filtro. Por isso o
-    /// recorte por data é refeito aqui, sobre <c>dateBegin</c>: sem isso o card mostraria
-    /// o mesmo número em todo período escolhido, o que é pior do que mostrar menos.
+    /// PARECIA QUE A API IGNORAVA O FILTRO DE DATA. Não ignorava: recebia os nomes
+    /// errados. Esta rota filtra por <c>initialCreatedDate</c>/<c>endCreatedDate</c>,
+    /// e não por <c>initialDate</c>/<c>endDate</c> como a agenda. Parâmetro desconhecido
+    /// não vira erro — a API cai no padrão dela, o mês corrente (guia §10.4), e o card
+    /// ficava preso no mesmo número em qualquer período.
+    ///
+    /// A janela é quebrada em blocos de 100 dias (teto do guia para busca com período),
+    /// já que o card de tratamentos pede 365 dias por padrão.
     /// </summary>
     public async Task<IReadOnlyList<SpineTreatment>> SearchTreatmentsAsync(
         string token, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         if (to < from) (from, to) = (to, from);
 
-        var all = new List<SpineTreatment>();
-        var page = 1;
-        var totalPages = 1;
+        // Dedup por id: uma janela grande vira vários blocos, e bloco vizinho pode
+        // devolver a mesma linha na borda.
+        var porId = new Dictionary<long, SpineTreatment>();
 
-        while (page <= totalPages && page <= 40)
+        foreach (var (blocoDe, blocoAte) in QuebrarEmBlocos(from, to, MaxDiasJanelaBi))
         {
-            var body = new Dictionary<string, object?>
+            var page = 1;
+            var totalPages = 1;
+
+            while (page <= totalPages && page <= 40)
             {
-                ["initialDate"] = from.ToString("yyyy-MM-dd"),
-                ["endDate"] = to.AddDays(1).ToString("yyyy-MM-dd"),
-                ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
-            };
+                // OS NOMES SÃO OUTROS AQUI, E ISSO CUSTOU CARO.
+                // /treatments/search filtra por initialCreatedDate/endCreatedDate — não
+                // por initialDate/endDate, que são os nomes da agenda. Mandar os nomes
+                // errados não dá erro: a API ignora o que não conhece e cai no padrão
+                // dela, que é o MÊS CORRENTE (guia §10.4). O efeito visível era o card
+                // preso no mesmo número em qualquer período escolhido.
+                var body = new Dictionary<string, object?>
+                {
+                    ["initialCreatedDate"] = blocoDe.ToString("yyyy-MM-dd"),
+                    // Um dia a mais, como na agenda: se o fim for exclusivo aqui também,
+                    // sem isso o último dia do período some. O corte fino é local.
+                    ["endCreatedDate"] = blocoAte.AddDays(1).ToString("yyyy-MM-dd"),
+                    ["pagination"] = new { page, rowsPerPage = MaxRowsPerPage },
+                };
 
-            var envelope = await PostAsync<SpineSearchEnvelope<SpineTreatment>>(
-                "/api/treatments/search", body, token, ct);
+                var envelope = await PostAsync<SpineSearchEnvelope<SpineTreatment>>(
+                    "/api/treatments/search", body, token, ct);
 
-            var rows = envelope?.Data?.Data;
-            if (rows is null || rows.Count == 0) break;
+                var rows = envelope?.Data?.Data;
+                if (rows is null || rows.Count == 0) break;
 
-            all.AddRange(rows);
-            totalPages = envelope!.Data!.TotalPages ?? 1;
-            page++;
+                foreach (var t in rows) porId[t.IdTreatment] = t;
+
+                totalPages = envelope!.Data!.TotalPages ?? 1;
+                page++;
+            }
         }
 
-        // Recorte local da janela. Tratamento sem data de início fica de fora: não dá
-        // para afirmar que pertence ao período.
-        return all
-            .Where(t => t.DateBegin is not null
-                     && DateOnly.FromDateTime(t.DateBegin.Value) >= from
-                     && DateOnly.FromDateTime(t.DateBegin.Value) <= to)
+        // Corte fino por data de LANÇAMENTO (created), que é o eixo do card — e o mesmo
+        // que a API filtra. Antes o corte era por dateBegin, campo diferente: com o
+        // servidor filtrando por um e a gente cortando por outro, linha válida sumia.
+        //
+        // Linha sem `created` fica: o servidor já a devolveu dentro da janela pedida, e
+        // descartar por falta de um campo que ele não mandou é jogar fora dado bom.
+        return porId.Values
+            .Where(t => t.Created is null
+                     || (DateOnly.FromDateTime(t.Created.Value) >= from
+                         && DateOnly.FromDateTime(t.Created.Value) <= to))
             .ToList();
     }
 

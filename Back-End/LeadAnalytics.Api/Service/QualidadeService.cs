@@ -102,7 +102,10 @@ public class QualidadeService(AppDbContext db, KpiConfigService kpiConfig)
             });
         }
 
-        Campo("origem", "Origem", mapa.OrigemFieldId, l => (string?)l.Source);
+        // NÃO usar Lead.Source como reforço: ela vale "Kommo" em 100% dos leads — é a
+        // origem do SISTEMA, não a de marketing. Usá-la faria a Origem aparecer sempre
+        // como 100% preenchida, inclusive nos 523 leads que estão em "Sem origem".
+        Campo("origem", "Origem", mapa.OrigemFieldId);
         Campo("qualificacao", "Qualificação", mapa.QualificacaoFieldId, l => (string?)l.Qualification);
         Campo("tipo_lead", "Tipo de lead", mapa.TipoFieldId);
         Campo("motivo_nao_agendamento", "Motivo do não agendamento", mapa.MotivoNaoAgendamentoFieldId);

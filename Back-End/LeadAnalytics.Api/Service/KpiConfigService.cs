@@ -36,6 +36,13 @@ public class KpiConfigService(
     public const string ProfileTipoAgendamentoKey = "profile_tipo_agendamento";
     public const string ProfileTipoTratamentoKey = "profile_tipo_tratamento";
 
+    /// <summary>
+    /// Campo que diz QUEM atendeu. Não é o responsible_user_id da Kommo: em Imperatriz ele
+    /// é a própria conta ("Doutor Hérnia Imperatriz") em todos os leads, então não distingue
+    /// SDR. Quem distingue é o custom field ☻ Responsável agendamento.
+    /// </summary>
+    public const string ProfileResponsavelKey = "profile_responsavel";
+
     /// <summary>Mapeamento dos custom fields da Kommo p/ os breakdowns do dashboard.</summary>
     public class LeadProfileFields
     {
@@ -56,6 +63,9 @@ public class KpiConfigService(
         public long? TipoAgendamentoFieldId { get; set; }
         /// <summary>Campo "Tipo de tratamento" (fisioterapia/pilates/...) — breakdown do card Tratamentos.</summary>
         public long? TipoTratamentoFieldId { get; set; }
+
+        /// <summary>Campo "Responsável agendamento" — quem de fato atendeu o lead.</summary>
+        public long? ResponsavelFieldId { get; set; }
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -1737,6 +1747,7 @@ public class KpiConfigService(
             ProfileValorTratKey, ProfileValorConsultaKey,
             ProfileTratFechadoKey, ProfileQualificacaoKey,
             ProfileTipoKey, ProfileTipoAgendamentoKey, ProfileTipoTratamentoKey,
+            ProfileResponsavelKey,
         };
         var rows = await _db.KpiConfigurations.AsNoTracking()
             .Where(k => k.UnitId == unitId && keys.Contains(k.KpiKey))
@@ -1765,6 +1776,7 @@ public class KpiConfigService(
             TipoFieldId = FieldOf(ProfileTipoKey),
             TipoAgendamentoFieldId = FieldOf(ProfileTipoAgendamentoKey),
             TipoTratamentoFieldId = FieldOf(ProfileTipoTratamentoKey),
+            ResponsavelFieldId = FieldOf(ProfileResponsavelKey),
         };
     }
 

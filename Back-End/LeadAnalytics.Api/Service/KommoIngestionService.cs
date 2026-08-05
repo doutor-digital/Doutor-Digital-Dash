@@ -199,6 +199,24 @@ public class KommoIngestionService(
                 lead.QualificationFilledAt = ev.KommoModifiedAtUtc ?? now;
             }
 
+            // ── Quem atendeu ────────────────────────────────────────────────
+            // NÃO usar responsible_user_id: em Imperatriz ele é a própria conta
+            // ("Doutor Hérnia Imperatriz") em todos os leads, então não distingue SDR
+            // nenhuma. Quem distingue é o custom field ☻ Responsável agendamento.
+            //
+            // Antes deste bloco o AttendantId do evento era só LOGADO e nunca gravado —
+            // por isso 100% dos leads ficavam sem responsável e nenhuma visão por pessoa
+            // funcionava: nem ranking, nem preenchimento por SDR, nem fila individual.
+            var respNome = ExtractFieldRaw(
+                lead.CustomFieldsJson, profileFields.ResponsavelFieldId,
+                n => n.Contains("respons") && n.Contains("agendamento"))?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(respNome))
+            {
+                var attId = await ResolverAtendenteAsync(respNome, unit.Id, ct);
+                if (attId is int aid && lead.AttendantId != aid) lead.AttendantId = aid;
+            }
+
             // Valor da consulta (campo escolhido em Configurações → "Valor da consulta").
             // Alimenta o card Consultas → Valor total. Não sobrescreve um valor já preenchido
             // manualmente na Revisão comercial — só seta quando o SQL está nulo, evitando
@@ -573,6 +591,55 @@ public class KommoIngestionService(
     /// KommoFormParser/webhook: array de objetos com field_id + field_name + values[].value).
     /// Match por field_id quando disponível, senão por predicado de nome (lowercase).
     /// </summary>
+    /// <summary>
+    /// Nome do responsável → Attendant, criando quando ainda não existe.
+    ///
+    /// O nome vem de um select da Kommo ("GIULIA", "ADRIELE"), não de um id de usuário.
+    /// Como Attendant.ExternalId é único GLOBAL e é o id do usuário na Kommo quando existe,
+    /// atendente derivado de nome recebe um id NEGATIVO determinístico: nunca colide com
+    /// um id real da Kommo, e o mesmo nome na mesma unidade cai sempre no mesmo registro,
+    /// sem duplicar a cada sync.
+    /// </summary>
+    private async Task<int?> ResolverAtendenteAsync(string nome, int unitId, CancellationToken ct)
+    {
+        var limpo = nome.Trim();
+        if (limpo.Length == 0) return null;
+
+        var existente = await _db.Attendants
+            .FirstOrDefaultAsync(a => a.UnitId == unitId && a.Name == limpo, ct);
+        if (existente is not null) return existente.Id;
+
+        var chave = $"{unitId}|{limpo.ToLowerInvariant()}";
+        unchecked
+        {
+            var h = 17;
+            foreach (var c in chave) h = h * 31 + c;
+            var externo = -(Math.Abs(h) % 1_500_000_000) - 1;
+
+            var att = new Attendant
+            {
+                ExternalId = externo,
+                Name = limpo,
+                UnitId = unitId,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.Attendants.Add(att);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                return att.Id;
+            }
+            catch (DbUpdateException)
+            {
+                // Corrida entre sync e webhook, ou colisão de hash: relê e usa o que ficou.
+                _db.Entry(att).State = EntityState.Detached;
+                var achado = await _db.Attendants
+                    .FirstOrDefaultAsync(a => a.UnitId == unitId && a.Name == limpo, ct);
+                return achado?.Id;
+            }
+        }
+    }
+
     private static string? ExtractFieldRaw(string? customFieldsJson, long? fieldId, Func<string, bool> nameMatches)
     {
         if (string.IsNullOrWhiteSpace(customFieldsJson)) return null;

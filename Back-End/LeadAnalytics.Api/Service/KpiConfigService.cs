@@ -1856,7 +1856,15 @@ public class KpiConfigService(
     }
 
     /// <summary>Extrai o "value" de um campo do CustomFieldsJson casando por field_id ou field_code.</summary>
-    private static string? ExtractFieldValue(string customFieldsJson, long? fieldId, string? fieldCode)
+    /// <summary>
+    /// Lê o valor de um campo customizado do JSON que o sync grava no lead.
+    ///
+    /// Público porque o painel de qualidade precisa da MESMA leitura: as colunas tipadas
+    /// (LeadType, NoAppointmentReason, TreatmentPlanValue) ficam vazias por desenho — o
+    /// sync grava o JSON e o cálculo resolve na consulta. Medir a coluna em vez do JSON
+    /// faz um campo preenchido em 87% aparecer como 0%.
+    /// </summary>
+    public static string? ExtractFieldValue(string customFieldsJson, long? fieldId, string? fieldCode)
     {
         try
         {

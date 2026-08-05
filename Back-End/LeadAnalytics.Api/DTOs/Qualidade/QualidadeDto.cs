@@ -13,6 +13,19 @@ public class QualidadeDto
     /// <summary>Leads com ao menos uma incoerência. Um lead conta uma vez, não por regra.</summary>
     public int LeadsComIncoerencia { get; set; }
 
+    /// <summary>Percentual de preenchimento a partir do qual o campo é considerado ok.</summary>
+    public double Meta { get; set; }
+
+    /// <summary>Campos mapeados que não atingiram a meta — é o número que vira cobrança.</summary>
+    public int CamposAbaixoDaMeta { get; set; }
+
+    /// <summary>
+    /// Campos sem mapeamento em Configurações Técnicas. É pendência de CONFIGURAÇÃO, não
+    /// de preenchimento: sem saber onde o campo mora, medir seria acusar a equipe por
+    /// defeito nosso.
+    /// </summary>
+    public int CamposSemMapeamento { get; set; }
+
     /// <summary>Ordenado do campo mais vazio para o mais preenchido — o topo é onde doer mais.</summary>
     public List<QualidadeCampoDto> PorCampo { get; set; } = [];
 
@@ -26,6 +39,11 @@ public class QualidadeCampoDto
 {
     public string Campo { get; set; } = string.Empty;
     public string Rotulo { get; set; } = string.Empty;
+
+    /// <summary>Falso = a unidade não disse onde este campo mora. Não é falha de quem preenche.</summary>
+    public bool Mapeado { get; set; }
+
+    public bool AtingiuMeta { get; set; }
     public int Preenchidos { get; set; }
     public int Vazios { get; set; }
 

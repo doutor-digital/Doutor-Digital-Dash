@@ -153,3 +153,38 @@ public class FilaItemDto
     public string? Detalhe { get; set; }
     public DateTime? Quando { get; set; }
 }
+
+/// <summary>
+/// O que aconteceu no CRM, na ordem em que aconteceu — a prova bruta por trás dos números.
+/// Fica no fim da página: no topo competiria com as filas, e perderia.
+/// </summary>
+public class AtividadeDto
+{
+    public List<AtividadeLinhaDto> Linhas { get; set; } = [];
+
+    /// <summary>Quantas coisas aconteceram na última hora — dá o tamanho do movimento.</summary>
+    public int NaUltimaHora { get; set; }
+
+    /// <summary>Só os leads novos da última hora.</summary>
+    public int EntraramNaUltimaHora { get; set; }
+
+    /// <summary>
+    /// Instante da linha mais recente. Nulo quando não houve nada em 24 h — a tela precisa
+    /// dizer isso, porque log vazio é indistinguível de log quebrado.
+    /// </summary>
+    public DateTime? MaisRecente { get; set; }
+}
+
+public class AtividadeLinhaDto
+{
+    public int? LeadId { get; set; }
+    public DateTime Quando { get; set; }
+
+    /// <summary>lead · etapa · agenda · campo</summary>
+    public string Tipo { get; set; } = string.Empty;
+
+    /// <summary>ok · atencao · ruim · neutro — define a cor da linha.</summary>
+    public string Tom { get; set; } = "neutro";
+
+    public string Texto { get; set; } = string.Empty;
+}

@@ -15,12 +15,14 @@ namespace LeadAnalytics.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/saude")]
-public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, HigieneService higiene, FilasService filas, TenantUnitGuard tenantGuard) : ControllerBase
+public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, HigieneService higiene, FilasService filas,
+    AtividadeService atividade, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
     private readonly AgendaDoDiaService _agenda = agenda;
     private readonly HigieneService _higiene = higiene;
     private readonly FilasService _filas = filas;
+    private readonly AtividadeService _atividade = atividade;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
     /// <summary>Frescor por fonte: Kommo, franquia e Meta Ads.</summary>
@@ -74,5 +76,20 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _filas.GetAsync(tid, unitId, ct));
+    }
+
+    /// <summary>
+    /// O que aconteceu no CRM nas últimas 24 h, na ordem em que aconteceu.
+    /// Prova bruta por trás dos números da página.
+    /// </summary>
+    [HttpGet("atividade")]
+    public async Task<IActionResult> Atividade(
+        [FromQuery] int? unitId, [FromQuery] int limite = 30, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _atividade.GetAsync(tid, unitId, limite, ct));
     }
 }

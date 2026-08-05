@@ -167,6 +167,7 @@ builder.Services.AddScoped<SaudeService>();
 builder.Services.AddScoped<AgendaDoDiaService>();
 builder.Services.AddScoped<HigieneService>();
 builder.Services.AddScoped<FilasService>();
+builder.Services.AddScoped<AtividadeService>();
 builder.Services.AddScoped<InternalApiKeyGuard>();
 builder.Services.AddScoped<DailyRelatoryService>();
 builder.Services.AddScoped<LeadAttributionService>();

@@ -2252,7 +2252,13 @@ public class LeadService(
                        where lower(e->>'field_name') like '%anúncio (ad)%'
                           or lower(e->>'field_name') like '%id do anúncio%' limit 1) as anuncio,
                     (select split_part(e->>'value', ',', 1) from jsonb_array_elements(l.""CustomFieldsJson"") e
-                       where lower(e->>'field_name') like '%campanha%' limit 1) as campanha
+                       where lower(e->>'field_name') like '%campanha%'
+                         -- ☎ Campanha 3C é campanha da DISCADORA, não anúncio. Sem esta
+                         -- exclusão ela entrava na cascata e dominava o card: 434 leads
+                         -- em ""Leads Imperatriz"" contra 35 do anúncio real, como se a
+                         -- ligação fosse mídia paga.
+                         and lower(e->>'field_name') not like '%3c%'
+                         and e->>'field_name' not like '☎%' limit 1) as campanha
                   from leads l
                   where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
                 )

@@ -14,8 +14,23 @@ public class DailyRelatoryDto
 
     public int TotalLeads { get; set; }
     public int Agendamentos { get; set; }
+
+    /// <summary>Agendados que já garantiram a consulta no PIX antecipado.</summary>
+    public int AgendadosComAntecipado { get; set; }
+
+    /// <summary>Agendados sem antecipado — é aqui que mora o no-show.</summary>
+    public int AgendadosSemAntecipado { get; set; }
+
+    /// <summary>Entraram e não marcaram. O complemento de Agendamentos.</summary>
+    public int NaoAgendaram { get; set; }
+
+    /// <summary>Fecharam tratamento.</summary>
     public int ComPagamento { get; set; }
+
     public int Resgastes { get; set; }
+
+    /// <summary>% do total que agendou. Pré-calculado para a tela não repetir a conta.</summary>
+    public double TaxaAgendamento { get; set; }
 
     /// <summary>De onde vieram os leads do dia. Do maior para o menor.</summary>
     public List<RelatorioContagemDto> PorOrigem { get; set; } = [];

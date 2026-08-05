@@ -32,9 +32,10 @@ namespace LeadAnalytics.Api.Service;
 /// Sem elas, "3 agendamentos" parece um dia ruim quando pode ser 3 preenchidos de 12.
 /// Um relatório que não diz o que falta não é conferível.
 /// </summary>
-public class DailyRelatoryService(AppDbContext db)
+public class DailyRelatoryService(AppDbContext db, KpiConfigService kpiConfig)
 {
     private readonly AppDbContext _db = db;
+    private readonly KpiConfigService _kpiConfig = kpiConfig;
 
     private static readonly string[] EtapasAgendado =
         [LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento];
@@ -65,11 +66,27 @@ public class DailyRelatoryService(AppDbContext db)
                 l.Id, l.UnitId, UnidadeNome = l.Unit!.Name, l.Name, l.CurrentStage,
                 l.Source, l.Qualification, l.LeadType, l.Tags, l.Observations,
                 l.HasAppointment, l.AppointmentScheduledAt, l.NoAppointmentReason,
-                l.ClosedTreatment, l.AttendantId,
+                l.ClosedTreatment, l.AttendantId, l.HasPayment, l.CustomFieldsJson,
             })
             .ToListAsync();
 
         if (leads.Count == 0) return [];
+
+        // O MAPA É POR UNIDADE, e sem ele o relatório mente duas vezes.
+        //
+        // Lead.Source vale "Kommo" em 100% dos leads — é a origem do SISTEMA, não o canal
+        // de marketing; usá-la faria a quebra por origem virar uma linha só, "Kommo 100%".
+        // E NoAppointmentReason fica vazia por desenho: o sync grava CustomFieldsJson e o
+        // cálculo resolve na consulta. Os dois saem do campo customizado que a unidade
+        // mapeou em Configurações Técnicas.
+        var mapaPorUnidade = new Dictionary<int, KpiConfigService.LeadProfileFields>();
+        foreach (var uid in leads.Select(l => l.UnitId).Where(u => u.HasValue).Select(u => u!.Value).Distinct())
+            mapaPorUnidade[uid] = await _kpiConfig.GetLeadProfileConfigAsync(uid);
+
+        string? Campo(string? json, long? fieldId) =>
+            fieldId is null || string.IsNullOrWhiteSpace(json)
+                ? null
+                : KpiConfigService.ExtractFieldValue(json, fieldId, null);
 
         var nomesAtendentes = await _db.Attendants.AsNoTracking()
             .Where(a => leads.Select(l => l.AttendantId).Contains(a.Id))
@@ -80,6 +97,8 @@ public class DailyRelatoryService(AppDbContext db)
             .Select(g =>
             {
                 var total = g.Count();
+                var mapa = g.Key.UnitId is int uidMapa && mapaPorUnidade.TryGetValue(uidMapa, out var m)
+                    ? m : new KpiConfigService.LeadProfileFields();
 
                 var agendou = g.Where(l =>
                     l.HasAppointment
@@ -88,29 +107,43 @@ public class DailyRelatoryService(AppDbContext db)
 
                 var naoAgendou = g.Where(l => !agendou.Select(a => a.Id).Contains(l.Id)).ToList();
 
+                // Antecipado: a etapa legada separa os dois casos; onde ela não existe,
+                // o campo HasPayment responde. Importa porque quem paga antes falta
+                // menos — é a fatia do agendamento que se pode contar com ela.
+                var comAntecipado = agendou.Count(l =>
+                    l.CurrentStage == LeadStages.AgendadoComPagamento || l.HasPayment);
+
                 return new DailyRelatoryDto
                 {
                     Unidade = g.Key.UnidadeNome,
                     UnidadeId = g.Key.UnitId ?? 0,
                     TotalLeads = total,
                     Agendamentos = agendou.Count,
+                    AgendadosComAntecipado = comAntecipado,
+                    AgendadosSemAntecipado = agendou.Count - comAntecipado,
+                    NaoAgendaram = naoAgendou.Count,
+                    TaxaAgendamento = total == 0 ? 0 : Math.Round(100.0 * agendou.Count / total, 1),
                     ComPagamento = g.Count(l =>
                         EtapasPagou.Contains(l.CurrentStage ?? "") || l.ClosedTreatment == true),
                     Resgastes = g.Count(l =>
                         (l.LeadType ?? "").Contains("resgate", StringComparison.OrdinalIgnoreCase)
                         || (l.Tags ?? "").Contains("resgate", StringComparison.OrdinalIgnoreCase)),
 
-                    PorOrigem = Contagem(g.Select(l => l.Source), total, "Sem origem"),
+                    PorOrigem = Contagem(
+                        g.Select(l => Campo(l.CustomFieldsJson, mapa.OrigemFieldId)), total, "Sem origem"),
                     PorQualificacao = Contagem(g.Select(l => l.Qualification), total, "Sem qualificação"),
                     MotivosNaoAgendamento = Contagem(
-                        naoAgendou.Select(l => l.NoAppointmentReason), naoAgendou.Count, "Sem motivo informado"),
+                        naoAgendou.Select(l => l.NoAppointmentReason
+                            ?? Campo(l.CustomFieldsJson, mapa.MotivoNaoAgendamentoFieldId)),
+                        naoAgendou.Count, "Sem motivo informado"),
 
                     Pendencias = Pendencias(
                         total,
-                        semOrigem: g.Count(l => Vazio(l.Source)),
+                        semOrigem: g.Count(l => Vazio(Campo(l.CustomFieldsJson, mapa.OrigemFieldId))),
                         semQualificacao: g.Count(l => Vazio(l.Qualification)),
                         agendadoSemData: agendou.Count(l => l.AppointmentScheduledAt is null),
-                        naoAgendouSemMotivo: naoAgendou.Count(l => Vazio(l.NoAppointmentReason)),
+                        naoAgendouSemMotivo: naoAgendou.Count(l => Vazio(l.NoAppointmentReason
+                            ?? Campo(l.CustomFieldsJson, mapa.MotivoNaoAgendamentoFieldId))),
                         semResponsavel: g.Count(l => l.AttendantId is null)),
 
                     Atendentes = [.. g.Where(l => l.AttendantId != null)
@@ -126,7 +159,9 @@ public class DailyRelatoryService(AppDbContext db)
                             var ag = agendou.Any(a => a.Id == l.Id) ? "Agendou" : "Não agendou";
                             // O motivo vem do CAMPO. Antes era heurística de palavra no texto
                             // livre, que inventava categoria e não dava para conferir.
-                            var motivo = Vazio(l.NoAppointmentReason) ? "Não informado" : l.NoAppointmentReason;
+                            var motivoCampo = l.NoAppointmentReason
+                                ?? Campo(l.CustomFieldsJson, mapa.MotivoNaoAgendamentoFieldId);
+                            var motivo = Vazio(motivoCampo) ? "Não informado" : motivoCampo;
                             return $"{nome} — {ag} — Motivo: {motivo}";
                         })),
                 };

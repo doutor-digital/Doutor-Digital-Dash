@@ -19,6 +19,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<Unit> Units { get; set; }
     public DbSet<KpiConfiguration> KpiConfigurations { get; set; }
     public DbSet<SavedFilter> SavedFilters { get; set; }
+    public DbSet<KpiGoal> KpiGoals { get; set; }
     public DbSet<Attendant> Attendants { get; set; }
     public DbSet<LeadAssignment> LeadAssignments { get; set; }
     public DbSet<LeadStageHistory> LeadStageHistories { get; set; }
@@ -136,6 +137,21 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(e => e.KpiKey).HasMaxLength(64);
             entity.Property(e => e.SourceType).HasMaxLength(48);
             entity.Property(e => e.ConfigJson).HasColumnType("jsonb");
+            entity.HasOne(e => e.Unit)
+                  .WithMany()
+                  .HasForeignKey(e => e.UnitId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── KpiGoal (meta mensal por KPI e unidade) ─────────────
+        modelBuilder.Entity<KpiGoal>(entity =>
+        {
+            entity.ToTable("kpi_goals");
+            entity.HasKey(e => e.Id);
+            // Uma meta por (unidade, KPI) — o PUT é upsert em cima disto.
+            entity.HasIndex(e => new { e.UnitId, e.KpiKey }).IsUnique();
+            entity.Property(e => e.KpiKey).HasMaxLength(64);
+            entity.Property(e => e.MetaMensal).HasPrecision(14, 2);
             entity.HasOne(e => e.Unit)
                   .WithMany()
                   .HasForeignKey(e => e.UnitId)

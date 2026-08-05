@@ -118,3 +118,38 @@ public class HigieneCampoDto
 
     public string? Detalhe { get; set; }
 }
+
+/// <summary>
+/// O que precisa de alguém agora. Métrica diz o que aconteceu; fila diz o que fazer.
+/// </summary>
+public class FilasDto
+{
+    public int TotalPendente { get; set; }
+
+    /// <summary>Só as filas com item. Lista de zeros ensina a equipe a ignorar o bloco.</summary>
+    public List<FilaDto> Filas { get; set; } = [];
+}
+
+public class FilaDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Titulo { get; set; } = string.Empty;
+
+    /// <summary>Por que isso não pode esperar.</summary>
+    public string Porque { get; set; } = string.Empty;
+
+    /// <summary>alta · media</summary>
+    public string Urgencia { get; set; } = "media";
+
+    public int Quantidade { get; set; }
+    public List<FilaItemDto> Itens { get; set; } = [];
+}
+
+public class FilaItemDto
+{
+    public int? LeadId { get; set; }
+    public string? Nome { get; set; }
+    public string? Telefone { get; set; }
+    public string? Detalhe { get; set; }
+    public DateTime? Quando { get; set; }
+}

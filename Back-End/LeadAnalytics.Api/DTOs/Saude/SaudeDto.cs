@@ -42,3 +42,40 @@ public class FonteSaudeDto
     /// <summary>O que fazer, quando há o que fazer. Vazio quando está tudo certo.</summary>
     public string? Detalhe { get; set; }
 }
+
+/// <summary>
+/// A agenda da clínica no dia, e o que a Kommo diz do mesmo dia.
+///
+/// Os dois lado a lado porque em 05/08 a franquia mostrava 4 avaliações e a Kommo 0 — e
+/// os dois estavam certos. Só que a divergência apareceu porque alguém abriu os dois
+/// sistemas e comparou na mão.
+/// </summary>
+public class AgendaDoDiaDto
+{
+    public DateOnly Dia { get; set; }
+
+    /// <summary>Tudo que a clínica tem marcado no dia: avaliações, sessões e retornos.</summary>
+    public int TotalNaClinica { get; set; }
+
+    public List<AgendaCategoriaDto> PorCategoria { get; set; } = [];
+
+    /// <summary>Só as avaliações — é o que se compara com o comercial.</summary>
+    public int AvaliacoesFranquia { get; set; }
+
+    /// <summary>Leads que ENTRARAM no dia e agendaram. Pergunta diferente, de propósito.</summary>
+    public int AgendadosKommo { get; set; }
+
+    /// <summary>Por que os dois números não precisam ser iguais.</summary>
+    public string Nota { get; set; } = string.Empty;
+}
+
+public class AgendaCategoriaDto
+{
+    public string Categoria { get; set; } = string.Empty;
+    public int Quantidade { get; set; }
+    public int Compareceram { get; set; }
+    public int Faltaram { get; set; }
+
+    /// <summary>Ainda vai acontecer — é a fila da recepção.</summary>
+    public int Pendentes { get; set; }
+}

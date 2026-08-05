@@ -38,6 +38,29 @@ public class QualidadeService(AppDbContext db, KpiConfigService kpiConfig)
     private static readonly string[] EtapasAgendado =
         [LeadStages.AgendadoSemPagamento, LeadStages.AgendadoComPagamento];
 
+    /// <summary>
+    /// Posição da etapa no funil. O denominador de um campo é "quantos leads CHEGARAM na
+    /// etapa em que ele passa a ser exigido" — medir contra a base inteira faz um campo
+    /// obrigatório só no AGENDADO aparecer com 8%, quando a maioria dos leads nunca saiu
+    /// da qualificação. O número fica baixo, ninguém entende, e o painel perde a
+    /// autoridade que deveria ter.
+    /// </summary>
+    private static int Rank(string? etapa) => etapa switch
+    {
+        LeadStages.Qualificacao => 1,
+        LeadStages.AgendadoSemPagamento or LeadStages.AgendadoComPagamento => 2,
+        LeadStages.Compareceu or LeadStages.Faltou => 3,
+        LeadStages.Negociacao or LeadStages.NaoFechouTratamento => 4,
+        LeadStages.FechouTratamento or LeadStages.EmTratamento or LeadStages.Alta => 5,
+        _ => 0,
+    };
+
+    /// <summary>Etapa a partir da qual o campo é exigido — espelha required_statuses da Kommo.</summary>
+    private const int ExigeQualificacao = 1;
+    private const int ExigeAgendado = 2;
+    private const int ExigeNegociacao = 4;
+    private const int ExigeGanho = 5;
+
     private static readonly string[] EtapasPosConsulta =
         [LeadStages.Compareceu, LeadStages.Negociacao, LeadStages.FechouTratamento,
          LeadStages.NaoFechouTratamento, LeadStages.EmTratamento];
@@ -81,40 +104,74 @@ public class QualidadeService(AppDbContext db, KpiConfigService kpiConfig)
                 : KpiConfigService.ExtractFieldValue(json, fieldId, null);
         }
 
-        int Preenchidos(long? fieldId, Func<dynamic, string?>? coluna = null) =>
-            fieldId is null ? -1 : leads.Count(l => !Vazio(Valor(l, fieldId, coluna?.Invoke(l))));
-
         var campos = new List<QualidadeCampoDto>();
-        void Campo(string id, string rotulo, long? fieldId, Func<dynamic, string?>? coluna = null)
+
+        /// <param name="exigeApartirDe">Rank da etapa em que o campo passa a ser exigido.</param>
+        void Campo(string id, string rotulo, long? fieldId, int exigeApartirDe,
+                   string etapaRotulo, Func<dynamic, string?>? coluna = null)
         {
-            var p = Preenchidos(fieldId, coluna);
-            // -1 = campo sem mapeamento. Aparece como pendência de configuração, não
-            // como falha de preenchimento — misturar os dois foi o que gerou a cobrança
-            // injusta da primeira versão.
+            // Só entram no denominador os leads que CHEGARAM na etapa. Lead que parou
+            // na qualificação não deve nada de campo do agendamento.
+            var universo = leads.Where(l => Rank((string?)l.CurrentStage) >= exigeApartirDe).ToList();
+
+            var mapeado = fieldId is not null;
+            var p = mapeado ? universo.Count(l => !Vazio(Valor(l, fieldId, coluna?.Invoke(l)))) : 0;
+
             campos.Add(new QualidadeCampoDto
             {
                 Campo = id,
                 Rotulo = rotulo,
-                Mapeado = p >= 0,
-                Preenchidos = Math.Max(p, 0),
-                Vazios = p < 0 ? 0 : total - p,
-                Percentual = p < 0 ? 0 : Math.Round(100.0 * p / total, 1),
+                Mapeado = mapeado,
+                Etapa = etapaRotulo,
+                Universo = universo.Count,
+                Preenchidos = p,
+                Vazios = mapeado ? universo.Count - p : 0,
+                Percentual = !mapeado || universo.Count == 0 ? 0 : Math.Round(100.0 * p / universo.Count, 1),
             });
         }
 
-        // NÃO usar Lead.Source como reforço: ela vale "Kommo" em 100% dos leads — é a
-        // origem do SISTEMA, não a de marketing. Usá-la faria a Origem aparecer sempre
-        // como 100% preenchida, inclusive nos 523 leads que estão em "Sem origem".
-        Campo("origem", "Origem", mapa.OrigemFieldId);
-        Campo("qualificacao", "Qualificação", mapa.QualificacaoFieldId, l => (string?)l.Qualification);
-        Campo("tipo_lead", "Tipo de lead", mapa.TipoFieldId);
-        Campo("motivo_nao_agendamento", "Motivo do não agendamento", mapa.MotivoNaoAgendamentoFieldId);
-        Campo("tipo_agendamento", "Tipo de agendamento", mapa.TipoAgendamentoFieldId);
-        Campo("fisioterapeuta", "Fisioterapeuta", mapa.FisioterapeutaFieldId);
-        Campo("valor_tratamento", "Valor do tratamento", mapa.ValorTratamentoFieldId);
-        Campo("valor_consulta", "Valor da consulta", mapa.ValorConsultaFieldId);
-        Campo("tratamento_fechado", "Fechou tratamento", mapa.TratamentoFechadoFieldId);
-        Campo("data_agendamento", "Data de agendamento", mapa.AppointmentFieldId);
+        // A etapa de cada campo espelha o required_statuses declarado na própria Kommo:
+        // é ela quem sabe onde o campo passa a ser obrigatório, não a gente.
+        //
+        // NÃO usar Lead.Source como reforço da Origem: vale "Kommo" em 100% dos leads —
+        // é a origem do SISTEMA, não a de marketing.
+        Campo("origem", "Origem", mapa.OrigemFieldId, ExigeQualificacao, "a partir de Em qualificação");
+        Campo("tipo_lead", "Tipo de lead", mapa.TipoFieldId, ExigeQualificacao, "a partir de Em qualificação");
+
+        Campo("qualificacao", "Qualificação", mapa.QualificacaoFieldId, ExigeAgendado,
+            "a partir de Agendado", l => (string?)l.Qualification);
+        Campo("data_agendamento", "Data de agendamento", mapa.AppointmentFieldId, ExigeAgendado,
+            "a partir de Agendado");
+        Campo("tipo_agendamento", "Tipo de agendamento", mapa.TipoAgendamentoFieldId, ExigeAgendado,
+            "a partir de Agendado");
+
+        Campo("valor_tratamento", "Valor do tratamento", mapa.ValorTratamentoFieldId, ExigeNegociacao,
+            "a partir de Em negociação");
+
+        Campo("fisioterapeuta", "Fisioterapeuta", mapa.FisioterapeutaFieldId, ExigeGanho, "no Ganho");
+        Campo("tratamento_fechado", "Fechou tratamento", mapa.TratamentoFechadoFieldId, ExigeGanho, "no Ganho");
+        Campo("valor_consulta", "Valor da consulta", mapa.ValorConsultaFieldId, ExigeGanho, "no Ganho");
+
+        // Motivo é o único que não segue o funil: só faz sentido em quem foi perdido.
+        {
+            var perdidosUniverso = leads.Where(l => (string?)l.CurrentStage == LeadStages.Perdido).ToList();
+            var mapeadoMotivo = mapa.MotivoNaoAgendamentoFieldId is not null;
+            var pm = mapeadoMotivo
+                ? perdidosUniverso.Count(l => !Vazio(Valor(l, mapa.MotivoNaoAgendamentoFieldId)))
+                : 0;
+            campos.Add(new QualidadeCampoDto
+            {
+                Campo = "motivo_nao_agendamento",
+                Rotulo = "Motivo do não agendamento",
+                Mapeado = mapeadoMotivo,
+                Etapa = "apenas em Perdido",
+                Universo = perdidosUniverso.Count,
+                Preenchidos = pm,
+                Vazios = mapeadoMotivo ? perdidosUniverso.Count - pm : 0,
+                Percentual = !mapeadoMotivo || perdidosUniverso.Count == 0
+                    ? 0 : Math.Round(100.0 * pm / perdidosUniverso.Count, 1),
+            });
+        }
 
         foreach (var c in campos) c.AtingiuMeta = c.Mapeado && c.Percentual >= MetaPercentual;
 

@@ -43,6 +43,19 @@ public class QualidadeCampoDto
     /// <summary>Falso = a unidade não disse onde este campo mora. Não é falha de quem preenche.</summary>
     public bool Mapeado { get; set; }
 
+    /// <summary>
+    /// Onde o campo passa a ser exigido, por extenso ("a partir de Agendado"). Sem isso a
+    /// tela não explica por que o denominador de um campo é menor que o de outro.
+    /// </summary>
+    public string Etapa { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Quantos leads CHEGARAM na etapa em que o campo é exigido. É o denominador: medir
+    /// contra a base inteira faz um campo do agendamento aparecer com 8% porque a maioria
+    /// dos leads nunca saiu da qualificação.
+    /// </summary>
+    public int Universo { get; set; }
+
     public bool AtingiuMeta { get; set; }
     public int Preenchidos { get; set; }
     public int Vazios { get; set; }

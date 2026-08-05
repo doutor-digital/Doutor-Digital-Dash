@@ -275,17 +275,34 @@ public class SpineApiClient
             }
         }
 
-        // Corte fino por data de LANÇAMENTO (created), que é o eixo do card — e o mesmo
-        // que a API filtra. Antes o corte era por dateBegin, campo diferente: com o
-        // servidor filtrando por um e a gente cortando por outro, linha válida sumia.
+        var brutos = porId.Values.ToList();
+
+        bool NoPeriodo(DateTime? d) =>
+            d is not null
+            && DateOnly.FromDateTime(d.Value) >= from
+            && DateOnly.FromDateTime(d.Value) <= to;
+
+        // Corte fino por data de LANÇAMENTO (created) — o eixo que o card anuncia e o
+        // mesmo que a tela da franquia usa.
         //
-        // Linha sem `created` fica: o servidor já a devolveu dentro da janela pedida, e
-        // descartar por falta de um campo que ele não mandou é jogar fora dado bom.
-        return porId.Values
-            .Where(t => t.Created is null
-                     || (DateOnly.FromDateTime(t.Created.Value) >= from
-                         && DateOnly.FromDateTime(t.Created.Value) <= to))
-            .ToList();
+        // A versão anterior deixava passar linha SEM data ("o servidor já filtrou, então
+        // confio"). Não filtrou: a rota devolveu a base inteira e o card foi de 2 para
+        // 184 num mês em que a franquia mostra 10. Confiar no servidor só é seguro
+        // quando dá para verificar que ele filtrou, e aqui não dá — então exige-se data.
+        var filtrados = brutos.Where(t => NoPeriodo(t.Created)).ToList();
+
+        // Os dois eixos lado a lado no log: é o que permite dizer, sem adivinhar, qual
+        // deles bate com o número que a clínica vê na tela da franquia.
+        _logger.LogInformation(
+            "Spine tratamentos {De}..{Ate}: brutos={Brutos} comCreated={ComCreated} comDateBegin={ComBegin} "
+            + "noPeriodoPorCreated={PorCreated} noPeriodoPorDateBegin={PorBegin}",
+            from, to, brutos.Count,
+            brutos.Count(t => t.Created is not null),
+            brutos.Count(t => t.DateBegin is not null),
+            filtrados.Count,
+            brutos.Count(t => NoPeriodo(t.DateBegin)));
+
+        return filtrados;
     }
 
     /// <summary>

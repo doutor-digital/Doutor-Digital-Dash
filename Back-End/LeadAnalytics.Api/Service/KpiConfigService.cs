@@ -190,21 +190,31 @@ public class KpiConfigService(
                 {
                     if (metric == "tratamentos")
                     {
-                        // Tratamentos ATIVOS (EM ANDAMENTO + NÃO INICIADO) — snapshot atual.
-                        // Janela ampla (3 anos) e NÃO o período do card, senão o número pula
-                        // com a borda de data (tratamento lançado às 20h cai no dia seguinte)
-                        // e com edições ao vivo da recepção. "Quantos estão em tratamento agora".
-                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, ate.AddYears(-3), ate, ct);
+                        // Tratamentos LANÇADOS no período selecionado — o mesmo recorte da
+                        // tela da franquia. Selecionar 01/07–31/07 tem que devolver o que
+                        // a clínica vê ali: em Imperatriz, 10 (9 Protocolo 03 Meses e
+                        // 1 Protocolo 01 Mês).
+                        //
+                        // ANTES ERA OUTRA PERGUNTA, e é a origem da confusão: contava
+                        // ATIVOS numa janela de 3 anos, ignorando o período do card. O
+                        // motivo alegado era estabilidade de borda, mas o preço foi um
+                        // número que não conversava com nenhuma tela — nem com a franquia,
+                        // nem com o filtro que o usuário acabara de escolher. A borda em si
+                        // já está resolvida onde é o lugar dela: SearchTreatmentsAsync pede
+                        // um dia a mais e recorta pelo dia da clínica.
+                        //
+                        // Conta TODOS os lançados, sem filtrar situação: um tratamento que
+                        // virou desistência ainda foi lançado naquele mês, e a franquia o
+                        // mostra na lista do mês. Filtrar aqui faria o número do passado
+                        // mudar sozinho conforme a recepção edita situação.
+                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, de, ate, ct);
                         if (t is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
-                        var ativos = t.PorSituacao
-                            .Where(s => s.Situacao.Contains("EM ANDAMENTO", StringComparison.OrdinalIgnoreCase)
-                                     || s.Situacao.Contains("NÃO INICIADO", StringComparison.OrdinalIgnoreCase))
-                            .Sum(s => s.Quantidade);
-                        // A nota diz QUAL fonte respondeu: rota oficial e export do CRM
-                        // web dão números diferentes (a rota só expõe o pós-liberação), e
-                        // sem isso um número que muda sozinho vira mistério.
+
+                        // A nota diz QUAL fonte respondeu: rota oficial e export do CRM web
+                        // dão números diferentes, e sem isso um número que muda sozinho
+                        // vira mistério.
                         var fonteNome = t.Fonte == "api" ? "rota oficial" : "export do CRM web";
-                        return (ativos, sample, $"fonte: franquia · {fonteNome} (ativos)");
+                        return (t.Total, sample, $"fonte: franquia · {fonteNome} (lançados no período)");
                     }
                     var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
                     if (av is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);

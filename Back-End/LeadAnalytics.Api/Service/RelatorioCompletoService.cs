@@ -26,11 +26,13 @@ namespace LeadAnalytics.Api.Service;
 public class RelatorioCompletoService(
     AppDbContext db,
     KpiConfigService kpiConfig,
-    CampanhasService campanhas)
+    CampanhasService campanhas,
+    AnunciosDesempenhoService anuncios)
 {
     private readonly AppDbContext _db = db;
     private readonly KpiConfigService _kpiConfig = kpiConfig;
     private readonly CampanhasService _campanhas = campanhas;
+    private readonly AnunciosDesempenhoService _anuncios = anuncios;
 
     /// <summary>Quantos nomes por lacuna. O bastante para conferir, não tanto que vire lista telefônica.</summary>
     private const int NomesPorLacuna = 40;
@@ -90,6 +92,8 @@ public class RelatorioCompletoService(
         }
 
         dto.Campanhas = await _campanhas.GetAsync(tenantId, unitId, de, ate, ct);
+        dto.Anuncios = await _anuncios.GetAsync(
+            tenantId, unitId, DateOnly.FromDateTime(de), DateOnly.FromDateTime(ate), ct);
 
         // ── Lacunas: o que não foi preenchido, COM NOME ─────────────────────
         string? Campo(string? json, long? id, Func<string, bool> porNome) =>

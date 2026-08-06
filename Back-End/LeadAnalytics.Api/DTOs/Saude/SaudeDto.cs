@@ -342,6 +342,9 @@ public class RelatorioCompletoDto
     public int HorariosPerdidos { get; set; }
 
     public List<CampanhaDto> Campanhas { get; set; } = [];
+
+    /// <summary>Cada anúncio com gasto, alcance, cliques, CTR, CPC e custo por conversa.</summary>
+    public List<AnuncioLinhaDto> Anuncios { get; set; } = [];
     public List<LacunaDto> Lacunas { get; set; } = [];
     public List<ValorContagemDto> Origens { get; set; } = [];
 }
@@ -376,4 +379,28 @@ public class ValorContagemDto
 {
     public string Valor { get; set; } = string.Empty;
     public int Contagem { get; set; }
+}
+
+/// <summary>
+/// Um anúncio no período, com tudo que decide se ele fica ou sai.
+/// "Custo por conversa" e não "custo por lead": a Meta conta conversa de WhatsApp iniciada, e
+/// nem toda conversa vira lead na Kommo — chamar de lead inflaria o resultado do anúncio.
+/// </summary>
+public class AnuncioLinhaDto
+{
+    public string AnuncioId { get; set; } = string.Empty;
+    public string? Nome { get; set; }
+    public string? Campanha { get; set; }
+    public string? Imagem { get; set; }
+
+    public decimal Gasto { get; set; }
+    public long Alcance { get; set; }
+    public long Impressoes { get; set; }
+    public long Cliques { get; set; }
+    public decimal Ctr { get; set; }
+    public decimal Cpc { get; set; }
+    public int Conversas { get; set; }
+
+    /// <summary>Nulo sem conversa: zero seria lido como "de graça".</summary>
+    public decimal? CustoPorConversa { get; set; }
 }

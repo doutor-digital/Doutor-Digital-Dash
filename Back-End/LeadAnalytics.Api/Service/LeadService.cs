@@ -2703,7 +2703,7 @@ public class LeadService(
     /// • Campo vazio NÃO é descartado: o que a SDR deixou em branco é metade do diagnóstico.
     ///   Some se devolvermos só o preenchido, e é justamente o que o painel de qualidade cobra.
     /// </summary>
-    private static List<LeadCustomFieldDto> LerCamposKommo(string? json)
+    internal static List<LeadCustomFieldDto> LerCamposKommo(string? json)
     {
         var saida = new List<LeadCustomFieldDto>();
         if (string.IsNullOrWhiteSpace(json)) return saida;

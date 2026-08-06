@@ -188,3 +188,38 @@ public class AtividadeLinhaDto
 
     public string Texto { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Conferência dos números: cada item é uma afirmação que tem de ser verdade.
+/// Teste unitário prova que a regra está certa; isto prova que o número da tela bate.
+/// </summary>
+public class ConferenciaDto
+{
+    public DateTime De { get; set; }
+    public DateTime Ate { get; set; }
+    public List<ChecagemDto> Checagens { get; set; } = [];
+
+    /// <summary>Quantas não fecharam. Zero é o único número aceitável aqui.</summary>
+    public int Falharam { get; set; }
+}
+
+public class ChecagemDto
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>A afirmação, escrita como afirmação — não como pergunta.</summary>
+    public string Titulo { get; set; } = string.Empty;
+
+    /// <summary>Por que isso importa, em uma frase que a SDR entenda.</summary>
+    public string Explica { get; set; } = string.Empty;
+
+    public int ValorA { get; set; }
+    public string RotuloA { get; set; } = string.Empty;
+    public int ValorB { get; set; }
+    public string RotuloB { get; set; } = string.Empty;
+
+    /// <summary>O que fazer, ou o tamanho exato da diferença.</summary>
+    public string Detalhe { get; set; } = string.Empty;
+
+    public bool Passou { get; set; }
+}

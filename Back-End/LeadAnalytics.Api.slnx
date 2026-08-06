@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="LeadAnalytics.Api/LeadAnalytics.Api.csproj" />
+  <Project Path="LeadAnalytics.Tests/LeadAnalytics.Tests.csproj" />
 </Solution>

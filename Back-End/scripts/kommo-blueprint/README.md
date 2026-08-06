@@ -44,6 +44,27 @@ Rodar o passo 3 duas vezes não duplica nada — o que já existe é reconhecido
 mantido. É assim que se acrescenta um grupo novo depois (ex.: ASAAS) sem
 recriar o resto.
 
+## Unidade que não quer um grupo inteiro
+
+`--skip-group <chave>` (repetível) tira um grupo do plano **naquela conta**. O
+blueprint continua sendo a verdade da matriz — quem não quer o grupo é o
+destino, não a origem.
+
+```bash
+# Boa Vista opera sem telefonia 3C e sem Asaas; Imperatriz mantém os dois
+python3 apply_blueprint.py --blueprint blueprint.clinica-v1.json \
+    --subdomain boavistarrdoutorhernia --token-file token_bv.txt \
+    --lock blueprint.boa-vista.lock.json \
+    --skip-group asaas --skip-group 3c-ligacoes
+```
+
+Chaves válidas hoje: `comercial`, `tratamento`, `asaas`, `3c-ligacoes`,
+`agente-dt`. Chave inexistente é erro, não silêncio.
+
+O lock da unidade registra a exclusão em `excluded_groups` — é o lembrete de
+passar as mesmas flags na próxima aplicação. Sem elas, o aplicador recria os
+campos, porque para ele "não existe no destino" significa "criar".
+
 ## Importar a base do CRM antigo
 
 `import_leads_csv.py` sobe leads de um CSV usando o de-para de

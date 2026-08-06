@@ -16,13 +16,15 @@ namespace LeadAnalytics.Api.Controllers;
 [Authorize]
 [Route("api/saude")]
 public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, HigieneService higiene, FilasService filas,
-    AtividadeService atividade, TenantUnitGuard tenantGuard) : ControllerBase
+    AtividadeService atividade,
+    ConferenciaService conferencia, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
     private readonly AgendaDoDiaService _agenda = agenda;
     private readonly HigieneService _higiene = higiene;
     private readonly FilasService _filas = filas;
     private readonly AtividadeService _atividade = atividade;
+    private readonly ConferenciaService _conferencia = conferencia;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
     /// <summary>Frescor por fonte: Kommo, franquia e Meta Ads.</summary>
@@ -91,5 +93,21 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _atividade.GetAsync(tid, unitId, limite, ct));
+    }
+
+    /// <summary>
+    /// Conferência dos números: cada item é uma afirmação que tem de ser verdade.
+    /// Zero falhas é o único resultado aceitável.
+    /// </summary>
+    [HttpGet("conferencia")]
+    public async Task<IActionResult> Conferencia(
+        [FromQuery] DateTime de, [FromQuery] DateTime ate,
+        [FromQuery] int? unitId, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _conferencia.GetAsync(tid, unitId, de, ate, ct));
     }
 }

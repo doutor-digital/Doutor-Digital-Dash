@@ -365,6 +365,14 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="sem isto, só imprime o plano")
     ap.add_argument("--confirm-subdomain", help="repita o subdomínio para confirmar a escrita")
     ap.add_argument("--retire-default-pipeline", help="nome do funil padrão a aposentar no fim")
+    ap.add_argument(
+        "--skip-group",
+        action="append",
+        default=[],
+        metavar="CHAVE",
+        help="chave de grupo do blueprint a NÃO aplicar nesta conta (repetível). "
+        "O blueprint continua sendo a verdade da matriz; a exclusão é da conta destino.",
+    )
     args = ap.parse_args()
 
     sub = args.subdomain.replace(".kommo.com", "").strip("/ ")
@@ -376,6 +384,22 @@ def main() -> int:
         return 2
 
     bp = json.loads(args.blueprint.read_text())
+
+    if args.skip_group:
+        pular = set(args.skip_group)
+        conhecidas = {g["key"] for g in bp["field_groups"]}
+        if pular - conhecidas:
+            print(
+                f"RECUSADO: grupo(s) {sorted(pular - conhecidas)} não existem no blueprint. "
+                f"Chaves válidas: {sorted(conhecidas)}",
+                file=sys.stderr,
+            )
+            return 2
+        bp["field_groups"] = [g for g in bp["field_groups"] if g["key"] not in pular]
+        antes = len(bp["fields"])
+        bp["fields"] = [f for f in bp["fields"] if f.get("group") not in pular]
+        print(f"pulando grupo(s) {sorted(pular)}: {antes - len(bp['fields'])} campos fora do plano")
+
     token = args.token_file.read_text().strip()
     cli = KommoClient(sub, token, read_only=not args.apply)
     account = cli.get("account")

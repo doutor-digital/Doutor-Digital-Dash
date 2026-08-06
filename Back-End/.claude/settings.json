@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 120 pnpm --filter agente-dt-frontend run lint)",
+      "Bash(grep -nA12 \"cors\\(\" src/server.ts)",
+      "Bash(curl -s -b /tmp/dd_cookie.txt https://agente-vps.doutordigitalconsultoria.com/api/units/cmrzf9v7w005jpk1m5e4tnjz0/kommo-fields -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/dd_cookie.txt https://agente-vps.doutordigitalconsultoria.com/api/units/cmrzf9v7w005jpk1m5e4tnjz0/kommo-lead-custom-fields)",
+      "Bash(mkdir -p /tmp/claude-1000/-home-joaoof-Downloads-Doutor-Digital-Dash-Back-End/6529328b-a404-4b03-980c-4cfe5862bbba/scratchpad)",
+      "Bash([ -s itz_token.txt ])",
+      "Bash(tr -d '\\\\n')",
+      "Bash(cat itz_token.txt)",
+      "Bash(curl -s -H 'Authorization: Bearer __TRACKED_VAR__' https://attivacorpoementeitz.kommo.com/api/v4/leads/pipelines -o pipes_now.json -w 'pipelines: %{http_code}\\\\n')",
+      "Bash(grep -iE \"\\\\.cs$\")",
+      "Bash(curl -s -m 20 https://app.doutorhernia.com.br/tratamentos -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Accept-Language: pt-BR,pt;q=0.9' -H 'User-Agent: __TRACKED_VAR__' -b 'token=__TRACKED_VAR__; jwt=__TRACKED_VAR__; access_token=__TRACKED_VAR__' -o trat_page.html -w 'http %{http_code} size %{size_download}\\\\n')",
+      "Bash(curl -s -m 25 https://app.doutorhernia.com.br/tratamentos -H 'Cookie: __TRACKED_VAR__' -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR,pt;q=0.9' -H 'Accept: text/html,application/xhtml+xml' -o trat.html -w 'http %{http_code} | size %{size_download}\\\\n')",
+      "Bash(grep -oiE \"<table[^>]*>|<th[^>]*>[^<]{2,30}</th>\" trat.html)",
+      "Bash(curl -s -m 25 https://app.doutorhernia.com.br/agendamentos -H 'Cookie: __TRACKED_VAR__' -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR' -o agend.html -w 'http %{http_code} size %{size_download}\\\\n')",
+      "Bash(grep -oiE \"<th>[^<]{2,28}</th>\" agend.html)",
+      "Bash(curl -s -m 20 -c cj.txt https://app.doutorhernia.com.br/login -H 'User-Agent: __TRACKED_VAR__' -o login.html -w 'http %{http_code}\\\\n')",
+      "Bash(awk '{print $6}')",
+      "Bash(curl -s -m 25 -b cj.txt -c cj.txt -L -H 'User-Agent: __TRACKED_VAR__' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode email=doutordigitalconsultoria@gmail.com --data-urlencode password=drhernia2025 https://app.doutorhernia.com.br/login -o postlogin.html -w 'http %{http_code} | final %{url_effective}\\\\n')",
+      "Bash(curl -s -m 20 -c cj.txt https://app.doutorhernia.com.br/login -H 'User-Agent: __TRACKED_VAR__' -o /dev/null)",
+      "Bash(curl -s -m 25 -b cj.txt -c cj.txt -L -H 'User-Agent: __TRACKED_VAR__' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode email=doutordigitalconsultoria@gmail.com --data-urlencode password=drhernia2025 https://app.doutorhernia.com.br/login -o /dev/null -w 'login http %{http_code}\\\\n')",
+      "Bash(curl -s -m 25 -b cj.txt https://app.doutorhernia.com.br/tratamentos -H 'User-Agent: __TRACKED_VAR__' -o trat.html -w 'tratamentos http %{http_code} size %{size_download}\\\\n')",
+      "Bash(curl -s -m 40 -b cj.txt https://app.doutorhernia.com.br/tratamentos/filtrar -H 'User-Agent: __TRACKED_VAR__' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode id_company=133 --data-urlencode 'created=01/01/2024 - 31/12/2026' --data-urlencode 'birthdate=01/01/1900 - 31/12/2026' --data-urlencode url=https://app.doutorhernia.com.br/tratamentos -o filt.html -w 'http %{http_code} size %{size_download}\\\\n')",
+      "Bash(curl -s -m 40 -b cj.txt -c cj.txt -L https://app.doutorhernia.com.br/tratamentos/filtrar -H 'User-Agent: __TRACKED_VAR__' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode id_company=133 --data-urlencode id_status=0 --data-urlencode 'created=01/01/2024 - 31/12/2026' --data-urlencode 'birthdate=01/01/1900 - 31/12/2026' --data-urlencode url=https://app.doutorhernia.com.br/tratamentos -o f2.html -w 'filtrar http %{http_code} size %{size_download}\\\\n')",
+      "Bash(curl -s -m 45 -b cj.txt -c cj.txt -L https://app.doutorhernia.com.br/tratamentos/filtrar -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR,pt;q=0.9' -H 'Accept: text/html' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode id_company=133 --data-urlencode id_status=0 --data-urlencode 'created=01/01/2024 - 31/12/2026' --data-urlencode 'birthdate=01/01/1900 - 31/12/2026' --data-urlencode url=https://app.doutorhernia.com.br/tratamentos -o f3.html -w 'http %{http_code} size %{size_download}\\\\n')",
+      "Bash(grep -oiE \"de [0-9]+ registros|mostrando [0-9]+|total[^<]{0,30}[0-9]+|[0-9]+ resultados|dataTables_info[^<]*|pageLength|serverSide|\\\\\"ajax\\\\\"|processing.*true\" f3.html)",
+      "Bash(curl -s -m 60 -b cj.txt -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR,pt;q=0.9' https://app.doutorhernia.com.br/tratamentos/exportar -o exp.out -w 'http %{http_code} | type %{content_type} | size %{size_download}\\\\n')",
+      "Bash(curl -s -m 12 -o /dev/null -w \"api-vps /docs -> %{http_code}\\\\n\" \"https://api-vps.doutordigitalconsultoria.com/docs\")",
+      "Bash(curl -s -m 12 -o /dev/null -w \"/api/spine/tratamentos \\(sem auth, espera 401\\) -> %{http_code}\\\\n\" \"https://api-vps.doutordigitalconsultoria.com/api/spine/tratamentos?unitId=15\")",
+      "Bash(curl -s -m 25 -X POST __TRACKED_VAR__/api/schedules/search -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"initialDate\":\"2026-06-30\",\"endDate\":\"2026-07-29\",\"idCategory\":1,\"pagination\":{\"page\":1,\"rowsPerPage\":250}}' -o av.json -w '[%{http_code}]\\\\n')",
+      "Bash(curl -s -m 25 -b cj.txt -c cj.txt -L -H 'User-Agent: __TRACKED_VAR__' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode email=doutordigitalconsultoria@gmail.com --data-urlencode password=drhernia2025 https://app.doutorhernia.com.br/login -o /dev/null)",
+      "Bash(curl -s -m 30 -b cj.txt -L https://app.doutorhernia.com.br/tratamentos/filtrar -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode id_company=133 --data-urlencode id_status=0 --data-urlencode 'created=30/06/2026 - 29/07/2026' --data-urlencode 'birthdate=01/01/1900 - 31/12/2100' --data-urlencode url=https://app.doutorhernia.com.br/tratamentos -o /dev/null)",
+      "Bash(curl -s -m 40 -b cj.txt https://app.doutorhernia.com.br/tratamentos/exportar -H 'User-Agent: __TRACKED_VAR__' -H 'Accept-Language: pt-BR' -o e.out)",
+      "Bash(curl -s -m 25 -X POST https://app-api-prod.doutorhernia.com.br/api/schedules/search -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"initialDate\":\"2026-06-30\",\"endDate\":\"2026-07-29\",\"idCategory\":1,\"pagination\":{\"page\":1,\"rowsPerPage\":250}}')",
+      "Bash(curl -s -m 25 -X POST https://app-api-prod.doutorhernia.com.br/api/schedules/search -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"initialDate\":\"2026-06-30\",\"endDate\":\"2026-07-29\",\"idCategory\":1,\"pagination\":{\"page\":1,\"rowsPerPage\":100}}' -o av.json -w '[%{http_code}]\\\\n')"
+    ],
+    "additionalDirectories": [
+      "/home/joaoof/agente-dt/frontend"
+    ]
+  }
+}

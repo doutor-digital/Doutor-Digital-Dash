@@ -148,7 +148,7 @@ public class AtividadeService(AppDbContext db)
         TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), SpineApiClient.BrTz);
 
     /// <summary>Só o primeiro nome: a linha do log tem largura de terminal, não de tabela.</summary>
-    private static string PrimeiroNome(string? nome)
+    internal static string PrimeiroNome(string? nome)
     {
         var n = (nome ?? string.Empty).Trim();
         if (n.Length == 0) return "Sem nome";
@@ -163,10 +163,17 @@ public class AtividadeService(AppDbContext db)
     /// A cor da linha diz o que aconteceu sem ninguém ler: ganho é verde, perdido é vermelho,
     /// o resto é o azul de "andou".
     /// </summary>
-    private static string TomDaEtapa(string? etapa)
+    internal static string TomDaEtapa(string? etapa)
     {
-        var e = (etapa ?? string.Empty).ToLowerInvariant();
-        if (e.Contains("perdid") || e.Contains("descart")) return "ruim";
+        var e = (etapa ?? string.Empty).ToLowerInvariant().Replace('_', ' ');
+
+        // A NEGAÇÃO VEM PRIMEIRO, e não é detalhe: "08 NAO FECHOU TRATAMENTO" contém
+        // "tratament" e era pintado de verde — a linha de perda com a cor de ganho.
+        // Quem lê a jornada de relance lia o oposto do que aconteceu.
+        if (e.Contains("perdid") || e.Contains("descart")
+            || e.Contains("nao fechou") || e.Contains("não fechou")
+            || e.Contains("cancelad")) return "ruim";
+
         if (e.Contains("ganho") || e.Contains("fechad") || e.Contains("tratament")) return "ok";
         if (e.Contains("agendad")) return "atencao";
         return "neutro";

@@ -343,7 +343,7 @@ public class JornadaService(AppDbContext db, KpiConfigService kpiConfig)
     }
 
     /// <summary>Etapa em id numérico cru vira texto legível — o resto passa como está.</summary>
-    private static string Rotulo(string? etapa)
+    internal static string Rotulo(string? etapa)
     {
         var e = (etapa ?? string.Empty).Trim();
         if (e.Length == 0) return "—";

@@ -31,75 +31,12 @@
       "id": "leads_19061785521575",
       "name": "TRATAMENTO"
     },
-    "asaas": {
-      "id": "leads_82401785521575",
-      "name": "ASAAS"
-    },
-    "3c-ligacoes": {
-      "id": "leads_7851785521576",
-      "name": "☎ 3C — LIGAÇÕES"
-    },
     "agente-dt": {
       "id": "leads_52991785521576",
       "name": "AGENTE DT"
     }
   },
   "fields": {
-    "3c-ligacoes::ultima-ligacao#1": {
-      "id": 397036,
-      "name": "☎ Última ligação",
-      "type": "date_time",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::resultado#1": {
-      "id": 397038,
-      "name": "☎ Resultado",
-      "type": "select",
-      "group": "3c-ligacoes",
-      "enums": {
-        "Atendida": 322098,
-        "Não atendida": 322100,
-        "Caixa postal": 322102,
-        "Ocupado": 322104,
-        "Falha": 322106
-      }
-    },
-    "3c-ligacoes::duracao-da-conversa#1": {
-      "id": 397040,
-      "name": "☎ Duração da conversa",
-      "type": "text",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::motivo-qualificacao#1": {
-      "id": 397042,
-      "name": "☎ Motivo (qualificação)",
-      "type": "text",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::agente#1": {
-      "id": 397044,
-      "name": "☎ Agente",
-      "type": "text",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::campanha-3c#1": {
-      "id": 397046,
-      "name": "☎ Campanha 3C",
-      "type": "text",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::tentativas#1": {
-      "id": 397048,
-      "name": "☎ Tentativas",
-      "type": "numeric",
-      "group": "3c-ligacoes"
-    },
-    "3c-ligacoes::gravacao#1": {
-      "id": 397050,
-      "name": "☎ Gravação",
-      "type": "url",
-      "group": "3c-ligacoes"
-    },
     "comercial::humano#1": {
       "id": 397052,
       "name": "*HUMANO*",
@@ -1095,122 +1032,6 @@
       "type": "text",
       "group": "tratamento"
     },
-    "ASAAS_CUSTOMER_ID": {
-      "id": 397338,
-      "name": "№ Cliente",
-      "type": "text",
-      "group": "asaas",
-      "code": "ASAAS_CUSTOMER_ID"
-    },
-    "ASAAS_PAYMENT_ID": {
-      "id": 397340,
-      "name": "№ Cobrança",
-      "type": "text",
-      "group": "asaas",
-      "code": "ASAAS_PAYMENT_ID"
-    },
-    "ASAAS_SUBSCRIPTION_ID": {
-      "id": 397342,
-      "name": "№ Assinatura",
-      "type": "text",
-      "group": "asaas",
-      "code": "ASAAS_SUBSCRIPTION_ID"
-    },
-    "ASAAS_STATUS": {
-      "id": 397344,
-      "name": "⬢ Status do pagamento",
-      "type": "select",
-      "group": "asaas",
-      "code": "ASAAS_STATUS",
-      "enums": {
-        "Pendente": 322520,
-        "Confirmado": 322522,
-        "Recebido": 322524,
-        "Recebido em dinheiro": 322526,
-        "Vencido": 322528,
-        "Estornado": 322530,
-        "Cancelado": 322532,
-        "Em análise (risco)": 322534,
-        "Chargeback": 322536
-      }
-    },
-    "ASAAS_BILLING_TYPE": {
-      "id": 397346,
-      "name": "⬢ Forma de pagamento",
-      "type": "select",
-      "group": "asaas",
-      "code": "ASAAS_BILLING_TYPE",
-      "enums": {
-        "Boleto": 322538,
-        "Pix": 322540,
-        "Cartão de crédito": 322542,
-        "Cartão de débito": 322544,
-        "Não definido": 322546
-      }
-    },
-    "ASAAS_INSTALLMENTS": {
-      "id": 397348,
-      "name": "# Nº de parcelas",
-      "type": "numeric",
-      "group": "asaas",
-      "code": "ASAAS_INSTALLMENTS"
-    },
-    "ASAAS_DUE_DATE": {
-      "id": 397350,
-      "name": "◷ Vencimento",
-      "type": "date",
-      "group": "asaas",
-      "code": "ASAAS_DUE_DATE"
-    },
-    "ASAAS_PAYMENT_DATE": {
-      "id": 397352,
-      "name": "◷ Data do pagamento",
-      "type": "date",
-      "group": "asaas",
-      "code": "ASAAS_PAYMENT_DATE"
-    },
-    "ASAAS_NEXT_DUE_DATE": {
-      "id": 397354,
-      "name": "◷ Próximo vencimento",
-      "type": "date",
-      "group": "asaas",
-      "code": "ASAAS_NEXT_DUE_DATE"
-    },
-    "ASAAS_INVOICE_URL": {
-      "id": 397356,
-      "name": "↗ Link da fatura",
-      "type": "url",
-      "group": "asaas",
-      "code": "ASAAS_INVOICE_URL"
-    },
-    "ASAAS_BANKSLIP_URL": {
-      "id": 397358,
-      "name": "↗ Boleto / PIX",
-      "type": "url",
-      "group": "asaas",
-      "code": "ASAAS_BANKSLIP_URL"
-    },
-    "ASAAS_DESCRIPTION": {
-      "id": 397360,
-      "name": "✎ Descrição",
-      "type": "text",
-      "group": "asaas",
-      "code": "ASAAS_DESCRIPTION"
-    },
-    "ASAAS_VALUE": {
-      "id": 397362,
-      "name": "¤ Valor da cobrança",
-      "type": "monetary",
-      "group": "asaas",
-      "code": "ASAAS_VALUE"
-    },
-    "ASAAS_NET_VALUE": {
-      "id": 397364,
-      "name": "¤ Valor líquido recebido",
-      "type": "monetary",
-      "group": "asaas",
-      "code": "ASAAS_NET_VALUE"
-    },
     "agente-dt::info-agente#1": {
       "id": 397366,
       "name": "*INFO AGENTE*",
@@ -1259,5 +1080,12 @@
   "target": {
     "subdomain": "boavistarrdoutorhernia",
     "account_id": 36801479
+  },
+  "excluded_groups": {
+    "keys": [
+      "3c-ligacoes",
+      "asaas"
+    ],
+    "motivo": "3C (telefonia) e ASAAS (financeiro) apagados da conta de Boa Vista em 2026-08-03 a pedido da unidade. Imperatriz MANTÉM os dois. Ao reaplicar o blueprint aqui, use --skip-group asaas --skip-group 3c-ligacoes."
   }
 }

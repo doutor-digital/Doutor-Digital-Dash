@@ -115,6 +115,16 @@ public class LeadService(
             UpdatedAt = lead.UpdatedAt,
             ConvertedAt = lead.ConvertedAt,
 
+            Qualification = lead.Qualification,
+            QualificationFilledAt = lead.QualificationFilledAt,
+            AppointmentScheduledAtFilledAt = lead.AppointmentScheduledAtFilledAt,
+            Price = lead.Price,
+            OriginalCreatedAt = lead.OriginalCreatedAt,
+
+            // A ficha inteira do cartão da Kommo. Ficava guardada em CustomFieldsJson e nunca
+            // chegava na tela: o detalhe mostrava dez colunas e escondia trinta e três campos.
+            CamposKommo = LerCamposKommo(lead.CustomFieldsJson),
+
             StageHistory = lead.StageHistory
                 .OrderBy(h => h.ChangedAt)
                 .Select(h => new LeadStageHistoryDto
@@ -122,7 +132,11 @@ public class LeadService(
                     Id = h.Id,
                     StageId = h.StageId,
                     StageLabel = h.StageLabel,
-                    ChangedAt = h.ChangedAt
+                    ChangedAt = h.ChangedAt,
+                    EntrySource = h.EntrySource,
+                    // Linha legada guarda a data do sync, não a da transição. A tela precisa
+                    // saber para não anunciar que o lead mudou de etapa às 3h da manhã.
+                    DataConfiavel = h.EntrySource != LeadStageHistory.SourceLegacy,
                 })
                 .ToList(),
 
@@ -2678,6 +2692,75 @@ public class LeadService(
         Granularity.Quarter => $"{dt.Year}-Q{(dt.Month - 1) / 3 + 1}",
         _ => dt.ToString("yyyy-MM-dd"),
     };
+
+    /// <summary>
+    /// Traduz o CustomFieldsJson do lead na ficha legível do cartão da Kommo.
+    ///
+    /// TRÊS CONVERSÕES QUE PRECISAM ACONTECER AQUI
+    /// -------------------------------------------
+    /// • Data vem como carimbo unix. "1757539204" na tela não é informação; vira 10/09/2025.
+    /// • Booleano vem como "true"/"1". Vira Sim/Não — é o que está escrito no cartão da Kommo.
+    /// • Campo vazio NÃO é descartado: o que a SDR deixou em branco é metade do diagnóstico.
+    ///   Some se devolvermos só o preenchido, e é justamente o que o painel de qualidade cobra.
+    /// </summary>
+    private static List<LeadCustomFieldDto> LerCamposKommo(string? json)
+    {
+        var saida = new List<LeadCustomFieldDto>();
+        if (string.IsNullOrWhiteSpace(json)) return saida;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return saida;
+
+            foreach (var f in doc.RootElement.EnumerateArray())
+            {
+                var nome = f.TryGetProperty("field_name", out var n) ? n.GetString() : null;
+                if (string.IsNullOrWhiteSpace(nome)) continue;
+
+                long fieldId = 0;
+                if (f.TryGetProperty("field_id", out var idEl))
+                    fieldId = idEl.ValueKind == JsonValueKind.Number
+                        ? idEl.GetInt64()
+                        : long.TryParse(idEl.GetString(), out var pid) ? pid : 0;
+
+                var bruto = f.TryGetProperty("value", out var v)
+                    ? (v.ValueKind == JsonValueKind.String ? v.GetString() : v.ToString())
+                    : null;
+
+                var valor = (bruto ?? string.Empty).Trim();
+                var ehData = false;
+
+                if (valor.Length > 0)
+                {
+                    // Data em unix: só entre 2001 e 2100, senão "3" e "1" viram 1970.
+                    if (long.TryParse(valor, out var seg) && seg is > 1_000_000_000 and < 4_100_000_000)
+                    {
+                        var utc = DateTimeOffset.FromUnixTimeSeconds(seg).UtcDateTime;
+                        valor = Spine.SpineApiClient.DiaLocal(utc).ToString("dd/MM/yyyy");
+                        ehData = true;
+                    }
+                    else if (valor.Equals("true", StringComparison.OrdinalIgnoreCase)) valor = "Sim";
+                    else if (valor.Equals("false", StringComparison.OrdinalIgnoreCase)) valor = "Não";
+                }
+
+                saida.Add(new LeadCustomFieldDto
+                {
+                    FieldId = fieldId,
+                    Nome = nome!.Trim(),
+                    Valor = valor,
+                    EhData = ehData,
+                    Preenchido = valor.Length > 0,
+                });
+            }
+        }
+        catch
+        {
+            // Cartão com JSON torto não derruba a ficha inteira do lead.
+        }
+
+        return [.. saida.OrderByDescending(c => c.Preenchido).ThenBy(c => c.Nome)];
+    }
 }
 
 public enum ProcessResult
@@ -2685,4 +2768,5 @@ public enum ProcessResult
     Created,
     Updated,
     Ignored
+
 }

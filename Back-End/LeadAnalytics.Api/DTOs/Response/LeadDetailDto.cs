@@ -44,6 +44,22 @@ public class LeadDetailDto
     public DateTime UpdatedAt { get; set; }
     public DateTime? ConvertedAt { get; set; }
 
+    /// <summary>Quente/Morno/Frio — vinha preenchido no banco e não era devolvido.</summary>
+    public string? Qualification { get; set; }
+    public DateTime? QualificationFilledAt { get; set; }
+
+    /// <summary>Quando a SDR preencheu a data da consulta (diferente da data em si).</summary>
+    public DateTime? AppointmentScheduledAtFilledAt { get; set; }
+
+    /// <summary>Valor do lead na Kommo.</summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>Data de criação original, quando a nossa foi a do primeiro sync.</summary>
+    public DateTime? OriginalCreatedAt { get; set; }
+
+    /// <summary>Todos os campos preenchidos do cartão da Kommo, com nome legível.</summary>
+    public List<LeadCustomFieldDto> CamposKommo { get; set; } = [];
+
     public List<LeadStageHistoryDto> StageHistory { get; set; } = new();
     public List<LeadConversationDto> Conversations { get; set; } = new();
     public List<LeadAssignmentDto> Assignments { get; set; } = new();
@@ -85,6 +101,42 @@ public class LeadStageHistoryDto
     public int StageId { get; set; }
     public string StageLabel { get; set; } = null!;
     public DateTime ChangedAt { get; set; }
+
+    /// <summary>webhook · events_api · legacy</summary>
+    public string? EntrySource { get; set; }
+
+    /// <summary>
+    /// A data é o instante real da mudança de etapa. Falso nas linhas legadas, que guardam a
+    /// data do sync — mostrá-las como hora da transição é o erro que faz a tela dizer que o
+    /// lead mudou de etapa às 3h da manhã.
+    /// </summary>
+    public bool DataConfiavel { get; set; }
+}
+
+/// <summary>
+/// Um campo do cartão da Kommo, já com nome e valor legíveis.
+///
+/// É onde mora metade da ficha do lead — origem, motivo, qualificação, tipo, valores, e o
+/// "Pausar IA". Ficava tudo guardado em CustomFieldsJson e nunca chegava na tela: o detalhe do
+/// lead mostrava dez colunas e escondia trinta e três campos.
+/// </summary>
+public class LeadCustomFieldDto
+{
+    public long FieldId { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public string Valor { get; set; } = string.Empty;
+
+    /// <summary>
+    /// O valor era um carimbo unix e foi convertido para data. A Kommo devolve data como
+    /// número, e "1757539204" na tela não é informação.
+    /// </summary>
+    public bool EhData { get; set; }
+
+    /// <summary>
+    /// Falso quando o campo existe no cartão e está em branco. Vem junto de propósito: o que
+    /// a SDR NÃO preencheu é metade do diagnóstico, e some se só devolvermos o preenchido.
+    /// </summary>
+    public bool Preenchido { get; set; }
 }
 
 public class LeadConversationDto

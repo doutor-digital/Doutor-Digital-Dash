@@ -31,7 +31,10 @@ jobs:
   # qualidade e com a etapa de perda pintada de verde. Teste vermelho agora
   # segura o deploy.
   testes:
-    runs-on: ubuntu-latest
+    # Roda no runner da VPS, não na fila do GitHub. O .NET é instalado na primeira
+    # execução e reaproveitado depois; o job leva segundos e não depende de
+    # disponibilidade de runner hospedado.
+    runs-on: [self-hosted, linux, vps]
     steps:
       - uses: actions/checkout@v4
 

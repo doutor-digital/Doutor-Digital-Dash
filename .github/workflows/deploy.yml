@@ -48,7 +48,11 @@ jobs:
 
   build:
     needs: testes
-    runs-on: ubuntu-latest
+    # Na VPS também. Ficava na fila esperando runner hospedado do GitHub, e o
+    # deploy inteiro parava atrás — inclusive durante instabilidade deles, que
+    # foi o que travou a esteira em 06/08. A VPS já roda Docker (é ela que
+    # serve o Swarm), então construir aqui não adiciona dependência nenhuma.
+    runs-on: [self-hosted, linux, vps]
     permissions:
       contents: read
       packages: write
@@ -76,8 +80,8 @@ jobs:
           tags: |
             ghcr.io/${{ steps.owner.outputs.lc }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ghcr.io/${{ steps.owner.outputs.lc }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Sem cache do GitHub: no self-hosted o daemon local guarda as
+          # camadas entre execuções, e é mais rápido que baixar cache remoto.
 
   deploy:
     needs: build

@@ -1808,13 +1808,29 @@ public class KpiConfigService(
         var direto = ExtractFieldValue(json ?? "[]", fieldId, null);
         if (!string.IsNullOrWhiteSpace(direto)) return direto;
 
-        // Vazio no campo mapeado: procura o gêmeo com o mesmo nome, sem o símbolo.
+        // O nome do campo mapeado. Quando o lead TEM a entrada, aprendemos daqui; quando não
+        // tem, usamos o que já foi aprendido de outro lead da mesma varredura.
+        //
+        // Sem essa memória a queda não funcionava justamente nos leads legados — os que só têm
+        // o campo antigo, que são a razão de ela existir. Auditoria de 06/08: 15 de 18 leads
+        // rotulados como origem "Kommo" tinham origem de verdade no campo herdado.
         var nomeMapeado = NomeDoCampo(json, fieldId.Value);
-        if (string.IsNullOrWhiteSpace(nomeMapeado)) return direto;
+        if (!string.IsNullOrWhiteSpace(nomeMapeado))
+            _nomePorCampo[fieldId.Value] = SemSimbolo(nomeMapeado);
+        else if (!_nomePorCampo.TryGetValue(fieldId.Value, out nomeMapeado))
+            return direto;
 
-        var baseMapeado = SemSimbolo(nomeMapeado);
+        var baseMapeado = _nomePorCampo.TryGetValue(fieldId.Value, out var b) ? b : SemSimbolo(nomeMapeado!);
         return ExtractFieldByName(json, n => SemSimbolo(n) == baseMapeado) ?? direto;
     }
+
+    /// <summary>
+    /// Nome (sem símbolo) de cada campo mapeado, aprendido dos leads que o possuem.
+    ///
+    /// Vive no processo porque nome de campo da Kommo praticamente não muda, e o custo de
+    /// errar é baixo: no pior caso a queda procura um gêmeo com nome antigo e não acha.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, string> _nomePorCampo = new();
 
     /// <summary>Tira símbolo e pontuação do começo: "⚑ Origem" e "Origem" viram a mesma chave.</summary>
     private static string SemSimbolo(string nome)

@@ -18,7 +18,8 @@ namespace LeadAnalytics.Api.Controllers;
 public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, HigieneService higiene, FilasService filas,
     AtividadeService atividade,
     ConferenciaService conferencia,
-    BuscasService buscas, TenantUnitGuard tenantGuard) : ControllerBase
+    BuscasService buscas,
+    NoShowService noShow, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
     private readonly AgendaDoDiaService _agenda = agenda;
@@ -27,6 +28,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     private readonly AtividadeService _atividade = atividade;
     private readonly ConferenciaService _conferencia = conferencia;
     private readonly BuscasService _buscas = buscas;
+    private readonly NoShowService _noShow = noShow;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
     /// <summary>Frescor por fonte: Kommo, franquia e Meta Ads.</summary>
@@ -124,5 +126,18 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _buscas.CatalogoAsync(tid, unitId, de, ate, ct));
+    }
+
+    /// <summary>Falta na agenda da clínica, com o desfecho inteiro e a lista de pacientes.</summary>
+    [HttpGet("no-show")]
+    public async Task<IActionResult> NoShow(
+        [FromQuery] DateOnly de, [FromQuery] DateOnly ate,
+        [FromQuery] int? unitId, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _noShow.GetAsync(tid, unitId, de, ate, ct));
     }
 }

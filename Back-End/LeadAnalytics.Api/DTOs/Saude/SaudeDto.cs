@@ -249,3 +249,52 @@ public class BuscaItemDto
     public string? Etapa { get; set; }
     public DateTime Quando { get; set; }
 }
+
+/// <summary>
+/// Falta na agenda da clínica, com o desfecho inteiro em volta.
+/// O número de falta sozinho não é interpretável nesta base: a recepção usa "Desmarcado"
+/// como balde guarda-chuva, e sem o contexto o card parece quebrado quando está certo.
+/// </summary>
+public class NoShowDto
+{
+    public DateOnly De { get; set; }
+    public DateOnly Ate { get; set; }
+
+    public int Agendados { get; set; }
+    public int Compareceram { get; set; }
+    public int Faltaram { get; set; }
+    public int Desmarcados { get; set; }
+    public int Remarcados { get; set; }
+    public int AindaPorVir { get; set; }
+
+    /// <summary>Agendados menos os que ainda vão acontecer — é o denominador honesto.</summary>
+    public int Resolvidos { get; set; }
+
+    public double PercentualFalta { get; set; }
+    public double PercentualComparecimento { get; set; }
+
+    public int AnteriorFaltaram { get; set; }
+    public int AnteriorAgendados { get; set; }
+    public double AnteriorPercentualFalta { get; set; }
+
+    /// <summary>Falso quando não existe espelho do período anterior — comparar com zero mentiria.</summary>
+    public bool TemAnterior { get; set; }
+
+    /// <summary>Muitos desmarcados para pouca falta: o balde está mascarando o número.</summary>
+    public bool BaldeSuspeito { get; set; }
+    public string? AvisoBalde { get; set; }
+
+    public List<NoShowItemDto> Faltas { get; set; } = [];
+
+    /// <summary>Os desmarcados, marcados como tais — para conferir se viraram falta.</summary>
+    public List<NoShowItemDto> Desmarcadas { get; set; } = [];
+}
+
+public class NoShowItemDto
+{
+    public string? Paciente { get; set; }
+    public string? Profissional { get; set; }
+    public string? Categoria { get; set; }
+    public DateTime Quando { get; set; }
+    public string? Status { get; set; }
+}

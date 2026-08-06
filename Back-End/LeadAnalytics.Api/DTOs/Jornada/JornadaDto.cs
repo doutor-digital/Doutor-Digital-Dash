@@ -116,4 +116,11 @@ public class JornadaRankingItemDto
     public DateTime CriadoEm { get; set; }
     public DateTime AgendouEm { get; set; }
     public double Minutos { get; set; }
+
+    /// <summary>
+    /// Entrou e foi para agendado quase no mesmo instante. Não é conversão rápida: é lead
+    /// cadastrado na Kommo depois do agendamento já ter acontecido. Sem esta marca, o topo da
+    /// lista seria sempre "0 min" e diria o contrário do que aconteceu.
+    /// </summary>
+    public bool CadastradoJaAgendado { get; set; }
 }

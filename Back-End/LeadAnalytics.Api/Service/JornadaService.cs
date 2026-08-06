@@ -306,8 +306,11 @@ public class JornadaService(AppDbContext db, KpiConfigService kpiConfig)
                 CriadoEm = c.CreatedAt,
                 AgendouEm = c.ChangedAt,
                 Minutos = Math.Round((c.ChangedAt - c.CreatedAt).TotalMinutes, 1),
+                CadastradoJaAgendado = (c.ChangedAt - c.CreatedAt).TotalMinutes < 2,
             })
-            .OrderBy(x => x.Minutos)
+            // Cadastrado-já-agendado vai para o fim: é registro atrasado, não velocidade.
+            .OrderBy(x => x.CadastradoJaAgendado)
+            .ThenBy(x => x.Minutos)
             .Take(20)
             .ToList();
 

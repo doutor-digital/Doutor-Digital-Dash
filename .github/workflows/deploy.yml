@@ -25,7 +25,26 @@ env:
   REMOTE_DIR: /opt/doutordigital/api
 
 jobs:
+  # ── Os testes correm ANTES do build, e o build depende deles ─────────────
+  # Sem isto, um erro de regra de contagem só aparecia quando alguém olhasse a
+  # tela e desconfiasse. Foi assim com o donut de origens, com o painel de
+  # qualidade e com a etapa de perda pintada de verde. Teste vermelho agora
+  # segura o deploy.
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Testes
+        working-directory: ./Back-End
+        run: dotnet test LeadAnalytics.Tests/LeadAnalytics.Tests.csproj --nologo --verbosity minimal
+
   build:
+    needs: testes
     runs-on: ubuntu-latest
     permissions:
       contents: read

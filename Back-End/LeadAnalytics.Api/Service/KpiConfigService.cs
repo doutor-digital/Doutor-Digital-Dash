@@ -1132,6 +1132,36 @@ public class KpiConfigService(
         };
         ag.Origens = Top(agOrigens);
         ag.TiposAgendamento = Top(agTipos);
+
+        // ── As duas perguntas que o card precisa separar ────────────────────
+        // ag.Total responde "quantos foram MOVIDOS para agendado no período".
+        // Isto aqui responde "quantos têm CONSULTA MARCADA para o período" — que é o número
+        // comparável com a agenda da franquia. Confundir os dois já custou uma conversa
+        // inteira sobre qual dos sistemas estava errado, quando nenhum estava.
+        ag.ComConsultaNoPeriodo = await _db.Leads.AsNoTracking()
+            .ExcludeDeleted()
+            .Where(l => l.TenantId == clinicId
+                        && (!unitId.HasValue || l.UnitId == unitId.Value)
+                        && l.AppointmentScheduledAt >= from
+                        && l.AppointmentScheduledAt <= to)
+            .CountAsync(ct);
+
+        if (unitId.HasValue)
+        {
+            var de = DateOnly.FromDateTime(Spine.SpineApiClient.DiaLocal(from).ToDateTime(TimeOnly.MinValue));
+            var ate = DateOnly.FromDateTime(Spine.SpineApiClient.DiaLocal(to).ToDateTime(TimeOnly.MinValue));
+
+            // Só conta se existe espelho da franquia no período: zero por falta de sync não
+            // pode virar "a franquia não tem nenhuma avaliação".
+            var temEspelho = await _db.SpineScheduleSnapshots.AsNoTracking()
+                .AnyAsync(x => x.UnitId == unitId.Value && x.DiaLocal >= de && x.DiaLocal <= ate, ct);
+
+            if (temEspelho)
+                ag.AvaliacoesFranquia = await _db.SpineScheduleSnapshots.AsNoTracking()
+                    .CountAsync(x => x.UnitId == unitId.Value
+                                     && x.DiaLocal >= de && x.DiaLocal <= ate
+                                     && x.IdCategory == Spine.SpineApiClient.ScheduleCategory.Avaliacao, ct);
+        }
         trat.Origens = Top(tratOrigens);
         trat.Fisios = Top(tratFisios);
         trat.TiposTratamento = Top(tratTipos);

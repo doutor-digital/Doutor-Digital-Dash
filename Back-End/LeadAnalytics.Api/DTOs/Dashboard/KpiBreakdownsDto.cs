@@ -50,6 +50,23 @@ public class AgendadosBreakdownDto
     /// em <see cref="Total"/> — chip informativo no card pra SDR entender a diferença.
     /// </summary>
     [JsonPropertyName("reclassificacoes")] public int Reclassificacoes { get; set; }
+
+    /// <summary>
+    /// Leads cuja DATA DE CONSULTA cai dentro do período — pergunta diferente de
+    /// <see cref="Total"/>, que conta quem foi MOVIDO para agendado no período.
+    ///
+    /// Medido em Imperatriz, 01–06/08: 9 agendaram no período, 12 têm consulta marcada para
+    /// ele. Os dois estão certos e nunca vão bater: quem agendou dia 28/07 para vir dia 04/08
+    /// só aparece no segundo. Sem os dois lado a lado, comparar com a agenda da franquia é
+    /// comparar coisas diferentes — e foi exatamente o que aconteceu.
+    /// </summary>
+    [JsonPropertyName("com_consulta_no_periodo")] public int ComConsultaNoPeriodo { get; set; }
+
+    /// <summary>
+    /// Avaliações na agenda da franquia no mesmo período — o número contra o qual isto se
+    /// confere. Nulo quando a unidade não tem a franquia ligada.
+    /// </summary>
+    [JsonPropertyName("avaliacoes_franquia")] public int? AvaliacoesFranquia { get; set; }
     [JsonPropertyName("origens")] public List<ValueCountDto> Origens { get; set; } = new();
     /// <summary>Quebra pelo custom field "Tipo de agendamento" (consulta/retorno/avaliação...).</summary>
     [JsonPropertyName("tipos_agendamento")] public List<ValueCountDto> TiposAgendamento { get; set; } = new();

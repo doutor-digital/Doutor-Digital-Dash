@@ -43,6 +43,16 @@ public class KpiConfigService(
     /// </summary>
     public const string ProfileResponsavelKey = "profile_responsavel";
 
+    /// <summary>
+    /// Campo booleano "Pausar IA" da Kommo — é o que decide se a Sofia responde aquele lead.
+    ///
+    /// Precisa ser mapeado por id, e não achado pelo nome: em Imperatriz existem DOIS campos
+    /// chamados "Pausar IA" (2055472, herdado, marcado em 7.624 leads, e 2443055, o que o
+    /// agente-dt de fato lê). Casar por nome pegaria o errado e diria que a IA está pausada
+    /// em 87% da base quando são 89 leads.
+    /// </summary>
+    public const string ProfilePausarIaKey = "profile_pausar_ia";
+
     /// <summary>Mapeamento dos custom fields da Kommo p/ os breakdowns do dashboard.</summary>
     public class LeadProfileFields
     {
@@ -66,6 +76,9 @@ public class KpiConfigService(
 
         /// <summary>Campo "Responsável agendamento" — quem de fato atendeu o lead.</summary>
         public long? ResponsavelFieldId { get; set; }
+
+        /// <summary>Campo "Pausar IA" que o agente-dt lê. Marcado = a Sofia não responde.</summary>
+        public long? PausarIaFieldId { get; set; }
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -1747,7 +1760,7 @@ public class KpiConfigService(
             ProfileValorTratKey, ProfileValorConsultaKey,
             ProfileTratFechadoKey, ProfileQualificacaoKey,
             ProfileTipoKey, ProfileTipoAgendamentoKey, ProfileTipoTratamentoKey,
-            ProfileResponsavelKey,
+            ProfileResponsavelKey, ProfilePausarIaKey,
         };
         var rows = await _db.KpiConfigurations.AsNoTracking()
             .Where(k => k.UnitId == unitId && keys.Contains(k.KpiKey))
@@ -1777,6 +1790,7 @@ public class KpiConfigService(
             TipoAgendamentoFieldId = FieldOf(ProfileTipoAgendamentoKey),
             TipoTratamentoFieldId = FieldOf(ProfileTipoTratamentoKey),
             ResponsavelFieldId = FieldOf(ProfileResponsavelKey),
+            PausarIaFieldId = FieldOf(ProfilePausarIaKey),
         };
     }
 

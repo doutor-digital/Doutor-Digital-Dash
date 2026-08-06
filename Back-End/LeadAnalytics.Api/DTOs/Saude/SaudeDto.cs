@@ -323,3 +323,57 @@ public class CampanhaDto
     public string? MelhorAnuncioImagem { get; set; }
     public int MelhorAnuncioLeads { get; set; }
 }
+
+/// <summary>
+/// O relatório que uma clínica precisa, num lugar só — e auditável.
+/// Cada lacuna vem com os NOMES: "12 leads sem origem" ninguém confere; com a lista, a gerente
+/// abre a Kommo, procura o primeiro e vê se bate.
+/// </summary>
+public class RelatorioCompletoDto
+{
+    public DateTime De { get; set; }
+    public DateTime Ate { get; set; }
+
+    public int TotalLeads { get; set; }
+    public int Agendaram { get; set; }
+
+    public int HorariosNaClinica { get; set; }
+    public int Compareceram { get; set; }
+    public int HorariosPerdidos { get; set; }
+
+    public List<CampanhaDto> Campanhas { get; set; } = [];
+    public List<LacunaDto> Lacunas { get; set; } = [];
+    public List<ValorContagemDto> Origens { get; set; } = [];
+}
+
+/// <summary>Um campo que ficou em branco, com quem deixou em branco.</summary>
+public class LacunaDto
+{
+    public string Campo { get; set; } = string.Empty;
+
+    /// <summary>O que quebra quando este campo falta — sem isso vira cobrança sem motivo.</summary>
+    public string Porque { get; set; } = string.Empty;
+
+    public int Faltando { get; set; }
+
+    /// <summary>Sobre quantos leads a conta é feita. Data de consulta só vale para agendados.</summary>
+    public int Universo { get; set; }
+    public double Percentual { get; set; }
+
+    public List<LeadSemCampoDto> Leads { get; set; } = [];
+}
+
+public class LeadSemCampoDto
+{
+    public int LeadId { get; set; }
+    public string? Nome { get; set; }
+    public string? Telefone { get; set; }
+    public string? Etapa { get; set; }
+    public DateTime Criado { get; set; }
+}
+
+public class ValorContagemDto
+{
+    public string Valor { get; set; } = string.Empty;
+    public int Contagem { get; set; }
+}

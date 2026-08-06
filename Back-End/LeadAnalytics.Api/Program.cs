@@ -173,6 +173,7 @@ builder.Services.AddScoped<ConferenciaService>();
 builder.Services.AddScoped<BuscasService>();
 builder.Services.AddScoped<NoShowService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.CampanhasService>();
+builder.Services.AddScoped<RelatorioCompletoService>();
 builder.Services.AddScoped<InternalApiKeyGuard>();
 builder.Services.AddScoped<DailyRelatoryService>();
 builder.Services.AddScoped<LeadAttributionService>();

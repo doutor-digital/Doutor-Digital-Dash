@@ -1777,8 +1777,66 @@ public class KpiConfigService(
     }
 
     /// <summary>Valor do campo: prefere o id configurado; senão casa por nome.</summary>
+    /// <summary>
+    /// Lê um campo do cartão da Kommo, com queda para o campo GÊMEO quando o mapeado está vazio.
+    ///
+    /// POR QUE A QUEDA EXISTE
+    /// ----------------------
+    /// A conta de Imperatriz tem cada informação em DOIS campos: o herdado ("Origem", id 24244xx)
+    /// e o da migração de julho ("⚑ Origem", id 24408xx). O dashboard lê o novo, mas 589 leads
+    /// só têm o antigo preenchido — e sumiam da contagem por origem. Somando os sete campos
+    /// duplicados são 1 899 preenchimentos que existem e não chegavam em card nenhum.
+    ///
+    /// Medido antes de escrever isto: quando os dois estão preenchidos, concordam em 99,8%
+    /// (7 divergências em 4 067). Não é conflito de informação; é informação que ficou para trás.
+    ///
+    /// A queda é por NOME, ignorando o símbolo da frente — é o que liga "⚑ Origem" a "Origem"
+    /// sem precisar de uma tabela de pares por unidade.
+    /// </summary>
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
-        => fieldId.HasValue ? ExtractFieldValue(json ?? "[]", fieldId, null) : ExtractFieldByName(json, nameMatches);
+    {
+        if (!fieldId.HasValue) return ExtractFieldByName(json, nameMatches);
+
+        var direto = ExtractFieldValue(json ?? "[]", fieldId, null);
+        if (!string.IsNullOrWhiteSpace(direto)) return direto;
+
+        // Vazio no campo mapeado: procura o gêmeo com o mesmo nome, sem o símbolo.
+        var nomeMapeado = NomeDoCampo(json, fieldId.Value);
+        if (string.IsNullOrWhiteSpace(nomeMapeado)) return direto;
+
+        var baseMapeado = SemSimbolo(nomeMapeado);
+        return ExtractFieldByName(json, n => SemSimbolo(n) == baseMapeado) ?? direto;
+    }
+
+    /// <summary>Tira símbolo e pontuação do começo: "⚑ Origem" e "Origem" viram a mesma chave.</summary>
+    private static string SemSimbolo(string nome)
+    {
+        var i = 0;
+        while (i < nome.Length && !char.IsLetterOrDigit(nome[i])) i++;
+        return nome[i..].Trim().ToLowerInvariant();
+    }
+
+    private static string? NomeDoCampo(string? json, long fieldId)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Object) continue;
+                if (!el.TryGetProperty("field_id", out var id)) continue;
+                var val = id.ValueKind == JsonValueKind.Number
+                    ? id.GetInt64()
+                    : long.TryParse(id.GetString(), out var p) ? p : -1;
+                if (val != fieldId) continue;
+                return el.TryGetProperty("field_name", out var n) ? n.GetString() : null;
+            }
+        }
+        catch (JsonException) { /* ignora */ }
+        return null;
+    }
 
     // ── Classificação Cadastro × Resgate ──────────────────────────────────────────
     // Fonte da verdade: o campo custom "Tipo de lead" da Kommo (id mapeado ou nome

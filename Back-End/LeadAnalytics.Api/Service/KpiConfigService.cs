@@ -1167,6 +1167,43 @@ public class KpiConfigService(
         trat.TiposTratamento = Top(tratTipos);
         cons.Agendamentos = consUpcoming.OrderBy(x => x.When).Take(8).ToList();
 
+        // ── O desfecho tem que vir de onde vem o número grande ──────────────
+        // Quando "consultas" está mapeado para a franquia, o número grande é o comparecimento
+        // real dela. Manter o desfecho calculado na Kommo produzia um card com três populações:
+        // 8 no topo, 12 no desfecho, 56 nos tipos — e nenhuma delas errada sozinha.
+        if (unitId is int uidC)
+        {
+            var consCfg = await _db.KpiConfigurations.AsNoTracking()
+                .FirstOrDefaultAsync(k => k.UnitId == uidC && k.KpiKey == "consultas", ct);
+
+            if (consCfg is { SourceType: "franquia" })
+            {
+                cons.Fonte = "franquia";
+                try
+                {
+                    var av = await _spineAvaliacoes.GetAsync(
+                        uidC, DateOnly.FromDateTime(from), DateOnly.FromDateTime(to), ct);
+                    if (av is not null)
+                    {
+                        cons.FranquiaTotal = av.Total;
+                        cons.Situacoes = [.. av.PorSituacao
+                            .Where(x => x.Total > 0)
+                            .OrderByDescending(x => x.Total)
+                            .Select(x => new DTOs.Dashboard.ValueCountDto
+                            {
+                                Value = x.Nome,
+                                Count = x.Total,
+                            })];
+                    }
+                }
+                catch
+                {
+                    // Franquia fora do ar não zera o card: sem situações, a tela mostra só o
+                    // número grande e diz que o desfecho não veio.
+                }
+            }
+        }
+
         return new DTOs.Dashboard.KpiBreakdownsDto
         {
             Cadastro = cad,

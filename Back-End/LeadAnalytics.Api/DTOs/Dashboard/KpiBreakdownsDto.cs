@@ -97,6 +97,22 @@ public class ConsultasBreakdownDto
     [JsonPropertyName("compareceu")] public int Compareceu { get; set; }
     [JsonPropertyName("faltou")] public int Faltou { get; set; }
     [JsonPropertyName("aguardando")] public int Aguardando { get; set; }
+    /// <summary>
+    /// De onde vem o número grande: <c>franquia</c> ou <c>kommo</c>. O card precisa saber,
+    /// porque as quebras têm de descrever a MESMA população do número — foi misturar isso que
+    /// produziu um card com 8 no topo, 12 no desfecho e 56 nos tipos.
+    /// </summary>
+    [JsonPropertyName("fonte")] public string Fonte { get; set; } = "kommo";
+
+    /// <summary>
+    /// Desfecho vindo da agenda da franquia, quando é ela que responde pelo número grande.
+    /// É a única fonte que sabe quem de fato compareceu — a Kommo só sabe o que foi combinado.
+    /// </summary>
+    [JsonPropertyName("situacoes")] public List<ValueCountDto> Situacoes { get; set; } = new();
+
+    /// <summary>Total de horários na agenda da franquia no período, em qualquer situação.</summary>
+    [JsonPropertyName("franquia_total")] public int FranquiaTotal { get; set; }
+
     /// <summary>Próximos agendamentos (nome + data/hora) — top 8 por data.</summary>
     [JsonPropertyName("agendamentos")] public List<AgendamentoItemDto> Agendamentos { get; set; } = new();
 }

@@ -223,3 +223,29 @@ public class ChecagemDto
 
     public bool Passou { get; set; }
 }
+
+/// <summary>Uma pergunta pronta sobre a base, com a contagem e quem entra nela.</summary>
+public class BuscaDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Titulo { get; set; } = string.Empty;
+
+    /// <summary>Por que essa pergunta importa — uma frase, sem jargão.</summary>
+    public string Porque { get; set; } = string.Empty;
+
+    public int Quantidade { get; set; }
+
+    /// <summary>Quanto isso representa dos leads do período. Número solto não tem tamanho.</summary>
+    public double Percentual { get; set; }
+
+    public List<BuscaItemDto> Itens { get; set; } = [];
+}
+
+public class BuscaItemDto
+{
+    public int LeadId { get; set; }
+    public string? Nome { get; set; }
+    public string? Telefone { get; set; }
+    public string? Etapa { get; set; }
+    public DateTime Quando { get; set; }
+}

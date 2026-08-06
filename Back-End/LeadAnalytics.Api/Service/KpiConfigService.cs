@@ -1793,6 +1793,14 @@ public class KpiConfigService(
     /// A queda é por NOME, ignorando o símbolo da frente — é o que liga "⚑ Origem" a "Origem"
     /// sem precisar de uma tabela de pares por unidade.
     /// </summary>
+    /// <summary>
+    /// Mesma leitura que os cards usam, exposta para as buscas — inclusive a queda para o
+    /// campo gêmeo. Se a busca lesse de outro jeito, ela e o card divergiriam, e a página
+    /// que existe para conferir passaria a ser mais uma fonte de dúvida.
+    /// </summary>
+    public static string? ExtractFieldPublic(string? json, long? fieldId, Func<string, bool> nameMatches)
+        => ExtractField(json, fieldId, nameMatches);
+
     private static string? ExtractField(string? json, long? fieldId, Func<string, bool> nameMatches)
     {
         if (!fieldId.HasValue) return ExtractFieldByName(json, nameMatches);

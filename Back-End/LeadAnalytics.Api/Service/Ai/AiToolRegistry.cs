@@ -16,6 +16,7 @@ namespace LeadAnalytics.Api.Service.Ai;
 /// </summary>
 public class AiToolRegistry(
     AppDbContext db,
+    Ads.CampanhasService campanhas,
     KpiConfigService kpiService,
     UnitEntryStageConfig entryStageConfig,
     KommoStagesResolver stagesResolver,
@@ -45,6 +46,14 @@ public class AiToolRegistry(
                 "get_custom_field_top",
                 "Top valores de um campo customizado da Kommo (ex.: Origem, Tratamento Indicado, Profissão, Motivo do Não Agendamento, Sexo).",
                 """{"type":"object","properties":{"unit_id":{"type":"integer"},"field_name":{"type":"string","description":"nome do campo, ex.: 'Origem', 'Profissão', 'Tratamento Indicado'"},"days":{"type":"integer","default":30},"limit":{"type":"integer","default":10}},"required":["unit_id","field_name"]}"""),
+
+            ReadTool(
+                "get_campanhas",
+                "Campanhas de anúncio no período: quantos leads cada uma trouxe, quantos viraram agendamento, "
+              + "quanto foi gasto, o custo por lead, e o anúncio que mais puxou (nome e imagem). "
+              + "Use quando perguntarem qual campanha traz mais lead, qual converte melhor, qual está cara, "
+              + "ou qual anúncio está funcionando.",
+                """{"type":"object","properties":{"unit_id":{"type":"integer"},"days":{"type":"integer","description":"janela em dias contando de hoje","default":30}},"required":["unit_id"]}"""),
 
             ReadTool(
                 "get_sexo_outcome",
@@ -110,6 +119,26 @@ public class AiToolRegistry(
                         GetString(args, "field_name") ?? "",
                         from, to,
                         Math.Min(GetInt(args, "limit") ?? 10, 30), ct);
+                case "get_campanhas":
+                {
+                    var lista = await campanhas.GetAsync(tenantId, unitId.Value, from, to, ct);
+                    // Só o que a IA precisa para responder: mandar o objeto inteiro gastaria
+                    // contexto com id de campanha e impressão, que ninguém pergunta.
+                    return Json(new
+                    {
+                        periodo = new { de = from, ate = to },
+                        campanhas = lista.Take(15).Select(c => new
+                        {
+                            c.Nome,
+                            c.Leads,
+                            c.Agendados,
+                            gasto = c.Gasto,
+                            custo_por_lead = c.CustoPorLead,
+                            anuncio_destaque = c.MelhorAnuncioNome,
+                            imagem = c.MelhorAnuncioImagem,
+                        }),
+                    });
+                }
                 case "get_sexo_outcome":
                     return await GetSexoOutcomeAsync(tenantId, unitId.Value, from, to, ct);
                 case "search_leads":

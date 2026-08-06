@@ -122,14 +122,23 @@ public class AdCreativeService(
         var http = httpFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(6);
 
-        var comoAnuncio = $"{GraphBase}/{id}?fields=name,creative%7Bthumbnail_url,object_story_id%7D"
+        // A campanha vem junto de propósito: é a ponte entre o lead (que guarda o id do
+        // ANÚNCIO) e o gasto (que vem por CAMPANHA). Sem ela ninguém liga os dois, e a
+        // pergunta "qual campanha traz mais lead" fica sem resposta.
+        var comoAnuncio = $"{GraphBase}/{id}?fields=name,campaign%7Bid,name%7D,creative%7Bthumbnail_url,image_url,object_story_id%7D"
                         + $"&thumbnail_width=240&thumbnail_height=240&access_token={Uri.EscapeDataString(token)}";
         var doc = await LerJsonAsync(http, comoAnuncio, ct);
         if (doc is not null && doc.RootElement.TryGetProperty("creative", out var criativo))
         {
             reg.NotFound = false;
             reg.Name = Texto(doc.RootElement, "name");
-            reg.ThumbnailUrl = Texto(criativo, "thumbnail_url");
+            // Preferência pela imagem em alta; a miniatura de 240px é o plano B.
+            reg.ThumbnailUrl = Texto(criativo, "image_url") ?? Texto(criativo, "thumbnail_url");
+            if (doc.RootElement.TryGetProperty("campaign", out var camp))
+            {
+                reg.CampaignId = Texto(camp, "id");
+                reg.CampaignName = Texto(camp, "name");
+            }
             var storyId = Texto(criativo, "object_story_id");
             if (!string.IsNullOrEmpty(storyId))
                 reg.PermalinkUrl = $"https://www.facebook.com/{storyId}";

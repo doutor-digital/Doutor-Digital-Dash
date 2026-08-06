@@ -19,7 +19,8 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     AtividadeService atividade,
     ConferenciaService conferencia,
     BuscasService buscas,
-    NoShowService noShow, TenantUnitGuard tenantGuard) : ControllerBase
+    NoShowService noShow,
+    LeadAnalytics.Api.Service.Ads.CampanhasService campanhas, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
     private readonly AgendaDoDiaService _agenda = agenda;
@@ -29,6 +30,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     private readonly ConferenciaService _conferencia = conferencia;
     private readonly BuscasService _buscas = buscas;
     private readonly NoShowService _noShow = noShow;
+    private readonly LeadAnalytics.Api.Service.Ads.CampanhasService _campanhas = campanhas;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
     /// <summary>Frescor por fonte: Kommo, franquia e Meta Ads.</summary>
@@ -139,5 +141,18 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _noShow.GetAsync(tid, unitId, de, ate, ct));
+    }
+
+    /// <summary>Campanhas do período: leads, gasto, custo por lead e o anúncio que mais puxou.</summary>
+    [HttpGet("campanhas")]
+    public async Task<IActionResult> Campanhas(
+        [FromQuery] DateTime de, [FromQuery] DateTime ate,
+        [FromQuery] int? unitId, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _campanhas.GetAsync(tid, unitId, de, ate, ct));
     }
 }

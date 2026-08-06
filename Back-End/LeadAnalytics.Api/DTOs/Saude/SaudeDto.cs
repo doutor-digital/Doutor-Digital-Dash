@@ -298,3 +298,28 @@ public class NoShowItemDto
     public DateTime Quando { get; set; }
     public string? Status { get; set; }
 }
+
+/// <summary>
+/// Uma campanha no período: leads que trouxe, gasto, custo por lead e o anúncio que mais puxou.
+/// O lead guarda o ID DO ANÚNCIO e o gasto vem por CAMPANHA — a ponte é o cache de criativos.
+/// </summary>
+public class CampanhaDto
+{
+    public string CampanhaId { get; set; } = string.Empty;
+    public string? Nome { get; set; }
+
+    public int Leads { get; set; }
+    public int Agendados { get; set; }
+
+    public decimal Gasto { get; set; }
+    public long Impressoes { get; set; }
+    public long Cliques { get; set; }
+
+    /// <summary>Nulo quando falta um dos lados — dividir por zero mentiria.</summary>
+    public decimal? CustoPorLead { get; set; }
+
+    public string? MelhorAnuncioId { get; set; }
+    public string? MelhorAnuncioNome { get; set; }
+    public string? MelhorAnuncioImagem { get; set; }
+    public int MelhorAnuncioLeads { get; set; }
+}

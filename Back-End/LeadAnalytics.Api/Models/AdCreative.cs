@@ -29,6 +29,14 @@ public class AdCreative
     /// <summary>Link para a peça (publicação/permalink), quando a Meta devolve.</summary>
     public string? PermalinkUrl { get; set; }
 
+    /// <summary>
+    /// Campanha dona deste anúncio. É a ponte que faltava: o lead guarda o ID DO ANÚNCIO e o
+    /// gasto vem por CAMPANHA — sem isto ninguém ligava os dois, e a IA respondia "não tenho
+    /// esse dado" para "qual campanha trouxe mais leads".
+    /// </summary>
+    public string? CampaignId { get; set; }
+    public string? CampaignName { get; set; }
+
     /// <summary>Id não reconhecido pela Meta — para de tentar até a próxima revalidação.</summary>
     public bool NotFound { get; set; }
 

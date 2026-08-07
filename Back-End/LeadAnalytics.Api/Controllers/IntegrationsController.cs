@@ -228,6 +228,44 @@ public class IntegrationsController(
         return Ok(new { items, date_from = fromD, date_to = toD });
     }
 
+    /// <summary>
+    /// O mesmo gasto, dia a dia, sem somar. É o que permite procurar por data e
+    /// desenhar o formato do período — a versão agregada perde os dois.
+    /// </summary>
+    [HttpGet("spend/daily")]
+    public async Task<IActionResult> SpendDaily(
+        [FromQuery] int? clinicId,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        if (RequireAnalyst() is { } denied) return denied;
+        var tenant = ResolveClinicId(clinicId);
+        if (tenant is null) return BadRequest(new { message = "clinicId não resolvido." });
+
+        var toD = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var fromD = from ?? toD.AddDays(-30);
+
+        var items = await db.CampaignDailySpends.AsNoTracking()
+            .Where(s => s.ClinicId == tenant.Value && s.Date >= fromD && s.Date <= toD)
+            .OrderByDescending(s => s.Date).ThenByDescending(s => s.Spend)
+            .Select(s => new AdsSpendDayDto
+            {
+                Date = s.Date,
+                Provider = s.Provider,
+                CampaignId = s.CampaignId,
+                CampaignName = s.CampaignName,
+                Currency = s.Currency,
+                Spend = s.Spend,
+                Impressions = s.Impressions,
+                Clicks = s.Clicks,
+                Conversations = s.Conversations,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new { items, date_from = fromD, date_to = toD });
+    }
+
     // ─── Credenciais do app (configuradas pelo analista) ─────────────────────
 
     /// <summary>Status das credenciais de cada provedor (sem expor o segredo).</summary>

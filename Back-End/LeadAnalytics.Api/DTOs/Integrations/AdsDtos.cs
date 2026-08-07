@@ -40,3 +40,20 @@ public class AdsSpendItemDto
     /// <summary>Conversas de WhatsApp iniciadas — o "lead" na visão do Meta.</summary>
     public long Conversations { get; set; }
 }
+
+/// <summary>
+/// Uma linha por dia e por campanha, sem somar. É o grão que a busca por data
+/// precisa: agregar por período responde "quanto", mas não "quando".
+/// </summary>
+public class AdsSpendDayDto
+{
+    public DateOnly Date { get; set; }
+    public string Provider { get; set; } = "";
+    [JsonPropertyName("campaign_id")] public string CampaignId { get; set; } = "";
+    [JsonPropertyName("campaign_name")] public string? CampaignName { get; set; }
+    public decimal Spend { get; set; }
+    public string Currency { get; set; } = "BRL";
+    public long Impressions { get; set; }
+    public long Clicks { get; set; }
+    public int Conversations { get; set; }
+}

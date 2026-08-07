@@ -152,13 +152,23 @@ public class AnunciosDesempenhoService(
 
         try
         {
-            // limit=100, não 250: com 250 a Meta responde "Please reduce the amount of data
-            // you're asking for" e devolve ZERO anúncio. O erro é HTTP 200 com corpo de erro,
-            // então passava despercebido e a tela caía na miniatura velha de 64px — o "ainda
-            // embaçado" que ninguém conseguia explicar.
+            // BUSCA DIRIGIDA, NÃO LISTAGEM
+            // -----------------------------
+            // Listar a conta inteira tinha dois problemas. Com limit=250 a Meta responde
+            // "Please reduce the amount of data you're asking for" e devolve ZERO — dentro de
+            // um HTTP 200, então passava por sucesso. E com limit=100 vinham só os 100
+            // primeiros anúncios da conta: os do período que ficassem fora dessa página
+            // apareciam sem foto, sem explicação.
+            //
+            // Aqui pedimos exatamente os ids que o /insights devolveu. Some a paginação, some
+            // o teto, e a resposta tem o tamanho do período em vez do tamanho da conta.
+            var ids = string.Join(",", linhas.Select(l => $"\"{l.AnuncioId}\""));
+            var filtro = $"[{{\"field\":\"id\",\"operator\":\"IN\",\"value\":[{ids}]}}]";
+
             var url = $"{GraphBase}/act_{contaId}/ads"
                     + "?limit=100&fields="
                     + Uri.EscapeDataString("id,name,creative{thumbnail_url,image_url,video_id,object_type}")
+                    + $"&filtering={Uri.EscapeDataString(filtro)}"
                     + $"&access_token={Uri.EscapeDataString(token)}";
 
             using var resp = await http.GetAsync(url, ct);

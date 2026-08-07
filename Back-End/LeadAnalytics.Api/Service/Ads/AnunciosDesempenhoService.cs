@@ -129,7 +129,63 @@ public class AnunciosDesempenhoService(
             });
         }
 
+        // ── A imagem vem de OUTRA rota ──────────────────────────────────────
+        // /insights devolve número, não criativo — pedir "creative" ali é ignorado em
+        // silêncio, e foi por isso que o card saiu sem foto. A miniatura está em /ads.
+        // Uma chamada só para a conta inteira, casada por id depois.
+        await PreencherImagensAsync(http, contaId, token, saida, ct);
+
         return [.. saida.OrderByDescending(x => x.Gasto)];
+    }
+
+    /// <summary>
+    /// Miniatura de cada anúncio, de /ads. Falhar aqui não é motivo para perder as métricas:
+    /// o card sem foto ainda decide se o anúncio fica ou sai.
+    /// </summary>
+    private async Task PreencherImagensAsync(
+        HttpClient http, string contaId, string token,
+        List<AnuncioLinhaDto> linhas, CancellationToken ct)
+    {
+        if (linhas.Count == 0) return;
+
+        try
+        {
+            var url = $"{GraphBase}/act_{contaId}/ads"
+                    + "?limit=250&fields=" + Uri.EscapeDataString("id,name,creative{thumbnail_url,image_url}")
+                    + $"&access_token={Uri.EscapeDataString(token)}";
+
+            using var resp = await http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return;
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            if (!doc.RootElement.TryGetProperty("data", out var data)) return;
+
+            var porId = new Dictionary<string, (string? img, string? nome)>();
+            foreach (var a in data.EnumerateArray())
+            {
+                var id = Txt(a, "id");
+                if (string.IsNullOrWhiteSpace(id)) continue;
+
+                string? img = null;
+                if (a.TryGetProperty("creative", out var cr) && cr.ValueKind == JsonValueKind.Object)
+                    // image_url é a versão grande; thumbnail_url sempre existe. Nesta conta só
+                    // vem a miniatura, e ela basta para 120px de altura no relatório.
+                    img = Txt(cr, "image_url") ?? Txt(cr, "thumbnail_url");
+
+                porId[id!] = (img, Txt(a, "name"));
+            }
+
+            foreach (var l in linhas)
+            {
+                if (!porId.TryGetValue(l.AnuncioId, out var info)) continue;
+                l.Imagem ??= info.img;
+                if (string.IsNullOrWhiteSpace(l.Nome)) l.Nome = info.nome;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Miniaturas de anúncio indisponíveis");
+        }
     }
 
     /// <summary>Conversas de WhatsApp iniciadas — o desfecho que estes anúncios perseguem.</summary>

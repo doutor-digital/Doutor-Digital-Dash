@@ -151,7 +151,8 @@ public class AnunciosDesempenhoService(
         try
         {
             var url = $"{GraphBase}/act_{contaId}/ads"
-                    + "?limit=250&fields=" + Uri.EscapeDataString("id,name,creative{thumbnail_url,image_url}")
+                    + "?limit=250&fields="
+                    + Uri.EscapeDataString("id,name,creative{thumbnail_url,image_url,video_id,object_type}")
                     + $"&access_token={Uri.EscapeDataString(token)}";
 
             using var resp = await http.GetAsync(url, ct);
@@ -161,6 +162,8 @@ public class AnunciosDesempenhoService(
             if (!doc.RootElement.TryGetProperty("data", out var data)) return;
 
             var porId = new Dictionary<string, (string? img, string? nome)>();
+            var videos = new Dictionary<string, string>();  // adId -> videoId
+
             foreach (var a in data.EnumerateArray())
             {
                 var id = Txt(a, "id");
@@ -168,11 +171,28 @@ public class AnunciosDesempenhoService(
 
                 string? img = null;
                 if (a.TryGetProperty("creative", out var cr) && cr.ValueKind == JsonValueKind.Object)
-                    // image_url é a versão grande; thumbnail_url sempre existe. Nesta conta só
-                    // vem a miniatura, e ela basta para 120px de altura no relatório.
+                {
+                    // image_url é a versão grande do criativo de imagem; thumbnail_url é
+                    // sempre 64px. Anúncio de vídeo não tem nenhuma das duas em tamanho útil —
+                    // o quadro em alta vem do próprio vídeo, logo abaixo.
                     img = Txt(cr, "image_url") ?? Txt(cr, "thumbnail_url");
+                    var vid = Txt(cr, "video_id");
+                    if (!string.IsNullOrWhiteSpace(vid)) videos[id!] = vid!;
+                }
 
                 porId[id!] = (img, Txt(a, "name"));
+            }
+
+            // Quadro em alta dos anúncios de vídeo. Exige pages_read_engagement: sem ela a
+            // Meta responde "Missing permissions" e ficamos com os 64px, que na tela viravam
+            // borrão. Com ela, o mesmo anúncio entrega 720x1280.
+            foreach (var (adId, videoId) in videos)
+            {
+                var quadro = await QuadroDoVideoAsync(http, videoId, token, ct);
+                if (string.IsNullOrWhiteSpace(quadro)) continue;
+
+                var atual = porId[adId];
+                porId[adId] = (quadro, atual.nome);
             }
 
             foreach (var l in linhas)
@@ -187,6 +207,48 @@ public class AnunciosDesempenhoService(
             logger.LogWarning(ex, "Miniaturas de anúncio indisponíveis");
         }
     }
+
+    /// <summary>
+    /// O quadro do vídeo, preferindo o que a Meta marca como preferido e, na falta dele, o
+    /// maior. Silencioso de propósito: sem permissão de Página o card volta ao thumbnail.
+    /// </summary>
+    private static async Task<string?> QuadroDoVideoAsync(
+        HttpClient http, string videoId, string token, CancellationToken ct)
+    {
+        try
+        {
+            var url = $"{GraphBase}/{videoId}"
+                    + "?fields=" + Uri.EscapeDataString("thumbnails{uri,width,height,is_preferred}")
+                    + $"&access_token={Uri.EscapeDataString(token)}";
+
+            using var resp = await http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            if (!doc.RootElement.TryGetProperty("thumbnails", out var th)
+                || !th.TryGetProperty("data", out var itens)
+                || itens.ValueKind != JsonValueKind.Array) return null;
+
+            string? melhor = null;
+            long melhorArea = 0;
+            foreach (var t in itens.EnumerateArray())
+            {
+                var uri = Txt(t, "uri");
+                if (string.IsNullOrWhiteSpace(uri)) continue;
+
+                if (t.TryGetProperty("is_preferred", out var pref)
+                    && pref.ValueKind == JsonValueKind.True) return uri;
+
+                var area = Num(t, "width") * Num(t, "height");
+                if (area > melhorArea) { melhorArea = area; melhor = uri; }
+            }
+            return melhor;
+        }
+        catch { return null; }
+    }
+
+    private static long Num(JsonElement e, string p) =>
+        e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64() : 0;
 
     /// <summary>Conversas de WhatsApp iniciadas — o desfecho que estes anúncios perseguem.</summary>
     private static int Conversas(JsonElement r)

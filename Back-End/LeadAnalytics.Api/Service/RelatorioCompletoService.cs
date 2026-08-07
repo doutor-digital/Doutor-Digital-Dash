@@ -40,6 +40,12 @@ public class RelatorioCompletoService(
     public async Task<RelatorioCompletoDto> GetAsync(
         int tenantId, int? unitId, DateTime de, DateTime ate, CancellationToken ct = default)
     {
+        // A data vem da query string sem fuso (Kind=Unspecified) e o Npgsql recusa:
+        // "Cannot write DateTime with Kind=Unspecified to PostgreSQL type
+        // 'timestamp with time zone'". Sem isto a rota devolve 500 sempre.
+        de = DateTime.SpecifyKind(de, DateTimeKind.Utc);
+        ate = DateTime.SpecifyKind(ate, DateTimeKind.Utc);
+
         var mapa = unitId.HasValue
             ? await _kpiConfig.GetLeadProfileConfigAsync(unitId.Value, ct)
             : new KpiConfigService.LeadProfileFields();

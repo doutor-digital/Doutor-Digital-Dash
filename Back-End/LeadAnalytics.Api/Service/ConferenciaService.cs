@@ -41,6 +41,12 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
     public async Task<ConferenciaDto> GetAsync(
         int tenantId, int? unitId, DateTime de, DateTime ate, CancellationToken ct = default)
     {
+        // A data vem da query string sem fuso (Kind=Unspecified) e o Npgsql recusa:
+        // "Cannot write DateTime with Kind=Unspecified to PostgreSQL type
+        // 'timestamp with time zone'". Sem isto a rota devolve 500 sempre.
+        de = DateTime.SpecifyKind(de, DateTimeKind.Utc);
+        ate = DateTime.SpecifyKind(ate, DateTimeKind.Utc);
+
         var checagens = new List<ChecagemDto>();
 
         var escopo = _db.Leads.AsNoTracking().ExcludeDeleted()

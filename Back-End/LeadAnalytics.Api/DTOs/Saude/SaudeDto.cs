@@ -391,6 +391,8 @@ public class AnuncioLinhaDto
     public string AnuncioId { get; set; } = string.Empty;
     public string? Nome { get; set; }
     public string? Campanha { get; set; }
+    public string? CampanhaId { get; set; }
+    public string? Conjunto { get; set; }
     public string? Imagem { get; set; }
 
     public decimal Gasto { get; set; }

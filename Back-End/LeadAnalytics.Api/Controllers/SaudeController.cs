@@ -20,6 +20,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     ConferenciaService conferencia,
     BuscasService buscas,
     NoShowService noShow,
+    Service.Ads.AnunciosDesempenhoService midia,
     LeadAnalytics.Api.Service.Ads.CampanhasService campanhas,
     RelatorioCompletoService relatorioCompleto, TenantUnitGuard tenantGuard) : ControllerBase
 {
@@ -31,6 +32,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     private readonly ConferenciaService _conferencia = conferencia;
     private readonly BuscasService _buscas = buscas;
     private readonly NoShowService _noShow = noShow;
+    private readonly Service.Ads.AnunciosDesempenhoService _midia = midia;
     private readonly LeadAnalytics.Api.Service.Ads.CampanhasService _campanhas = campanhas;
     private readonly RelatorioCompletoService _relatorioCompleto = relatorioCompleto;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
@@ -172,5 +174,18 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _relatorioCompleto.GetAsync(tid, unitId, de, ate, ct));
+    }
+
+    /// <summary>Cada anúncio do período com gasto, entrega e custo por conversa.</summary>
+    [HttpGet("midia")]
+    public async Task<IActionResult> Midia(
+        [FromQuery] DateOnly de, [FromQuery] DateOnly ate,
+        [FromQuery] int? unitId, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+        if (tenantId is not int tid) return Forbid();
+
+        return Ok(await _midia.GetAsync(tid, unitId, de, ate, ct));
     }
 }

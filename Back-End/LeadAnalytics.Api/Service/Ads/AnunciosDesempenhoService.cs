@@ -94,7 +94,7 @@ public class AnunciosDesempenhoService(
         var http = httpFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(20);
 
-        var campos = "ad_id,ad_name,campaign_name,spend,impressions,reach,clicks,ctr,cpc,actions";
+        var campos = "ad_id,ad_name,campaign_id,campaign_name,adset_name,spend,impressions,reach,clicks,ctr,cpc,actions";
         var janela = $"{{\"since\":\"{de:yyyy-MM-dd}\",\"until\":\"{ate:yyyy-MM-dd}\"}}";
         var url = $"{GraphBase}/act_{contaId}/insights"
                 + $"?level=ad&limit=50&fields={Uri.EscapeDataString(campos)}"
@@ -118,6 +118,8 @@ public class AnunciosDesempenhoService(
                 AnuncioId = Txt(r, "ad_id") ?? "",
                 Nome = Txt(r, "ad_name"),
                 Campanha = Txt(r, "campaign_name"),
+                CampanhaId = Txt(r, "campaign_id"),
+                Conjunto = Txt(r, "adset_name"),
                 Gasto = gasto,
                 Alcance = Lng(r, "reach"),
                 Impressoes = Lng(r, "impressions"),

@@ -22,6 +22,8 @@ namespace LeadAnalytics.Api.Controllers;
 ///   "channel": "whatsapp",
 ///   "status": "active",                       // active | closed | handoff (opcional)
 ///   "contact": { "name": "Maria", "phone": "5563999998888" },
+///   "leadExternalId": "77616",                 // id do lead na Kommo — é o que liga ao card
+
 ///   "summary": "Quer agendar avaliação",      // opcional
 ///   "intent": "agendamento", "sentiment": "positivo",  // opcional
 ///   "handoff": false,                          // true = passou pra humano

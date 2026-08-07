@@ -123,7 +123,14 @@ public class AgentIngestionService(AppDbContext db, ILogger<AgentIngestionServic
         if (payload.EndedAt.HasValue) conv.EndedAt = payload.EndedAt;
         else if (conv.Status == "closed" && conv.EndedAt is null) conv.EndedAt = lastAt ?? now;
 
-        // ─── Vínculo com Contact / Lead pelo telefone ───────────────────────
+        // ─── Vínculo com o Lead ─────────────────────────────────────────────
+        // O id do lead na Kommo vem primeiro porque é exato: o agente conversa
+        // dentro do card, então ele sabe de quem é a conversa. O telefone é o
+        // caminho de trás — aqui a maioria dos leads não tem telefone gravado,
+        // e casar por sufixo de dígitos acerta o lead errado quando erra.
+        if (!string.IsNullOrWhiteSpace(payload.LeadExternalId))
+            await LinkByKommoLeadAsync(conv, tenantId, payload.LeadExternalId!, ct);
+
         if (!string.IsNullOrWhiteSpace(digits))
             await LinkByPhoneAsync(conv, tenantId, phoneRaw!, digits!, ct);
 
@@ -134,6 +141,23 @@ public class AgentIngestionService(AppDbContext db, ILogger<AgentIngestionServic
             isNew ? "criada" : "atualizada", tenantId, unit.Id, externalId, rebuilt.Count, conv.ContactId, conv.LeadId);
 
         return new AgentIngestResult(conv.Id, isNew, rebuilt.Count);
+    }
+
+    /// <summary>
+    /// Liga a conversa ao lead pelo id da Kommo (<c>leads.ExternalId</c>). É o
+    /// vínculo confiável: mesmo número dos dois lados, sem heurística.
+    /// </summary>
+    private async Task LinkByKommoLeadAsync(
+        AgentConversation conv, int tenantId, string leadExternalId, CancellationToken ct)
+    {
+        if (!int.TryParse(leadExternalId.Trim(), out var externalId)) return;
+
+        var leadId = await _db.Leads.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.ExternalId == externalId)
+            .Select(l => (int?)l.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (leadId.HasValue) conv.LeadId = leadId;
     }
 
     private async Task LinkByPhoneAsync(
@@ -197,6 +221,9 @@ public class AgentWebhookPayload
     [JsonPropertyName("status")] public string? Status { get; set; }
 
     [JsonPropertyName("contact")] public AgentContactDto? Contact { get; set; }
+
+    /// <summary>Id do lead na Kommo. É por ele que a conversa acha o lead daqui.</summary>
+    [JsonPropertyName("leadExternalId")] public string? LeadExternalId { get; set; }
 
     [JsonPropertyName("summary")] public string? Summary { get; set; }
     [JsonPropertyName("intent")] public string? Intent { get; set; }

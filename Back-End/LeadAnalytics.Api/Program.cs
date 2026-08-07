@@ -290,6 +290,7 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiAnalyticsService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AiToolRegistry>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.KommoStagesResolver>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.LeadSearchService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ai.AnaliseConversaService>();
 
 // ── Central de Integrações (Meta / Google Ads) ───────────────────────────────
 builder.Services.AddScoped<ProtectedTokenService>();

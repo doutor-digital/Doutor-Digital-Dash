@@ -11,3 +11,4 @@ Back-End/*_ids.txt
 
 # Backup de automações da Kommo: o payload da interface traz JWT de sessão
 Back-End/docs/kommo-imperatriz/backup-*/
+/docs

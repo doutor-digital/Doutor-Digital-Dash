@@ -2276,12 +2276,31 @@ public class LeadService(
                 from x group by 1 order by 2 desc limit 12";
 
             // Tratamento indicado é multiselect: o valor pode vir como array JSON.
+            //
+            // O LATERAL É OBRIGATÓRIO AQUI, NÃO É ESTILO
+            // ------------------------------------------
+            // A versão anterior chamava jsonb_array_elements_text dentro de um CASE, e o
+            // Postgres recusa: "set-returning functions are not allowed in CASE". A consulta
+            // explodia com 500 sempre que a tela era aberta — silenciosamente, porque o erro
+            // só aparecia no log do servidor.
+            //
+            // A saída é o LATERAL com unnest: o CASE devolve um ARRAY (não um conjunto), o
+            // que o Postgres aceita, e o unnest expande fora dele.
+            //
+            // E os dois formatos precisam ser tratados. Medido em Imperatriz: o multiselect
+            // chega como TEXTO com vírgulas — "Cervical longo, Lombar longo" contava como um
+            // tratamento inventado, e Lombar longo aparecia com 205 em vez de 252.
             var sqlTratamento = $@"
                 with v as (
-                  select case when jsonb_typeof(e->'value') = 'array'
-                              then jsonb_array_elements_text(e->'value')
-                              else e->>'value' end as tratamento
-                  from leads l, lateral jsonb_array_elements(l.""CustomFieldsJson"") e
+                  select trim(arr.item) as tratamento
+                  from leads l,
+                       lateral jsonb_array_elements(l.""CustomFieldsJson"") e,
+                       lateral unnest(
+                         case when jsonb_typeof(e->'value') = 'array'
+                              then array(select jsonb_array_elements_text(e->'value'))
+                              else string_to_array(coalesce(e->>'value',''), ',')
+                         end
+                       ) as arr(item)
                   where l.""Id"" in ({idsCsv2}) and l.""CustomFieldsJson"" is not null
                     and lower(e->>'field_name') like '%tratamento%indicado%'
                 )

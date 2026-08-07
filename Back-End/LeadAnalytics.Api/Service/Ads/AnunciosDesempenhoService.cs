@@ -78,6 +78,8 @@ public class AnunciosDesempenhoService(
         foreach (var l in linhas)
         {
             var c = criativos.FirstOrDefault(x => x.AdId == l.AnuncioId);
+            // O cache só entra quando a Meta não deu nada: a miniatura guardada é de 64px e,
+            // esticada na linha, é exatamente o borrão que se quer evitar.
             l.Imagem ??= c?.ThumbnailUrl;
             if (string.IsNullOrWhiteSpace(l.Nome)) l.Nome = c?.Name ?? l.AnuncioId;
         }
@@ -150,15 +152,33 @@ public class AnunciosDesempenhoService(
 
         try
         {
+            // limit=100, não 250: com 250 a Meta responde "Please reduce the amount of data
+            // you're asking for" e devolve ZERO anúncio. O erro é HTTP 200 com corpo de erro,
+            // então passava despercebido e a tela caía na miniatura velha de 64px — o "ainda
+            // embaçado" que ninguém conseguia explicar.
             var url = $"{GraphBase}/act_{contaId}/ads"
-                    + "?limit=250&fields="
+                    + "?limit=100&fields="
                     + Uri.EscapeDataString("id,name,creative{thumbnail_url,image_url,video_id,object_type}")
                     + $"&access_token={Uri.EscapeDataString(token)}";
 
             using var resp = await http.GetAsync(url, ct);
-            if (!resp.IsSuccessStatusCode) return;
+            if (!resp.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Listagem de anúncios falhou: HTTP {Status}", (int)resp.StatusCode);
+                return;
+            }
 
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+
+            // A Meta devolve erro DENTRO de um 200. Sem olhar aqui, a falha vira silêncio e a
+            // tela mostra imagem velha sem ninguém saber por quê.
+            if (doc.RootElement.TryGetProperty("error", out var erro))
+            {
+                logger.LogWarning("Listagem de anúncios recusada pela Meta: {Msg}",
+                    erro.TryGetProperty("message", out var m) ? m.GetString() : "sem mensagem");
+                return;
+            }
+
             if (!doc.RootElement.TryGetProperty("data", out var data)) return;
 
             var porId = new Dictionary<string, (string? img, string? nome)>();

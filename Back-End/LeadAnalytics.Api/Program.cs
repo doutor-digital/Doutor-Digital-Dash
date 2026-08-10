@@ -253,6 +253,7 @@ builder.Services.AddScoped<QualificationBackfillService>();
 builder.Services.AddScoped<ConsultasBackfillService>();
 builder.Services.AddScoped<KommoConversationsImporter>();
 builder.Services.AddScoped<AgentIngestionService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Asaas.AsaasIngestionService>();
 builder.Services.AddHttpClient<KommoApiClient>(c =>
 {
     c.Timeout = TimeSpan.FromSeconds(30);

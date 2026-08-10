@@ -16,7 +16,7 @@ namespace LeadAnalytics.Api.Controllers;
 ///  • DELETE /api/admin/kpi-exclusions  body { unit_id, kpi_key, lead_id }
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/kpi-exclusions")]
 public class AdminKpiExclusionsController(
     AppDbContext db,

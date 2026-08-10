@@ -22,7 +22,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// no Kommo (ex.: "Edileusa 01/02/25"). Mesma estratégia do Cloudia CSV import.
 /// </summary>
 [ApiController]
-[AllowAnonymous] // alinhado com AdminKpiExclusionsController (admin-only é resolvido por unidade)
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/kpi-reconcile")]
 public class AdminKpiReconcileController(
     AppDbContext db,

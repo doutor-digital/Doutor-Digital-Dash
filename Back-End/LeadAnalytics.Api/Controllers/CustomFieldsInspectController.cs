@@ -20,9 +20,11 @@ namespace LeadAnalytics.Api.Controllers;
 /// Pode ficar em prod — é só leitura, autenticado por tenant.
 /// </summary>
 [ApiController]
-// ⚠️ TEMPORÁRIO: [AllowAnonymous] só pra debug ao vivo do bug dos campos
-// customizados. REVERTER pra [Authorize] depois que terminar o diagnóstico.
-[AllowAnonymous]
+// Já esteve [AllowAnonymous] durante um diagnóstico e ficou assim em produção:
+// qualquer pessoa com a URL lia nome, telefone e campos de lead de qualquer
+// unidade, sem token. Rota de diagnóstico devolve dado de paciente igual às
+// outras — o "é só leitura" não a torna pública.
+[Authorize]
 [Route("api/admin/custom-fields")]
 public class CustomFieldsInspectController(
     AppDbContext db,

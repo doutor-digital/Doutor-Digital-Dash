@@ -14,7 +14,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// (linhas "legacy" datadas por updated_at são excluídas das contagens).
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/agendados-backfill")]
 public class AdminAgendadosBackfillController(
     AppDbContext db,

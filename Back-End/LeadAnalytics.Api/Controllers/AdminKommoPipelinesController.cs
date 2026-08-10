@@ -16,7 +16,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// Reverter pra [Authorize] junto com os outros endpoints de debug.
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/kommo-pipelines")]
 public class AdminKommoPipelinesController(
     AppDbContext db,

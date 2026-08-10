@@ -15,7 +15,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// Uso: GET /api/admin/lead-count-diagnostic/{unitId}?dateFrom=2026-06-01&dateTo=2026-06-12
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/lead-count-diagnostic")]
 public class AdminLeadCountDiagnosticController(AppDbContext db) : ControllerBase
 {

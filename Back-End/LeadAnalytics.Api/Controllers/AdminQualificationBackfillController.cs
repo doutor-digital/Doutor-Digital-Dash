@@ -16,7 +16,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// Uso: POST /api/admin/qualification-backfill/{unitId}?maxPages=100
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/qualification-backfill")]
 public class AdminQualificationBackfillController(
     AppDbContext db,

@@ -238,7 +238,8 @@
       "Bash(scp -i ~/.ssh/doutordigital_vps -o StrictHostKeyChecking=no -q n2.NOVO.json root@89.116.214.130:/root/)",
       "Bash(gh workflow *)",
       "Bash(cd /home/joaoof/Downloads/Doutor-Digital-Dash/Back-End; grep -n \"public\" LeadAnalytics.Api/DTOs/Ads/AdsSpendIngestRequest.cs 2>/dev/null | sed -n 8,16p || sed -n 19,40p LeadAnalytics.Api/DTOs/Ads/*.cs | head -20)",
-      "Bash(scp -i ~/.ssh/doutordigital_vps -o StrictHostKeyChecking=no -q g_nodes.json g_conn.json root@89.116.214.130:/root/)"
+      "Bash(scp -i ~/.ssh/doutordigital_vps -o StrictHostKeyChecking=no -q g_nodes.json g_conn.json root@89.116.214.130:/root/)",
+      "Bash(rsync -az -e 'ssh -i /home/joaoof/.ssh/doutordigital_vps -o StrictHostKeyChecking=no' --exclude bin/ --exclude obj/ --exclude .git/ ./ root@89.116.214.130:/opt/doutordigital/api-src/)"
     ],
     "additionalDirectories": [
       "/home/joaoof/Downloads/Doutor-Digital-Dash/Back-End",

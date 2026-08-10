@@ -14,7 +14,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// antigos no card agora". Leads novos já são populados pelo webhook ao vivo.
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/consultas-backfill")]
 public class AdminConsultasBackfillController(
     ConsultasBackfillService backfill,

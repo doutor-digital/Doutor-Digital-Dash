@@ -14,7 +14,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// mas o backfill aqui pega o que veio antes do deploy ou se o webhook falhou.
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/resgate-backfill")]
 public class AdminResgateBackfillController(
     AppDbContext db,

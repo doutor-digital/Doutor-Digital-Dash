@@ -16,7 +16,7 @@ namespace LeadAnalytics.Api.Controllers;
 /// ⚠️ <c>[AllowAnonymous]</c> — remover quando o caso da ITZ estiver fechado.
 /// </summary>
 [ApiController]
-[AllowAnonymous]
+[Authorize]  // era anônimo em produção: rota de admin exposta a quem tivesse a URL
 [Route("api/admin/kommo-stage-debug")]
 public class KommoStageDebugController(
     AppDbContext db,

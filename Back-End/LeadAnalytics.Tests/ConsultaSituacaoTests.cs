@@ -87,4 +87,35 @@ public class ConsultaSituacaoTests
         Assert.Equal(string.Empty, ConsultaSituacaoSyncService.ChaveNome(null));
         Assert.Equal(string.Empty, ConsultaSituacaoSyncService.ChaveNome("   "));
     }
+
+    // ─── Telefone ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Telefone_casa_apesar_de_formato_ddi_e_nono_digito()
+    {
+        // A franquia grava "+55 99 98199-1934"; a Kommo, "9998199 1934". O que os
+        // dois sempre têm em comum são os 8 últimos dígitos.
+        var a = ConsultaSituacaoSyncService.ChaveTelefone("+55 99 98199-1934");
+        var b = ConsultaSituacaoSyncService.ChaveTelefone("9998199 1934");
+        Assert.Equal("81991934", a);
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void Telefones_de_pessoas_diferentes_nao_casam()
+    {
+        Assert.NotEqual(
+            ConsultaSituacaoSyncService.ChaveTelefone("+5599981991934"),
+            ConsultaSituacaoSyncService.ChaveTelefone("+5599981849849"));
+    }
+
+    [Fact]
+    public void Telefone_curto_demais_nao_vira_chave()
+    {
+        // Ramal ou número truncado casaria com gente demais. Melhor não ter chave
+        // do que ter uma que confirma qualquer um.
+        Assert.Null(ConsultaSituacaoSyncService.ChaveTelefone("3524"));
+        Assert.Null(ConsultaSituacaoSyncService.ChaveTelefone(""));
+        Assert.Null(ConsultaSituacaoSyncService.ChaveTelefone(null));
+    }
 }

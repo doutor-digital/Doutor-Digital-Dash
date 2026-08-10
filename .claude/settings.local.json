@@ -241,7 +241,8 @@
       "Bash(scp -i ~/.ssh/doutordigital_vps -o StrictHostKeyChecking=no -q g_nodes.json g_conn.json root@89.116.214.130:/root/)",
       "Bash(rsync -az -e 'ssh -i /home/joaoof/.ssh/doutordigital_vps -o StrictHostKeyChecking=no' --exclude bin/ --exclude obj/ --exclude .git/ ./ root@89.116.214.130:/opt/doutordigital/api-src/)",
       "Bash(sed -i '255a builder.Services.AddScoped<LeadAnalytics.Api.Service.Asaas.AsaasIngestionService>\\(\\);' LeadAnalytics.Api/Program.cs && dotnet build LeadAnalytics.Api/LeadAnalytics.Api.csproj -v q --nologo 2>&1 | grep -E \"error\" | sort -u | head -8; echo BUILD_DONE)",
-      "Bash(dotnet test *)"
+      "Bash(dotnet test *)",
+      "Bash(scp -q -i ~/.ssh/doutordigital_vps /tmp/q.sql root@89.116.214.130:/tmp/q.sql)"
     ],
     "additionalDirectories": [
       "/home/joaoof/Downloads/Doutor-Digital-Dash/Back-End",

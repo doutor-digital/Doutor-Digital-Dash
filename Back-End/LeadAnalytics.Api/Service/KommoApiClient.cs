@@ -52,6 +52,22 @@ public class KommoApiClient
         return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
     }
 
+    /// <summary>
+    /// Busca leads específicos por id. Existe porque o telefone do paciente não fica
+    /// no lead e sim no contato ligado a ele — e o contato só aparece com
+    /// <c>with=contacts</c>. Sem isto não há como confirmar identidade por telefone.
+    /// </summary>
+    public async Task<KommoLeadsPageResponse?> GetLeadsByIdsAsync(
+        string subdomainOrHost, string token, IEnumerable<long> ids, CancellationToken ct)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return new KommoLeadsPageResponse();
+
+        var qs = string.Join("&", idList.Select(id => $"filter[id][]={id}"));
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?{qs}&limit=250&with=contacts";
+        return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
+    }
+
     public async Task<KommoContactsPageResponse?> GetContactsByIdsAsync(
         string subdomainOrHost, string token, IEnumerable<long> ids, CancellationToken ct)
     {

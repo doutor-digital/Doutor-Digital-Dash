@@ -24,6 +24,7 @@ public class SpineController(
     SpineTokenStore tokens,
     SpineApiClient client,
     FranquiaTratamentosService tratamentos,
+    ConsultaSituacaoSyncService consultaSync,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
 {
@@ -34,6 +35,7 @@ public class SpineController(
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly FranquiaTratamentosService _tratamentos = tratamentos;
+    private readonly ConsultaSituacaoSyncService _consultaSync = consultaSync;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
 
@@ -580,6 +582,40 @@ public class SpineController(
     }
 
     /// <summary>Healthcheck da API do Doutor Hérnia — útil pra Central de Integrações.</summary>
+    /// <summary>
+    /// Leva a situação da consulta (atendeu, faltou, remarcou, desmarcou) e a categoria
+    /// do sistema da franquia para o cartão do lead na Kommo. Use <c>simular=true</c>
+    /// para ver o que aconteceria sem escrever nada.
+    /// </summary>
+    [HttpPost("consultas/sincronizar")]
+    public async Task<IActionResult> SincronizarConsultas(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        [FromQuery] bool simular = false,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var ini = de ?? fim.AddDays(-7);
+
+        try
+        {
+            return Ok(await _consultaSync.SincronizarAsync(unitId, ini, fim, simular, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
+        catch (SpineApiException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao sincronizar consultas (unidade {UnitId})", unitId);
+            return BadGateway(ex);
+        }
+    }
+
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken ct = default)
     {

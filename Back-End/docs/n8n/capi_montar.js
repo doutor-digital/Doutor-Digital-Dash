@@ -63,5 +63,10 @@ for (const item of $input.all()) {
   }});
 }
 
-// Descartes saem pela segunda porta, para virarem linha na tabela de cobertura.
-return [saida, descartes.map((x) => ({ json: x }))];
+// O nó Code do n8n tem UMA saída só — devolver [aprovados, descartados] faz ele
+// ler uma lista de listas e recusar tudo. Sai uma lista única, marcada com
+// _aprovado, e o IF seguinte separa os dois caminhos.
+return [
+  ...saida.map((x) => ({ json: { ...x.json, _aprovado: true } })),
+  ...descartes.map((x) => ({ json: { ...x, _aprovado: false } })),
+];

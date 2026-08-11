@@ -179,7 +179,7 @@
   },
   {
    "parameters": {
-    "jsCode": "// ═══ MONTA O EVENTO E DECIDE SE ELE SAI ═══════════════════════════════════\n// Ponto único de montagem: os três gatilhos convergem aqui. Triplicar esta\n// lógica seria garantir que as três cópias divergissem na primeira correção.\n//\n// Três campos precisam andar juntos para a Meta casar o evento com o anúncio:\n// action_source 'business_messaging', messaging_channel 'whatsapp' e o\n// ctwa_clid dentro de user_data. Faltando um, o evento entra e não atribui —\n// e o sintoma é o pior possível: aparece \"recebido\" no Gerenciador, com zero\n// atribuição, o que parece funcionamento.\n\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\nconst descartes = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const unidade = cfg.unidades[String(d.pipeline_id)] || null;\n\n  // Filtro de unidade primeiro, antes de qualquer processamento.\n  if (!unidade) {\n    descartes.push({ motivo: 'unidade_fora_do_mapa', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, pipeline_id: String(d.pipeline_id || ''), detalhe: d });\n    continue;\n  }\n\n  // Sem clique não há o que atribuir. Não é erro — é lead de outra origem.\n  if (!d.ctwa_clid) {\n    descartes.push({ motivo: 'sem_ctwa_clid', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, telefone: d.telefone, detalhe: d });\n    continue;\n  }\n\n  const quando = d.event_time || agora;\n  if (agora - quando > cfg.janelaDias * 86400) {\n    descartes.push({ motivo: 'fora_da_janela_7d', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, detalhe: { quando, agora } });\n    continue;\n  }\n\n  const evento = {\n    event_name: d.event_name,\n    event_time: quando,\n    action_source: 'business_messaging',\n    messaging_channel: 'whatsapp',\n    event_id: d.event_id,\n    user_data: {\n      ctwa_clid: d.ctwa_clid,\n      whatsapp_business_account_id: unidade.wabaId,\n    },\n  };\n  // Valor só em Purchase, e só quando existe. Mandar 0 ensina a Meta que a\n  // venda vale zero.\n  if (d.event_name === EVENTOS.compra && Number(d.valor) > 0) {\n    evento.custom_data = { currency: 'BRL', value: Number(d.valor) };\n  }\n\n  saida.push({ json: {\n    ...d,\n    unidade: unidade.nome,\n    pixel: unidade.pixel,\n    corpo: { data: [evento], ...(cfg.testEventCode ? { test_event_code: cfg.testEventCode } : {}) },\n  }});\n}\n\n// Descartes saem pela segunda porta, para virarem linha na tabela de cobertura.\nreturn [saida, descartes.map((x) => ({ json: x }))];\n"
+    "jsCode": "// ═══ MONTA O EVENTO E DECIDE SE ELE SAI ═══════════════════════════════════\n// Ponto único de montagem: os três gatilhos convergem aqui. Triplicar esta\n// lógica seria garantir que as três cópias divergissem na primeira correção.\n//\n// Três campos precisam andar juntos para a Meta casar o evento com o anúncio:\n// action_source 'business_messaging', messaging_channel 'whatsapp' e o\n// ctwa_clid dentro de user_data. Faltando um, o evento entra e não atribui —\n// e o sintoma é o pior possível: aparece \"recebido\" no Gerenciador, com zero\n// atribuição, o que parece funcionamento.\n\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\nconst descartes = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const unidade = cfg.unidades[String(d.pipeline_id)] || null;\n\n  // Filtro de unidade primeiro, antes de qualquer processamento.\n  if (!unidade) {\n    descartes.push({ motivo: 'unidade_fora_do_mapa', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, pipeline_id: String(d.pipeline_id || ''), detalhe: d });\n    continue;\n  }\n\n  // Sem clique não há o que atribuir. Não é erro — é lead de outra origem.\n  if (!d.ctwa_clid) {\n    descartes.push({ motivo: 'sem_ctwa_clid', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, telefone: d.telefone, detalhe: d });\n    continue;\n  }\n\n  const quando = d.event_time || agora;\n  if (agora - quando > cfg.janelaDias * 86400) {\n    descartes.push({ motivo: 'fora_da_janela_7d', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, detalhe: { quando, agora } });\n    continue;\n  }\n\n  const evento = {\n    event_name: d.event_name,\n    event_time: quando,\n    action_source: 'business_messaging',\n    messaging_channel: 'whatsapp',\n    event_id: d.event_id,\n    user_data: {\n      ctwa_clid: d.ctwa_clid,\n      whatsapp_business_account_id: unidade.wabaId,\n    },\n  };\n  // Valor só em Purchase, e só quando existe. Mandar 0 ensina a Meta que a\n  // venda vale zero.\n  if (d.event_name === EVENTOS.compra && Number(d.valor) > 0) {\n    evento.custom_data = { currency: 'BRL', value: Number(d.valor) };\n  }\n\n  saida.push({ json: {\n    ...d,\n    unidade: unidade.nome,\n    pixel: unidade.pixel,\n    corpo: { data: [evento], ...(cfg.testEventCode ? { test_event_code: cfg.testEventCode } : {}) },\n  }});\n}\n\n// O nó Code do n8n tem UMA saída só — devolver [aprovados, descartados] faz ele\n// ler uma lista de listas e recusar tudo. Sai uma lista única, marcada com\n// _aprovado, e o IF seguinte separa os dois caminhos.\nreturn [\n  ...saida.map((x) => ({ json: { ...x.json, _aprovado: true } })),\n  ...descartes.map((x) => ({ json: { ...x, _aprovado: false } })),\n];\n"
    },
    "name": "Montar evento",
    "type": "n8n-nodes-base.code",
@@ -359,6 +359,25 @@
     1620,
     -220
    ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "boolean": [
+      {
+       "value1": "={{ $json._aprovado }}",
+       "value2": true
+      }
+     ]
+    }
+   },
+   "name": "Passou nas três checagens?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 1,
+   "position": [
+    60,
+    0
+   ]
   }
  ],
  "connections": {
@@ -508,14 +527,7 @@
    "main": [
     [
      {
-      "node": "Reservar event_id",
-      "type": "main",
-      "index": 0
-     }
-    ],
-    [
-     {
-      "node": "Registrar descarte",
+      "node": "Passou nas três checagens?",
       "type": "main",
       "index": 0
      }
@@ -595,6 +607,24 @@
      }
     ],
     []
+   ]
+  },
+  "Passou nas três checagens?": {
+   "main": [
+    [
+     {
+      "node": "Reservar event_id",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Registrar descarte",
+      "type": "main",
+      "index": 0
+     }
+    ]
    ]
   }
  },

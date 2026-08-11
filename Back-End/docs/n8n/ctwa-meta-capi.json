@@ -167,7 +167,10 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "-- Acha o clique pelo telefone, tentando as variantes brasileiras em ordem e\n-- caindo no sufixo de 8 dígitos só no fim.\nSELECT ctwa_clid, telefone, primeiro_contato_em, phone_number_id\nFROM ctwa_eventos\nWHERE regexp_replace(telefone, '\\D', '', 'g') = ANY($1::text[])\n   OR regexp_replace(telefone, '\\D', '', 'g') LIKE '%' || $2\nORDER BY primeiro_contato_em ASC\nLIMIT 1;"
+    "query": "SELECT ctwa_clid, telefone, primeiro_contato_em, phone_number_id\nFROM ctwa_eventos\nWHERE regexp_replace(telefone, '\\D', '', 'g') = ANY(string_to_array($1, '|'))\n   OR regexp_replace(telefone, '\\D', '', 'g') LIKE '%' || $2\nORDER BY primeiro_contato_em ASC LIMIT 1;",
+    "options": {
+     "queryReplacement": "={{ $json.variantes.join('|') }}, {{ $json.sufixo8 }}"
+    }
    },
    "name": "Buscar ctwa_clid",
    "type": "n8n-nodes-base.postgres",
@@ -192,7 +195,10 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "-- Reserva ANTES de chamar a Meta. Se não voltar linha, outro webhook\n-- já mandou este evento e a execução para aqui.\nINSERT INTO capi_envios (event_id, event_name, unidade, pixel_id, ctwa_clid, telefone, kommo_lead_id, wamid, valor, status)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'reservado')\nON CONFLICT (event_id) DO NOTHING\nRETURNING id, event_id;"
+    "query": "-- Reserva ANTES de chamar a Meta. Se não voltar linha, outro webhook\n-- já mandou este evento e a execução para aqui.\nINSERT INTO capi_envios (event_id, event_name, unidade, pixel_id, ctwa_clid, telefone, kommo_lead_id, wamid, valor, status)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'reservado')\nON CONFLICT (event_id) DO NOTHING\nRETURNING id, event_id;",
+    "options": {
+     "queryReplacement": "={{ $json.event_id }}, {{ $json.event_name }}, {{ $json.unidade }}, {{ $json.pixel }}, {{ $json.ctwa_clid }}, {{ $json.telefone || '' }}, {{ $json.kommo_lead_id || '' }}, {{ $json.wamid || '' }}, {{ $json.valor || 0 }}"
+    }
    },
    "name": "Reservar event_id",
    "type": "n8n-nodes-base.postgres",
@@ -277,7 +283,10 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "UPDATE capi_envios SET status=$2, http_status=$3, resposta=$4::jsonb, enviado_em=now() WHERE event_id=$1;"
+    "query": "UPDATE capi_envios SET status=$2, http_status=$3, resposta=$4::jsonb, enviado_em=now() WHERE event_id=$1;",
+    "options": {
+     "queryReplacement": "={{ $json.event_id }}, {{ $json.statusCode == 200 ? 'enviado' : 'falhou' }}, {{ $json.statusCode }}, {{ JSON.stringify($json.body || {}) }}"
+    }
    },
    "name": "Marcar enviado",
    "type": "n8n-nodes-base.postgres",
@@ -290,7 +299,10 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "UPDATE capi_envios SET status='simulado', enviado_em=now() WHERE event_id=$1;"
+    "query": "UPDATE capi_envios SET status='simulado', enviado_em=now() WHERE event_id=$1;",
+    "options": {
+     "queryReplacement": "={{ $json.event_id }}"
+    }
    },
    "name": "Marcar simulado",
    "type": "n8n-nodes-base.postgres",
@@ -303,7 +315,10 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "INSERT INTO capi_descartes (motivo, event_name, kommo_lead_id, telefone, pipeline_id, detalhe)\nVALUES ($1,$2,$3,$4,$5,$6::jsonb);"
+    "query": "INSERT INTO capi_descartes (motivo, event_name, kommo_lead_id, telefone, pipeline_id, detalhe)\nVALUES ($1,$2,$3,$4,$5,$6::jsonb);",
+    "options": {
+     "queryReplacement": "={{ $json.motivo }}, {{ $json.event_name || '' }}, {{ $json.kommo_lead_id || '' }}, {{ $json.telefone || '' }}, {{ $json.pipeline_id || '' }}, {{ JSON.stringify($json.detalhe || {}) }}"
+    }
    },
    "name": "Registrar descarte",
    "type": "n8n-nodes-base.postgres",

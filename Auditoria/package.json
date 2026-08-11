@@ -1,0 +1,19 @@
+{
+  "name": "auditoria-prontuarios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Auditoria de prontuários fisioterapêuticos — unidade IMPERATRIZ - MA",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
+    "scrape": "npm run build && node dist/scrape.js",
+    "serve": "npm run build && node dist/serve.js"
+  },
+  "dependencies": {
+    "linkedom": "^0.18.13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
+  }
+}

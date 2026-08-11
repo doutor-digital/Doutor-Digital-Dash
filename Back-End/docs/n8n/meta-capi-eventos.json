@@ -1,0 +1,246 @@
+{
+ "name": "Meta CAPI — Eventos de conversão (multi-unidade)",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "minutes",
+       "minutesInterval": 3
+      }
+     ]
+    }
+   },
+   "name": "A cada 3 min",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1,
+   "position": [
+    -1200,
+    -200
+   ]
+  },
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "kommo-capi",
+    "responseMode": "lastNode"
+   },
+   "name": "Webhook Kommo (funil)",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -1200,
+    200
+   ],
+   "webhookId": "kommo-capi"
+  },
+  {
+   "parameters": {
+    "jsCode": "// ─── Config: resolve a unidade e o pixel ────────────────────────────────────\n//\n// O multi-tenant sai do phone_number_id: cada unidade tem o seu número de\n// WhatsApp, e ele vem em toda mensagem. Assim o mesmo fluxo serve a rede inteira\n// sem variável por unidade — acrescentar clínica é acrescentar uma linha no mapa.\n//\n// META_CAPI_UNIDADES é um JSON no ambiente do n8n, por exemplo:\n// {\"728123456789012\":{\"unidade\":\"imperatriz\",\"pixel\":\"1076495867156119\"}}\n//\n// Se o mapa não tiver o número, o evento NÃO é enviado. Mandar para o pixel\n// errado suja o aprendizado da campanha de outra clínica, e isso não tem desfazer.\n\nconst mapa = (() => {\n  try { return JSON.parse($env.META_CAPI_UNIDADES || '{}'); }\n  catch { return {}; }\n})();\n\nconst cfg = {\n  mapa,\n  token: $env.META_CAPI_TOKEN || '',\n  graphVersion: $env.META_GRAPH_VERSION || 'v23.0',\n  // Pixel único de fallback, para quem roda uma clínica só.\n  pixelPadrao: $env.META_PIXEL_ID || '',\n  // Código de teste do Gerenciador de Eventos. Com ele preenchido, o evento\n  // aparece em \"Eventos de teste\" e NÃO entra na otimização — é o que permite\n  // conferir antes de valer para a campanha.\n  testEventCode: $env.META_CAPI_TEST_CODE || '',\n  // Janela de atribuição do clique no WhatsApp. Evento mais velho que isso a\n  // Meta aceita mas não credita ao anúncio; enviar só gera ruído.\n  janelaDias: Number($env.META_CAPI_JANELA_DIAS || 7),\n};\n\n// Cada etapa da Kommo vira um evento do funil da Meta.\nconst EVENTOS = {\n  mensagem:           'ViewContent',\n  lead_quente:        'Lead',\n  agendamento:        'AddToCart',\n  consulta_realizada: 'InitiateCheckout',\n  compra:             'Purchase',\n};\n\nreturn [{ json: { cfg, EVENTOS } }];\n"
+   },
+   "name": "Config",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -960,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "SELECT e.wamid, e.telefone_digits, e.phone_number_id, e.ctwa_clid, e.primeiro_contato_em\nFROM ctwa_eventos e\nLEFT JOIN capi_envios c ON c.event_id = 'vc-' || e.wamid\nWHERE e.ctwa_clid IS NOT NULL AND c.id IS NULL\n  AND e.primeiro_contato_em > now() - interval '7 days'\nORDER BY e.primeiro_contato_em LIMIT 200;"
+   },
+   "name": "Cliques ainda não enviados",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    -720,
+    -200
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "\n// Monta o ViewContent a partir dos cliques que o rastreio já gravou.\n// Lê de ctwa_eventos em vez de tocar no fluxo que roda — o rastreio continua\n// intocado e este aqui só observa o que ele produziu.\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\n\nfor (const item of $input.all()) {\n  const e = item.json;\n  const destino = cfg.mapa[String(e.phone_number_id)] || null;\n  const pixel = destino?.pixel || cfg.pixelPadrao;\n\n  if (!pixel) { continue; }              // sem pixel não há para onde mandar\n  if (!e.ctwa_clid) { continue; }        // sem clique não há o que atribuir\n\n  const quando = Math.floor(new Date(e.primeiro_contato_em).getTime() / 1000);\n  if (agora - quando > cfg.janelaDias * 86400) { continue; }  // fora da janela\n\n  saida.push({ json: {\n    pixel,\n    unidade: destino?.unidade || 'desconhecida',\n    event_id: `vc-${e.wamid}`,\n    event_name: EVENTOS.mensagem,\n    event_time: quando,\n    ctwa_clid: e.ctwa_clid,\n    telefone: e.telefone_digits,\n    wamid: e.wamid,\n    kommo_lead_id: null,\n    corpo: {\n      data: [{\n        event_name: EVENTOS.mensagem,\n        event_time: quando,\n        event_id: `vc-${e.wamid}`,\n        action_source: 'business_messaging',\n        messaging_channel: 'whatsapp',\n        user_data: { ctwa_clid: e.ctwa_clid },\n      }],\n      ...(cfg.testEventCode ? { test_event_code: cfg.testEventCode } : {}),\n    },\n  }});\n}\nreturn saida;\n"
+   },
+   "name": "Montar ViewContent",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -480,
+    -200
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O webhook da Kommo chega em notação de colchetes; este nó normaliza\n// e devolve { evento, kommo_lead_id, ctwa_clid, phone_number_id, valor }.\n// Preencher conforme o mapa de etapas da unidade.\nreturn $input.all();"
+   },
+   "name": "Ler etapa e clid do cartão",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -720,
+    200
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "\n// Traduz a mudança de etapa na Kommo num evento do funil da Meta.\n//\n// A regra dura: sem ctwa_clid no cartão, NÃO envia. O lead que não veio de\n// anúncio virando Purchase no pixel ensina a Meta a otimizar para a audiência\n// errada — é pior que não enviar nada.\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d.ctwa_clid) continue;\n  const pixel = (cfg.mapa[String(d.phone_number_id)] || {}).pixel || cfg.pixelPadrao;\n  if (!pixel || !d.evento) continue;\n\n  const nome = EVENTOS[d.evento];\n  if (!nome) continue;   // etapa sem evento correspondente: não inventa\n\n  const corpo = {\n    data: [{\n      event_name: nome,\n      event_time: agora,\n      event_id: `${d.evento}-${d.kommo_lead_id}`,\n      action_source: 'business_messaging',\n      messaging_channel: 'whatsapp',\n      user_data: { ctwa_clid: d.ctwa_clid },\n      ...(d.valor ? { custom_data: { currency: 'BRL', value: Number(d.valor) } } : {}),\n    }],\n    ...(cfg.testEventCode ? { test_event_code: cfg.testEventCode } : {}),\n  };\n\n  saida.push({ json: {\n    pixel, unidade: d.unidade || 'desconhecida',\n    event_id: `${d.evento}-${d.kommo_lead_id}`,\n    event_name: nome, event_time: agora,\n    ctwa_clid: d.ctwa_clid, telefone: d.telefone || null,\n    wamid: null, kommo_lead_id: String(d.kommo_lead_id), corpo,\n  }});\n}\nreturn saida;\n"
+   },
+   "name": "Montar evento do funil",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -480,
+    200
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "=https://graph.facebook.com/{{ $('Config').first().json.cfg.graphVersion }}/{{ $json.pixel }}/events",
+    "sendQuery": true,
+    "queryParameters": {
+     "parameters": [
+      {
+       "name": "access_token",
+       "value": "={{ $('Config').first().json.cfg.token }}"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+    "options": {
+     "response": {
+      "response": {
+       "neverError": true,
+       "fullResponse": true
+      }
+     }
+    }
+   },
+   "name": "Enviar para a Meta",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1,
+   "position": [
+    -240,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "INSERT INTO capi_envios (event_id, event_name, unidade, pixel_id, ctwa_clid, telefone, kommo_lead_id, wamid, status, http_status, resposta)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)\nON CONFLICT (event_id) DO NOTHING;"
+   },
+   "name": "Registrar envio",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    0,
+    0
+   ]
+  }
+ ],
+ "connections": {
+  "A cada 3 min": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Webhook Kommo (funil)": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Config": {
+   "main": [
+    [
+     {
+      "node": "Cliques ainda não enviados",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "Ler etapa e clid do cartão",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Cliques ainda não enviados": {
+   "main": [
+    [
+     {
+      "node": "Montar ViewContent",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Montar ViewContent": {
+   "main": [
+    [
+     {
+      "node": "Enviar para a Meta",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ler etapa e clid do cartão": {
+   "main": [
+    [
+     {
+      "node": "Montar evento do funil",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Montar evento do funil": {
+   "main": [
+    [
+     {
+      "node": "Enviar para a Meta",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Enviar para a Meta": {
+   "main": [
+    [
+     {
+      "node": "Registrar envio",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "active": false,
+ "id": "capiMetaEventos1"
+}

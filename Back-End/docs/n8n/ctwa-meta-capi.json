@@ -1,0 +1,605 @@
+{
+ "id": "capiCtwaImper01",
+ "name": "CTWA → Meta CAPI — Conversões (Imperatriz)",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "minutes",
+       "minutesInterval": 5
+      }
+     ]
+    }
+   },
+   "name": "A cada 5 min",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1,
+   "position": [
+    -1500,
+    -300
+   ]
+  },
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "kommo-lead-quente",
+    "responseMode": "onReceived"
+   },
+   "name": "Kommo — lead atualizado",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -1500,
+    0
+   ],
+   "webhookId": "kommo-lead-quente"
+  },
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "kommo-etapa",
+    "responseMode": "onReceived"
+   },
+   "name": "Kommo — etapa alterada",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -1500,
+    300
+   ],
+   "webhookId": "kommo-etapa"
+  },
+  {
+   "parameters": {
+    "jsCode": "// ═══ CONFIGURAÇÃO ÚNICA ═══════════════════════════════════════════════════\n// Todo id vive aqui. Id espalhado pelo fluxo é o que faz ninguém ter coragem\n// de mexer depois — e é o que transforma \"adicionar uma unidade\" em caçada.\n\nconst cfg = {\n  // ── Destino ──────────────────────────────────────────────────────────────\n  graphVersion: $env.META_GRAPH_VERSION || 'v21.0',\n  token:        $env.META_CAPI_TOKEN || '',\n\n  // Código do Gerenciador de Eventos. Com ele preenchido o evento aparece em\n  // \"Eventos de teste\" e NÃO entra na otimização. Comece com ele, apague depois.\n  testEventCode: $env.META_CAPI_TEST_CODE || '',\n\n  // Roda o fluxo inteiro e grava no log SEM chamar a Meta. Serve para conferir\n  // o casamento de telefone e o mapa de etapas antes de valer para a campanha.\n  modoTeste: String($env.META_CAPI_DRY_RUN || 'false').toLowerCase() === 'true',\n\n  // ── Unidades ─────────────────────────────────────────────────────────────\n  // Chave = pipeline_id do funil. É o filtro que protege o pixel: conversão de\n  // outra unidade caindo no pixel de Imperatriz contamina a otimização das\n  // campanhas dela, e o estrago é silencioso — ninguém vê, a campanha só piora.\n  unidades: {\n    '14091100': {\n      nome: 'imperatriz',\n      pixel: '1076495867156119',\n      wabaId: '1558318502323307',\n      phoneNumberId: '1192220830640227',\n    },\n  },\n\n  // ── Mapa de etapas → evento (Imperatriz) ─────────────────────────────────\n  etapas: {\n    '108773008': 'AddToCart',          // AGENDADO\n    '108773012': 'InitiateCheckout',   // COMPARECEU\n    '142':       'Purchase',           // GANHO / CONCLUÍDO\n  },\n\n  // ── Lead quente ──────────────────────────────────────────────────────────\n  // Não é mudança de etapa: é o campo de qualificação. O webhook de lead\n  // atualizado não traz custom_fields de forma confiável, então o fluxo relê o\n  // lead na API e procura por este field_id.\n  qualificacao: {\n    fieldId: Number($env.KOMMO_CF_QUALIFICACAO || 2440809),\n    // \"Quente\" = 1832805. Numérico também aceito, via valorMinimo.\n    enumQuente: Number($env.KOMMO_ENUM_QUENTE || 1832805),\n    valorMinimo: Number($env.KOMMO_QUALIF_MINIMO || 0),\n  },\n\n  janelaDias: Number($env.META_CAPI_JANELA_DIAS || 7),\n};\n\n// Nome do evento por gatilho. LeadSubmitted é o que alimenta a otimização —\n// por isso ele tem alerta de falha próprio mais adiante no fluxo.\nconst EVENTOS = {\n  mensagem:           'ViewContent',\n  lead_quente:        'LeadSubmitted',\n  agendamento:        'AddToCart',\n  consulta_realizada: 'InitiateCheckout',\n  compra:             'Purchase',\n};\n\nreturn [{ json: { cfg, EVENTOS } }];\n"
+   },
+   "name": "Config",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -1260,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "SELECT e.wamid, e.telefone, e.telefone_digits, e.phone_number_id, e.ctwa_clid,\n       extract(epoch from e.primeiro_contato_em)::bigint AS event_time\nFROM ctwa_eventos e\nLEFT JOIN capi_envios c ON c.event_id = 'view-' || e.ctwa_clid\nWHERE e.ctwa_clid IS NOT NULL AND c.id IS NULL\n  AND e.primeiro_contato_em > now() - interval '7 days'\nORDER BY e.primeiro_contato_em LIMIT 200;"
+   },
+   "name": "Cliques ainda não enviados",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    -1020,
+    -300
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O ViewContent não passa pelo Kommo, então não tem pipeline_id. A unidade\n// vem do phone_number_id, que é o número que recebeu a mensagem.\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst porNumero = Object.entries(cfg.unidades).reduce((m,[pid,u]) => (m[u.phoneNumberId]=pid, m), {});\nreturn $input.all().map(i => ({ json: {\n  event_name: EVENTOS.mensagem,\n  event_id: 'view-' + i.json.ctwa_clid,\n  event_time: Number(i.json.event_time),\n  ctwa_clid: i.json.ctwa_clid,\n  telefone: i.json.telefone,\n  wamid: i.json.wamid,\n  kommo_lead_id: null, valor: null,\n  pipeline_id: porNumero[String(i.json.phone_number_id)] || null,\n}}));"
+   },
+   "name": "Preparar ViewContent",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -780,
+    -300
+   ]
+  },
+  {
+   "parameters": {
+    "method": "GET",
+    "url": "=https://attivacorpoementeitz.kommo.com/api/v4/leads/{{ $json.body?.leads?.update?.[0]?.id || $json.body?.leads?.status?.[0]?.id }}",
+    "options": {
+     "response": {
+      "response": {
+       "neverError": true
+      }
+     }
+    }
+   },
+   "name": "Ler lead na Kommo",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1,
+   "position": [
+    -1020,
+    150
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O webhook de lead atualizado não traz custom_fields de forma confiável,\n// por isso relemos o lead. Dispara UMA vez: a reserva do event_id\n// 'quente-<lead>' impede o reenvio se alguém tirar e recolocar a estrela.\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst out=[];\nfor (const i of $input.all()) {\n  const l=i.json; const cfs=l.custom_fields_values||[];\n  const campo=cfs.find(c=>Number(c.field_id)===cfg.qualificacao.fieldId);\n  if(!campo) continue;\n  const v=campo.values?.[0]||{};\n  const quente = Number(v.enum_id)===cfg.qualificacao.enumQuente\n    || (cfg.qualificacao.valorMinimo>0 && Number(v.value)>=cfg.qualificacao.valorMinimo);\n  if(!quente) continue;\n  out.push({json:{ event_name:EVENTOS.lead_quente, event_id:'quente-'+l.id,\n    event_time:Math.floor(Date.now()/1000), kommo_lead_id:String(l.id),\n    pipeline_id:String(l.pipeline_id), telefone:null, valor:null }});\n}\nreturn out;"
+   },
+   "name": "Avaliar qualificação",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -780,
+    150
+   ]
+  },
+  {
+   "parameters": {
+    "method": "GET",
+    "url": "=https://attivacorpoementeitz.kommo.com/api/v4/leads/{{ $json.body?.leads?.status?.[0]?.id }}",
+    "options": {
+     "response": {
+      "response": {
+       "neverError": true
+      }
+     }
+    }
+   },
+   "name": "Ler lead (etapa)",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1,
+   "position": [
+    -1020,
+    420
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Etapa sem evento no mapa não vira nada. Inventar um evento porque a etapa\n// 'parece' de venda é o caminho para o pixel aprender errado.\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst out=[];\nfor (const i of $input.all()) {\n  const l=i.json; const nome=cfg.etapas[String(l.status_id)];\n  if(!nome) continue;\n  out.push({json:{ event_name:nome, event_id:'kommo-'+l.id+'-'+nome,\n    event_time:Math.floor(Date.now()/1000), kommo_lead_id:String(l.id),\n    pipeline_id:String(l.pipeline_id), telefone:null,\n    valor: nome===EVENTOS.compra ? (l.price||0) : null }});\n}\nreturn out;"
+   },
+   "name": "Traduzir etapa em evento",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -780,
+    420
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// ═══ CASAMENTO DE TELEFONE ════════════════════════════════════════════════\n// A maior fonte de perda de atribuição nesse tipo de integração, e não é\n// exagero: o WhatsApp entrega \"5599981991934\" e a recepção digitou\n// \"(99) 8199-1934\". Comparar as duas strings acerta quase nada.\n//\n// A regra é comparar só dígitos e gerar as variantes brasileiras: com e sem o\n// DDI 55, com e sem o nono dígito. Os 8 últimos são o que sobra sempre, mas\n// sozinhos casam pessoas diferentes de DDDs diferentes — por isso as variantes\n// vêm antes, e o sufixo de 8 é o último recurso.\n\nfunction variantes(bruto) {\n  const d = String(bruto || '').replace(/\\D/g, '');\n  if (d.length < 8) return [];\n\n  const v = new Set([d]);\n  const semDdi = d.startsWith('55') ? d.slice(2) : d;\n  v.add(semDdi);\n  v.add('55' + semDdi);\n\n  // Nono dígito: entra e sai conforme a época do cadastro.\n  if (semDdi.length === 11 && semDdi[2] === '9') {\n    const sem9 = semDdi.slice(0, 2) + semDdi.slice(3);\n    v.add(sem9); v.add('55' + sem9);\n  }\n  if (semDdi.length === 10) {\n    const com9 = semDdi.slice(0, 2) + '9' + semDdi.slice(2);\n    v.add(com9); v.add('55' + com9);\n  }\n  return [...v];\n}\n\nreturn $input.all().map((item) => {\n  const t = item.json.telefone || item.json.phone || '';\n  return { json: { ...item.json, variantes: variantes(t), sufixo8: String(t).replace(/\\D/g,'').slice(-8) } };\n});\n"
+   },
+   "name": "Variantes do telefone",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -540,
+    150
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "-- Acha o clique pelo telefone, tentando as variantes brasileiras em ordem e\n-- caindo no sufixo de 8 dígitos só no fim.\nSELECT ctwa_clid, telefone, primeiro_contato_em, phone_number_id\nFROM ctwa_eventos\nWHERE regexp_replace(telefone, '\\D', '', 'g') = ANY($1::text[])\n   OR regexp_replace(telefone, '\\D', '', 'g') LIKE '%' || $2\nORDER BY primeiro_contato_em ASC\nLIMIT 1;"
+   },
+   "name": "Buscar ctwa_clid",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    -300,
+    150
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// ═══ MONTA O EVENTO E DECIDE SE ELE SAI ═══════════════════════════════════\n// Ponto único de montagem: os três gatilhos convergem aqui. Triplicar esta\n// lógica seria garantir que as três cópias divergissem na primeira correção.\n//\n// Três campos precisam andar juntos para a Meta casar o evento com o anúncio:\n// action_source 'business_messaging', messaging_channel 'whatsapp' e o\n// ctwa_clid dentro de user_data. Faltando um, o evento entra e não atribui —\n// e o sintoma é o pior possível: aparece \"recebido\" no Gerenciador, com zero\n// atribuição, o que parece funcionamento.\n\nconst { cfg, EVENTOS } = $('Config').first().json;\nconst agora = Math.floor(Date.now() / 1000);\nconst saida = [];\nconst descartes = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const unidade = cfg.unidades[String(d.pipeline_id)] || null;\n\n  // Filtro de unidade primeiro, antes de qualquer processamento.\n  if (!unidade) {\n    descartes.push({ motivo: 'unidade_fora_do_mapa', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, pipeline_id: String(d.pipeline_id || ''), detalhe: d });\n    continue;\n  }\n\n  // Sem clique não há o que atribuir. Não é erro — é lead de outra origem.\n  if (!d.ctwa_clid) {\n    descartes.push({ motivo: 'sem_ctwa_clid', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, telefone: d.telefone, detalhe: d });\n    continue;\n  }\n\n  const quando = d.event_time || agora;\n  if (agora - quando > cfg.janelaDias * 86400) {\n    descartes.push({ motivo: 'fora_da_janela_7d', event_name: d.event_name,\n      kommo_lead_id: d.kommo_lead_id, detalhe: { quando, agora } });\n    continue;\n  }\n\n  const evento = {\n    event_name: d.event_name,\n    event_time: quando,\n    action_source: 'business_messaging',\n    messaging_channel: 'whatsapp',\n    event_id: d.event_id,\n    user_data: {\n      ctwa_clid: d.ctwa_clid,\n      whatsapp_business_account_id: unidade.wabaId,\n    },\n  };\n  // Valor só em Purchase, e só quando existe. Mandar 0 ensina a Meta que a\n  // venda vale zero.\n  if (d.event_name === EVENTOS.compra && Number(d.valor) > 0) {\n    evento.custom_data = { currency: 'BRL', value: Number(d.valor) };\n  }\n\n  saida.push({ json: {\n    ...d,\n    unidade: unidade.nome,\n    pixel: unidade.pixel,\n    corpo: { data: [evento], ...(cfg.testEventCode ? { test_event_code: cfg.testEventCode } : {}) },\n  }});\n}\n\n// Descartes saem pela segunda porta, para virarem linha na tabela de cobertura.\nreturn [saida, descartes.map((x) => ({ json: x }))];\n"
+   },
+   "name": "Montar evento",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -60,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "-- Reserva ANTES de chamar a Meta. Se não voltar linha, outro webhook\n-- já mandou este evento e a execução para aqui.\nINSERT INTO capi_envios (event_id, event_name, unidade, pixel_id, ctwa_clid, telefone, kommo_lead_id, wamid, valor, status)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'reservado')\nON CONFLICT (event_id) DO NOTHING\nRETURNING id, event_id;"
+   },
+   "name": "Reservar event_id",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    180,
+    -120
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "number": [
+      {
+       "value1": "={{ $items().length }}",
+       "operation": "larger",
+       "value2": 0
+      }
+     ]
+    }
+   },
+   "name": "Reservou?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 1,
+   "position": [
+    420,
+    -120
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "boolean": [
+      {
+       "value1": "={{ $('Config').first().json.cfg.modoTeste }}",
+       "value2": true
+      }
+     ]
+    }
+   },
+   "name": "Modo teste?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 1,
+   "position": [
+    660,
+    -120
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "=https://graph.facebook.com/{{ $('Config').first().json.cfg.graphVersion }}/{{ $json.pixel }}/events",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "Authorization",
+       "value": "=Bearer {{ $('Config').first().json.cfg.token }}"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+    "options": {
+     "response": {
+      "response": {
+       "neverError": true,
+       "fullResponse": true
+      }
+     }
+    }
+   },
+   "name": "Enviar para a Meta",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1,
+   "position": [
+    900,
+    -220
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "UPDATE capi_envios SET status=$2, http_status=$3, resposta=$4::jsonb, enviado_em=now() WHERE event_id=$1;"
+   },
+   "name": "Marcar enviado",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    1140,
+    -220
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "UPDATE capi_envios SET status='simulado', enviado_em=now() WHERE event_id=$1;"
+   },
+   "name": "Marcar simulado",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    900,
+    -20
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "INSERT INTO capi_descartes (motivo, event_name, kommo_lead_id, telefone, pipeline_id, detalhe)\nVALUES ($1,$2,$3,$4,$5,$6::jsonb);"
+   },
+   "name": "Registrar descarte",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 1,
+   "position": [
+    180,
+    180
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "string": [
+      {
+       "value1": "={{ $json.event_name }}",
+       "value2": "LeadSubmitted"
+      },
+      {
+       "value1": "={{ String($json.http_status || '') }}",
+       "operation": "notEqual",
+       "value2": "200"
+      }
+     ]
+    }
+   },
+   "name": "LeadSubmitted falhou?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 1,
+   "position": [
+    1380,
+    -220
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.ALERT_WEBHOOK_URL || 'https://localhost/desativado' }}",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ alerta: 'LeadSubmitted falhou na Meta', lead: $json.kommo_lead_id, http: $json.http_status }) }}",
+    "options": {
+     "response": {
+      "response": {
+       "neverError": true
+      }
+     }
+    }
+   },
+   "name": "Alertar falha do LeadSubmitted",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1,
+   "position": [
+    1620,
+    -220
+   ]
+  }
+ ],
+ "connections": {
+  "A cada 5 min": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Kommo — lead atualizado": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Kommo — etapa alterada": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Config": {
+   "main": [
+    [
+     {
+      "node": "Cliques ainda não enviados",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "Ler lead na Kommo",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "Ler lead (etapa)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Cliques ainda não enviados": {
+   "main": [
+    [
+     {
+      "node": "Preparar ViewContent",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Preparar ViewContent": {
+   "main": [
+    [
+     {
+      "node": "Montar evento",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ler lead na Kommo": {
+   "main": [
+    [
+     {
+      "node": "Avaliar qualificação",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Avaliar qualificação": {
+   "main": [
+    [
+     {
+      "node": "Variantes do telefone",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ler lead (etapa)": {
+   "main": [
+    [
+     {
+      "node": "Traduzir etapa em evento",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Traduzir etapa em evento": {
+   "main": [
+    [
+     {
+      "node": "Variantes do telefone",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Variantes do telefone": {
+   "main": [
+    [
+     {
+      "node": "Buscar ctwa_clid",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Buscar ctwa_clid": {
+   "main": [
+    [
+     {
+      "node": "Montar evento",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Montar evento": {
+   "main": [
+    [
+     {
+      "node": "Reservar event_id",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Registrar descarte",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Reservar event_id": {
+   "main": [
+    [
+     {
+      "node": "Reservou?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Reservou?": {
+   "main": [
+    [
+     {
+      "node": "Modo teste?",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    []
+   ]
+  },
+  "Modo teste?": {
+   "main": [
+    [
+     {
+      "node": "Marcar simulado",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Enviar para a Meta",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Enviar para a Meta": {
+   "main": [
+    [
+     {
+      "node": "Marcar enviado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Marcar enviado": {
+   "main": [
+    [
+     {
+      "node": "LeadSubmitted falhou?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "LeadSubmitted falhou?": {
+   "main": [
+    [
+     {
+      "node": "Alertar falha do LeadSubmitted",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    []
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "active": false
+}

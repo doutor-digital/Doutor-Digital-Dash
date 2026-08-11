@@ -1,39 +1,59 @@
-// ─── Config: resolve a unidade e o pixel ────────────────────────────────────
-//
-// O multi-tenant sai do phone_number_id: cada unidade tem o seu número de
-// WhatsApp, e ele vem em toda mensagem. Assim o mesmo fluxo serve a rede inteira
-// sem variável por unidade — acrescentar clínica é acrescentar uma linha no mapa.
-//
-// META_CAPI_UNIDADES é um JSON no ambiente do n8n, por exemplo:
-// {"728123456789012":{"unidade":"imperatriz","pixel":"1076495867156119"}}
-//
-// Se o mapa não tiver o número, o evento NÃO é enviado. Mandar para o pixel
-// errado suja o aprendizado da campanha de outra clínica, e isso não tem desfazer.
-
-const mapa = (() => {
-  try { return JSON.parse($env.META_CAPI_UNIDADES || '{}'); }
-  catch { return {}; }
-})();
+// ═══ CONFIGURAÇÃO ÚNICA ═══════════════════════════════════════════════════
+// Todo id vive aqui. Id espalhado pelo fluxo é o que faz ninguém ter coragem
+// de mexer depois — e é o que transforma "adicionar uma unidade" em caçada.
 
 const cfg = {
-  mapa,
-  token: $env.META_CAPI_TOKEN || '',
-  graphVersion: $env.META_GRAPH_VERSION || 'v23.0',
-  // Pixel único de fallback, para quem roda uma clínica só.
-  pixelPadrao: $env.META_PIXEL_ID || '',
-  // Código de teste do Gerenciador de Eventos. Com ele preenchido, o evento
-  // aparece em "Eventos de teste" e NÃO entra na otimização — é o que permite
-  // conferir antes de valer para a campanha.
+  // ── Destino ──────────────────────────────────────────────────────────────
+  graphVersion: $env.META_GRAPH_VERSION || 'v21.0',
+  token:        $env.META_CAPI_TOKEN || '',
+
+  // Código do Gerenciador de Eventos. Com ele preenchido o evento aparece em
+  // "Eventos de teste" e NÃO entra na otimização. Comece com ele, apague depois.
   testEventCode: $env.META_CAPI_TEST_CODE || '',
-  // Janela de atribuição do clique no WhatsApp. Evento mais velho que isso a
-  // Meta aceita mas não credita ao anúncio; enviar só gera ruído.
+
+  // Roda o fluxo inteiro e grava no log SEM chamar a Meta. Serve para conferir
+  // o casamento de telefone e o mapa de etapas antes de valer para a campanha.
+  modoTeste: String($env.META_CAPI_DRY_RUN || 'false').toLowerCase() === 'true',
+
+  // ── Unidades ─────────────────────────────────────────────────────────────
+  // Chave = pipeline_id do funil. É o filtro que protege o pixel: conversão de
+  // outra unidade caindo no pixel de Imperatriz contamina a otimização das
+  // campanhas dela, e o estrago é silencioso — ninguém vê, a campanha só piora.
+  unidades: {
+    '14091100': {
+      nome: 'imperatriz',
+      pixel: '1076495867156119',
+      wabaId: '1558318502323307',
+      phoneNumberId: '1192220830640227',
+    },
+  },
+
+  // ── Mapa de etapas → evento (Imperatriz) ─────────────────────────────────
+  etapas: {
+    '108773008': 'AddToCart',          // AGENDADO
+    '108773012': 'InitiateCheckout',   // COMPARECEU
+    '142':       'Purchase',           // GANHO / CONCLUÍDO
+  },
+
+  // ── Lead quente ──────────────────────────────────────────────────────────
+  // Não é mudança de etapa: é o campo de qualificação. O webhook de lead
+  // atualizado não traz custom_fields de forma confiável, então o fluxo relê o
+  // lead na API e procura por este field_id.
+  qualificacao: {
+    fieldId: Number($env.KOMMO_CF_QUALIFICACAO || 2440809),
+    // "Quente" = 1832805. Numérico também aceito, via valorMinimo.
+    enumQuente: Number($env.KOMMO_ENUM_QUENTE || 1832805),
+    valorMinimo: Number($env.KOMMO_QUALIF_MINIMO || 0),
+  },
+
   janelaDias: Number($env.META_CAPI_JANELA_DIAS || 7),
 };
 
-// Cada etapa da Kommo vira um evento do funil da Meta.
+// Nome do evento por gatilho. LeadSubmitted é o que alimenta a otimização —
+// por isso ele tem alerta de falha próprio mais adiante no fluxo.
 const EVENTOS = {
   mensagem:           'ViewContent',
-  lead_quente:        'Lead',
+  lead_quente:        'LeadSubmitted',
   agendamento:        'AddToCart',
   consulta_realizada: 'InitiateCheckout',
   compra:             'Purchase',

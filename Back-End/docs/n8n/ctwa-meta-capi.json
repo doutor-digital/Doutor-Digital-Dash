@@ -53,7 +53,7 @@
   },
   {
    "parameters": {
-    "jsCode": "// ═══ CONFIGURAÇÃO ÚNICA ═══════════════════════════════════════════════════\n// Todo id vive aqui. Id espalhado pelo fluxo é o que faz ninguém ter coragem\n// de mexer depois — e é o que transforma \"adicionar uma unidade\" em caçada.\n\nconst cfg = {\n  // ── Destino ──────────────────────────────────────────────────────────────\n  graphVersion: $env.META_GRAPH_VERSION || 'v21.0',\n  token:        $env.META_CAPI_TOKEN || '',\n\n  // Código do Gerenciador de Eventos. Com ele preenchido o evento aparece em\n  // \"Eventos de teste\" e NÃO entra na otimização. Comece com ele, apague depois.\n  testEventCode: $env.META_CAPI_TEST_CODE || '',\n\n  // Roda o fluxo inteiro e grava no log SEM chamar a Meta. Serve para conferir\n  // o casamento de telefone e o mapa de etapas antes de valer para a campanha.\n  modoTeste: String($env.META_CAPI_DRY_RUN || 'false').toLowerCase() === 'true',\n\n  // ── Unidades ─────────────────────────────────────────────────────────────\n  // Chave = pipeline_id do funil. É o filtro que protege o pixel: conversão de\n  // outra unidade caindo no pixel de Imperatriz contamina a otimização das\n  // campanhas dela, e o estrago é silencioso — ninguém vê, a campanha só piora.\n  unidades: {\n    '14091100': {\n      nome: 'imperatriz',\n      pixel: '1076495867156119',\n      wabaId: '1558318502323307',\n      phoneNumberId: '1192220830640227',\n    },\n  },\n\n  // ── Mapa de etapas → evento (Imperatriz) ─────────────────────────────────\n  etapas: {\n    '108773008': 'AddToCart',          // AGENDADO\n    '108773012': 'InitiateCheckout',   // COMPARECEU\n    '142':       'Purchase',           // GANHO / CONCLUÍDO\n  },\n\n  // ── Lead quente ──────────────────────────────────────────────────────────\n  // Não é mudança de etapa: é o campo de qualificação. O webhook de lead\n  // atualizado não traz custom_fields de forma confiável, então o fluxo relê o\n  // lead na API e procura por este field_id.\n  qualificacao: {\n    fieldId: Number($env.KOMMO_CF_QUALIFICACAO || 2440809),\n    // \"Quente\" = 1832805. Numérico também aceito, via valorMinimo.\n    enumQuente: Number($env.KOMMO_ENUM_QUENTE || 1832805),\n    valorMinimo: Number($env.KOMMO_QUALIF_MINIMO || 0),\n  },\n\n  janelaDias: Number($env.META_CAPI_JANELA_DIAS || 7),\n};\n\n// Nome do evento por gatilho. LeadSubmitted é o que alimenta a otimização —\n// por isso ele tem alerta de falha próprio mais adiante no fluxo.\nconst EVENTOS = {\n  mensagem:           'ViewContent',\n  lead_quente:        'LeadSubmitted',\n  agendamento:        'AddToCart',\n  consulta_realizada: 'InitiateCheckout',\n  compra:             'Purchase',\n};\n\nreturn [{ json: { cfg, EVENTOS } }];\n"
+    "jsCode": "// ═══ CONFIGURAÇÃO ÚNICA ═══════════════════════════════════════════════════\n// Todo id vive aqui. Id espalhado pelo fluxo é o que faz ninguém ter coragem\n// de mexer depois — e é o que transforma \"adicionar uma unidade\" em caçada.\n\nconst cfg = {\n  // ── Destino ──────────────────────────────────────────────────────────────\n  graphVersion: $env.META_GRAPH_VERSION || 'v21.0',\n  token:        $env.META_CAPI_TOKEN || '',\n\n  // Código do Gerenciador de Eventos. Com ele preenchido o evento aparece em\n  // \"Eventos de teste\" e NÃO entra na otimização. Comece com ele, apague depois.\n  testEventCode: $env.META_CAPI_TEST_CODE || '',\n\n  // Roda o fluxo inteiro e grava no log SEM chamar a Meta. Serve para conferir\n  // o casamento de telefone e o mapa de etapas antes de valer para a campanha.\n  modoTeste: String($env.META_CAPI_DRY_RUN || 'false').toLowerCase() === 'true',\n\n  // ── Unidades ─────────────────────────────────────────────────────────────\n  // Chave = pipeline_id do funil. É o filtro que protege o pixel: conversão de\n  // outra unidade caindo no pixel de Imperatriz contamina a otimização das\n  // campanhas dela, e o estrago é silencioso — ninguém vê, a campanha só piora.\n  unidades: {\n    '14091100': {\n      nome: 'imperatriz',\n      pixel: '1076495867156119',\n      wabaId: '1558318502323307',\n      phoneNumberId: '1192220830640227',\n    },\n  },\n\n  // ── Mapa de etapas → evento (Imperatriz) ─────────────────────────────────\n  etapas: {\n    '108773008': 'AddToCart',          // AGENDADO\n    '108773012': 'InitiateCheckout',   // COMPARECEU\n    '142':       'Purchase',           // GANHO / CONCLUÍDO\n  },\n\n  // ── Lead quente ──────────────────────────────────────────────────────────\n  // Não é mudança de etapa: é o campo de qualificação. O webhook de lead\n  // atualizado não traz custom_fields de forma confiável, então o fluxo relê o\n  // lead na API e procura por este field_id.\n  qualificacao: {\n    fieldId: Number($env.KOMMO_CF_QUALIFICACAO || 2440809),\n    // \"Quente\" = 1832805. Numérico também aceito, via valorMinimo.\n    enumQuente: Number($env.KOMMO_ENUM_QUENTE || 1832805),\n    valorMinimo: Number($env.KOMMO_QUALIF_MINIMO || 0),\n  },\n\n  kommoSubdomain: $env.KOMMO_SUBDOMAIN || 'attivacorpoementeitz',\n\n  janelaDias: Number($env.META_CAPI_JANELA_DIAS || 7),\n};\n\n// Nome do evento por gatilho. LeadSubmitted é o que alimenta a otimização —\n// por isso ele tem alerta de falha próprio mais adiante no fluxo.\nconst EVENTOS = {\n  mensagem:           'ViewContent',\n  lead_quente:        'LeadSubmitted',\n  agendamento:        'AddToCart',\n  consulta_realizada: 'InitiateCheckout',\n  compra:             'Purchase',\n};\n\nreturn [{ json: { cfg, EVENTOS } }];\n"
    },
    "name": "Config",
    "type": "n8n-nodes-base.code",
@@ -92,22 +92,32 @@
   {
    "parameters": {
     "method": "GET",
-    "url": "=https://attivacorpoementeitz.kommo.com/api/v4/leads/{{ $json.body?.leads?.update?.[0]?.id || $json.body?.leads?.status?.[0]?.id }}",
+    "url": "=https://{{ $('Config').first().json.cfg.kommoSubdomain }}.kommo.com/api/v4/leads/{{ $json.leadId }}",
     "options": {
      "response": {
       "response": {
        "neverError": true
       }
-     }
-    }
+     },
+     "timeout": 15000
+    },
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "kommoLongLivedApi"
    },
    "name": "Ler lead na Kommo",
    "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1,
+   "typeVersion": 4.2,
    "position": [
     -1020,
     150
-   ]
+   ],
+   "authentication": "predefinedCredentialType",
+   "credentials": {
+    "kommoLongLivedApi": {
+     "id": "MnPGiOOvaSPm9HgC",
+     "name": "Kommo Imperatriz"
+    }
+   }
   },
   {
    "parameters": {
@@ -124,22 +134,32 @@
   {
    "parameters": {
     "method": "GET",
-    "url": "=https://attivacorpoementeitz.kommo.com/api/v4/leads/{{ $json.body?.leads?.status?.[0]?.id }}",
+    "url": "=https://{{ $('Config').first().json.cfg.kommoSubdomain }}.kommo.com/api/v4/leads/{{ $json.leadId }}",
     "options": {
      "response": {
       "response": {
        "neverError": true
       }
-     }
-    }
+     },
+     "timeout": 15000
+    },
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "kommoLongLivedApi"
    },
    "name": "Ler lead (etapa)",
    "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1,
+   "typeVersion": 4.2,
    "position": [
     -1020,
     420
-   ]
+   ],
+   "authentication": "predefinedCredentialType",
+   "credentials": {
+    "kommoLongLivedApi": {
+     "id": "MnPGiOOvaSPm9HgC",
+     "name": "Kommo Imperatriz"
+    }
+   }
   },
   {
    "parameters": {
@@ -275,7 +295,7 @@
    },
    "name": "Enviar para a Meta",
    "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1,
+   "typeVersion": 4.2,
    "position": [
     900,
     -220
@@ -370,7 +390,7 @@
    },
    "name": "Alertar falha do LeadSubmitted",
    "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1,
+   "typeVersion": 4.2,
    "position": [
     1620,
     -220
@@ -393,6 +413,42 @@
    "position": [
     60,
     0
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O Config é um nó Code e, como todo Code, TROCA o item — depois dele o corpo do\n// webhook não existe mais. Por isso lemos direto do nó de webhook, pelo nome.\n//\n// A Kommo manda form-urlencoded em notação de colchetes, então as chaves chegam\n// cruas: \"leads[status][0][id]\". Não existe $json.body.leads.status[0].id.\nconst origem = $('Kommo — lead atualizado').first().json;\nconst corpo = origem.body || origem.query || origem;\n\nfunction achaId(o) {\n  for (const [k, v] of Object.entries(o || {})) {\n    if (/^leads\\[(status|update|add)\\]\\[\\d+\\]\\[id\\]$/.test(k)) return String(v);\n  }\n  // Alguns proxies já entregam aninhado; aceita os dois formatos.\n  const l = o?.leads || {};\n  for (const tipo of ['status', 'update', 'add']) {\n    const id = l?.[tipo]?.[0]?.id;\n    if (id) return String(id);\n  }\n  return null;\n}\n\nconst leadId = achaId(corpo);\nif (!leadId) return [];          // webhook sem lead: encerra sem erro\nreturn [{ json: { leadId } }];\n"
+   },
+   "name": "Extrair lead (quente)",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -1140,
+    150
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O Config é um nó Code e, como todo Code, TROCA o item — depois dele o corpo do\n// webhook não existe mais. Por isso lemos direto do nó de webhook, pelo nome.\n//\n// A Kommo manda form-urlencoded em notação de colchetes, então as chaves chegam\n// cruas: \"leads[status][0][id]\". Não existe $json.body.leads.status[0].id.\nconst origem = $('Kommo — etapa alterada').first().json;\nconst corpo = origem.body || origem.query || origem;\n\nfunction achaId(o) {\n  for (const [k, v] of Object.entries(o || {})) {\n    if (/^leads\\[(status|update|add)\\]\\[\\d+\\]\\[id\\]$/.test(k)) return String(v);\n  }\n  // Alguns proxies já entregam aninhado; aceita os dois formatos.\n  const l = o?.leads || {};\n  for (const tipo of ['status', 'update', 'add']) {\n    const id = l?.[tipo]?.[0]?.id;\n    if (id) return String(id);\n  }\n  return null;\n}\n\nconst leadId = achaId(corpo);\nif (!leadId) return [];          // webhook sem lead: encerra sem erro\nreturn [{ json: { leadId } }];\n"
+   },
+   "name": "Extrair lead (etapa)",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -1140,
+    420
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// O nó Postgres anterior devolveu só o clique. O evento que veio do funil ficou\n// para trás, porque nó de banco troca o item. Aqui os dois voltam a ser um.\n//\n// Este nó existe por causa de um comportamento do n8n que já quebrou o fluxo\n// quatro vezes hoje: todo nó Code ou Postgres SUBSTITUI o item. Quem precisa do\n// que veio antes tem que buscar pelo nome do nó, com item pareado.\nconst evento = $('Variantes do telefone').all();\nconst saida = [];\n\n$input.all().forEach((item, i) => {\n  const clique = item.json || {};\n  const base = (evento[i] || evento[0] || {}).json || {};\n  if (!clique.ctwa_clid) {\n    // Sem clique casado: segue adiante marcado, para virar linha de descarte\n    // com o motivo em vez de sumir.\n    saida.push({ json: { ...base, ctwa_clid: null } });\n    return;\n  }\n  saida.push({ json: { ...base, ctwa_clid: clique.ctwa_clid, telefone: clique.telefone || base.telefone } });\n});\nreturn saida;\n"
+   },
+   "name": "Juntar clique ao evento",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -180,
+    150
    ]
   }
  ],
@@ -439,12 +495,12 @@
       "index": 0
      },
      {
-      "node": "Ler lead na Kommo",
+      "node": "Extrair lead (quente)",
       "type": "main",
       "index": 0
      },
      {
-      "node": "Ler lead (etapa)",
+      "node": "Extrair lead (etapa)",
       "type": "main",
       "index": 0
      }
@@ -532,7 +588,7 @@
    "main": [
     [
      {
-      "node": "Montar evento",
+      "node": "Juntar clique ao evento",
       "type": "main",
       "index": 0
      }
@@ -637,6 +693,39 @@
     [
      {
       "node": "Registrar descarte",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extrair lead (quente)": {
+   "main": [
+    [
+     {
+      "node": "Ler lead na Kommo",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extrair lead (etapa)": {
+   "main": [
+    [
+     {
+      "node": "Ler lead (etapa)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Juntar clique ao evento": {
+   "main": [
+    [
+     {
+      "node": "Montar evento",
       "type": "main",
       "index": 0
      }

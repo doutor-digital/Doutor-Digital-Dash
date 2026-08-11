@@ -251,7 +251,7 @@
   {
    "parameters": {
     "method": "POST",
-    "url": "=https://graph.facebook.com/{{ $('Config').first().json.cfg.graphVersion }}/{{ $json.pixel }}/events",
+    "url": "=https://graph.facebook.com/{{ $('Config').first().json.cfg.graphVersion }}/{{ $('Montar evento').item.json.pixel }}/events",
     "sendHeaders": true,
     "headerParameters": {
      "parameters": [
@@ -263,7 +263,7 @@
     },
     "sendBody": true,
     "specifyBody": "json",
-    "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+    "jsonBody": "={{ JSON.stringify($('Montar evento').item.json.corpo) }}",
     "options": {
      "response": {
       "response": {
@@ -286,7 +286,7 @@
     "operation": "executeQuery",
     "query": "UPDATE capi_envios SET status=$2, http_status=$3, resposta=$4::jsonb, enviado_em=now() WHERE event_id=$1;",
     "options": {
-     "queryReplacement": "={{ [ $json.event_id, ($json.statusCode === 200 ? 'enviado' : 'falhou'), $json.statusCode, JSON.stringify($json.body || {}) ] }}"
+     "queryReplacement": "={{ [ $('Montar evento').item.json.event_id, ($json.statusCode === 200 ? 'enviado' : 'falhou'), $json.statusCode, JSON.stringify($json.body || {}) ] }}"
     }
    },
    "name": "Marcar enviado",
@@ -302,7 +302,7 @@
     "operation": "executeQuery",
     "query": "UPDATE capi_envios SET status='simulado', enviado_em=now() WHERE event_id=$1;",
     "options": {
-     "queryReplacement": "={{ [ $json.event_id ] }}"
+     "queryReplacement": "={{ [ $('Montar evento').item.json.event_id ] }}"
     }
    },
    "name": "Marcar simulado",
@@ -334,11 +334,11 @@
     "conditions": {
      "string": [
       {
-       "value1": "={{ $json.event_name }}",
+       "value1": "={{ $('Montar evento').item.json.event_name }}",
        "value2": "LeadSubmitted"
       },
       {
-       "value1": "={{ String($json.http_status || '') }}",
+       "value1": "={{ String($('Enviar para a Meta').item.json.statusCode || '') }}",
        "operation": "notEqual",
        "value2": "200"
       }
@@ -359,7 +359,7 @@
     "url": "={{ $env.ALERT_WEBHOOK_URL || 'https://localhost/desativado' }}",
     "sendBody": true,
     "specifyBody": "json",
-    "jsonBody": "={{ JSON.stringify({ alerta: 'LeadSubmitted falhou na Meta', lead: $json.kommo_lead_id, http: $json.http_status }) }}",
+    "jsonBody": "={{ JSON.stringify({ alerta: 'LeadSubmitted falhou na Meta', lead: $('Montar evento').item.json.kommo_lead_id, http: $('Enviar para a Meta').item.json.statusCode }) }}",
     "options": {
      "response": {
       "response": {

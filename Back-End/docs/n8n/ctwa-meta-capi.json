@@ -66,11 +66,12 @@
   {
    "parameters": {
     "operation": "executeQuery",
-    "query": "SELECT e.wamid, e.telefone, e.telefone_digits, e.phone_number_id, e.ctwa_clid,\n       extract(epoch from e.primeiro_contato_em)::bigint AS event_time\nFROM ctwa_eventos e\nLEFT JOIN capi_envios c ON c.event_id = 'view-' || e.ctwa_clid\nWHERE e.ctwa_clid IS NOT NULL AND c.id IS NULL\n  AND e.primeiro_contato_em > now() - interval '7 days'\nORDER BY e.primeiro_contato_em LIMIT 200;"
+    "query": "SELECT e.wamid, e.telefone, e.telefone_digits, e.phone_number_id, e.ctwa_clid,\n       extract(epoch from e.primeiro_contato_em)::bigint AS event_time\nFROM ctwa_eventos e\nLEFT JOIN capi_envios c ON c.event_id = 'view-' || e.ctwa_clid\nWHERE e.ctwa_clid IS NOT NULL AND c.id IS NULL\n  AND e.primeiro_contato_em > now() - interval '7 days'\nORDER BY e.primeiro_contato_em LIMIT 200;",
+    "options": {}
    },
    "name": "Cliques ainda não enviados",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     -1020,
     -300
@@ -169,12 +170,12 @@
     "operation": "executeQuery",
     "query": "SELECT ctwa_clid, telefone, primeiro_contato_em, phone_number_id\nFROM ctwa_eventos\nWHERE regexp_replace(telefone, '\\D', '', 'g') = ANY(string_to_array($1, '|'))\n   OR regexp_replace(telefone, '\\D', '', 'g') LIKE '%' || $2\nORDER BY primeiro_contato_em ASC LIMIT 1;",
     "options": {
-     "queryReplacement": "={{ $json.variantes.join('|') }}, {{ $json.sufixo8 }}"
+     "queryReplacement": "={{ [ $json.variantes.join('|'), $json.sufixo8 ] }}"
     }
    },
    "name": "Buscar ctwa_clid",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     -300,
     150
@@ -197,12 +198,12 @@
     "operation": "executeQuery",
     "query": "-- Reserva ANTES de chamar a Meta. Se não voltar linha, outro webhook\n-- já mandou este evento e a execução para aqui.\nINSERT INTO capi_envios (event_id, event_name, unidade, pixel_id, ctwa_clid, telefone, kommo_lead_id, wamid, valor, status)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'reservado')\nON CONFLICT (event_id) DO NOTHING\nRETURNING id, event_id;",
     "options": {
-     "queryReplacement": "={{ $json.event_id }}, {{ $json.event_name }}, {{ $json.unidade }}, {{ $json.pixel }}, {{ $json.ctwa_clid }}, {{ $json.telefone || '' }}, {{ $json.kommo_lead_id || '' }}, {{ $json.wamid || '' }}, {{ $json.valor || 0 }}"
+     "queryReplacement": "={{ [ $json.event_id, $json.event_name, $json.unidade, $json.pixel, $json.ctwa_clid, $json.telefone || null, $json.kommo_lead_id || null, $json.wamid || null, $json.valor || null ] }}"
     }
    },
    "name": "Reservar event_id",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     180,
     -120
@@ -285,12 +286,12 @@
     "operation": "executeQuery",
     "query": "UPDATE capi_envios SET status=$2, http_status=$3, resposta=$4::jsonb, enviado_em=now() WHERE event_id=$1;",
     "options": {
-     "queryReplacement": "={{ $json.event_id }}, {{ $json.statusCode == 200 ? 'enviado' : 'falhou' }}, {{ $json.statusCode }}, {{ JSON.stringify($json.body || {}) }}"
+     "queryReplacement": "={{ [ $json.event_id, ($json.statusCode === 200 ? 'enviado' : 'falhou'), $json.statusCode, JSON.stringify($json.body || {}) ] }}"
     }
    },
    "name": "Marcar enviado",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     1140,
     -220
@@ -301,12 +302,12 @@
     "operation": "executeQuery",
     "query": "UPDATE capi_envios SET status='simulado', enviado_em=now() WHERE event_id=$1;",
     "options": {
-     "queryReplacement": "={{ $json.event_id }}"
+     "queryReplacement": "={{ [ $json.event_id ] }}"
     }
    },
    "name": "Marcar simulado",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     900,
     -20
@@ -317,12 +318,12 @@
     "operation": "executeQuery",
     "query": "INSERT INTO capi_descartes (motivo, event_name, kommo_lead_id, telefone, pipeline_id, detalhe)\nVALUES ($1,$2,$3,$4,$5,$6::jsonb);",
     "options": {
-     "queryReplacement": "={{ $json.motivo }}, {{ $json.event_name || '' }}, {{ $json.kommo_lead_id || '' }}, {{ $json.telefone || '' }}, {{ $json.pipeline_id || '' }}, {{ JSON.stringify($json.detalhe || {}) }}"
+     "queryReplacement": "={{ [ $json.motivo, $json.event_name || null, $json.kommo_lead_id || null, $json.telefone || null, $json.pipeline_id || null, JSON.stringify($json.detalhe || {}) ] }}"
     }
    },
    "name": "Registrar descarte",
    "type": "n8n-nodes-base.postgres",
-   "typeVersion": 1,
+   "typeVersion": 2.5,
    "position": [
     180,
     180

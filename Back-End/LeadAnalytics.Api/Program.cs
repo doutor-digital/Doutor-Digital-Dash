@@ -279,6 +279,8 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineHistoricoService
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.FranquiaWebStore>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.FranquiaWebClient>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.FranquiaTratamentosService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.FranquiaAuditoriaClient>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.AuditoriaProntuarioService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.ConsultaSituacaoSyncService>();
 
 // ── I.A. (OpenAI GPT-4o-mini + Whisper) ──────────────────────────────────────

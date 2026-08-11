@@ -24,6 +24,7 @@ public class SpineController(
     SpineTokenStore tokens,
     SpineApiClient client,
     FranquiaTratamentosService tratamentos,
+    AuditoriaProntuarioService auditoria,
     ConsultaSituacaoSyncService consultaSync,
     TenantUnitGuard tenantGuard,
     ILogger<SpineController> logger) : ControllerBase
@@ -35,6 +36,7 @@ public class SpineController(
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly FranquiaTratamentosService _tratamentos = tratamentos;
+    private readonly AuditoriaProntuarioService _auditoria = auditoria;
     private readonly ConsultaSituacaoSyncService _consultaSync = consultaSync;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ILogger<SpineController> _logger = logger;
@@ -73,6 +75,52 @@ public class SpineController(
         catch (FranquiaWebException ex)
         {
             _logger.LogWarning(ex, "Falha ao raspar tratamentos da franquia (unidade {UnitId})", unitId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "CRM web da franquia recusou/mudou.",
+                Detail = ex.Motivo,
+                Status = 502,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Auditoria dos prontuários da unidade: varre os atendimentos do período, abre cada
+    /// ficha e aplica as regras de consistência de registro (questionário retroativo, alta
+    /// sem teste nomeado, numeração de protocolo que não fecha, EVA incoerente).
+    ///
+    /// Prontuário não existe na API oficial — só no CRM web —, então a fonte é raspagem e a
+    /// chamada é cara: uma ficha de ~290 KB por tratamento. Resposta cacheada por 30 min.
+    /// Padrão: mês corrente.
+    /// </summary>
+    [HttpGet("auditoria")]
+    public async Task<IActionResult> Auditoria(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        CancellationToken ct = default)
+    {
+        var (error, _) = await _tenantGuard.ResolveTenantAsync(unitId, ct);
+        if (error is not null) return error;
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? new DateOnly(hoje.Year, hoje.Month, 1);
+        var fim = ate ?? inicio.AddMonths(1).AddDays(-1);
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+
+        try
+        {
+            var dto = await _auditoria.GetAsync(unitId, inicio, fim, ct);
+            if (dto is null)
+                return SemAutorizacaoDaFranquia(
+                    $"Cadastre email/senha ('{FranquiaWebStore.EmailKey}'/'{FranquiaWebStore.PasswordKey}') "
+                    + $"e o idCompany ('{FranquiaWebStore.CompanyKeyFor(unitId)}') em AppConfiguration.");
+            return Ok(dto);
+        }
+        catch (FranquiaWebException ex)
+        {
+            _logger.LogWarning(ex, "Falha ao raspar prontuários da franquia (unidade {UnitId})", unitId);
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
                 Title = "CRM web da franquia recusou/mudou.",

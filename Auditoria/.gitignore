@@ -1,6 +1,0 @@
-dist/
-web/js/
-
-# Dados de paciente — nome, CPF, evolução clínica. Nunca versionar (LGPD Art. 11).
-data/
-web/relatorio.js

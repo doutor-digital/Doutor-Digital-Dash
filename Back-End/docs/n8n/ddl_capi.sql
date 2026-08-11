@@ -42,3 +42,12 @@ CREATE INDEX IF NOT EXISTS ix_capi_descartes_motivo ON capi_descartes (motivo, e
 -- Sem ele, cada webhook vira varredura da tabela inteira.
 CREATE INDEX IF NOT EXISTS ix_ctwa_eventos_digits
   ON ctwa_eventos ((regexp_replace(telefone, '\D', '', 'g')), primeiro_contato_em DESC);
+
+-- ─── Conserto para quem já criou a tabela na versão anterior ────────────────
+-- CREATE TABLE IF NOT EXISTS não altera tabela existente: ele não faz nada, em
+-- silêncio. Quem rodou o DDL antigo precisa destes ALTER.
+ALTER TABLE capi_envios ADD COLUMN IF NOT EXISTS valor numeric(14,2);
+ALTER TABLE capi_envios ADD COLUMN IF NOT EXISTS reservado_em timestamptz NOT NULL DEFAULT now();
+ALTER TABLE capi_envios ALTER COLUMN enviado_em DROP NOT NULL;
+ALTER TABLE capi_envios ALTER COLUMN enviado_em DROP DEFAULT;
+ALTER TABLE capi_envios ALTER COLUMN status SET DEFAULT 'reservado';

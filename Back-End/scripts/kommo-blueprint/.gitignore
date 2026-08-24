@@ -3,3 +3,11 @@ __pycache__/
 token*.txt
 # Estado do import: telefone -> lead_id de pacientes reais. NÃO versionar (PII).
 import.*.jsonl
+# Snapshot de ANTES da Fase 2 (ids de lead por etapa) — e o desfazer. Nao versionar.
+snapshot.*.json
+# Dump de leads com custom_fields_values (PII + backup dos campos legados). Nao versionar.
+backup_campos_antigos_*.json
+# Dumps e desfazer de migração: leads inteiros com nome e telefone. Nao versionar (PII).
+dump.*.json
+rollback.*.json
+backup.*.json

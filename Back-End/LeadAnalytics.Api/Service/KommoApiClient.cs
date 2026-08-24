@@ -45,10 +45,17 @@ public class KommoApiClient
         bool withContacts = false)
     {
         var with = withContacts ? "&with=contacts" : string.Empty;
-        // order[updated_at]=desc — leads recentemente modificados primeiro. Casa com a
-        // estratégia do dashboard (filtros por janela de UpdatedAt) e garante que leads
-        // novos/ativos sejam sincronizados antes dos antigos quando há cap (maxLeads).
-        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}&order[updated_at]=desc{with}";
+        // order[id]=asc, NÃO order[updated_at]=desc. `updated_at` é uma chave que se
+        // move: quando a conta está sendo mutada, o lead que a página 1 já entregou
+        // sobe de posição, empurra os outros e a página 2 pula registro. Medido em
+        // Canaã e Marabá (ago/2026): logo depois da migração de etapas o sync perdeu
+        // 1.858 e 4.377 leads, todos os de id mais alto. `id` é imutável, então a
+        // paginação fecha mesmo com a conta viva.
+        //
+        // Custo: com cap (`maxLeads` < total) isto pega os leads MAIS ANTIGOS primeiro,
+        // e o dashboard prefere os ativos. Se o cap voltar a valer, ordene por id e
+        // pagine do fim (última página primeiro) — não volte para `updated_at`.
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads?limit={limit}&page={page}&order[id]=asc{with}";
         return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
     }
 

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace LeadAnalytics.Api.Service.Stages;
 
 /// <summary>
@@ -78,7 +81,15 @@ public static class CanonicalStages
             return core.Contains("COM_PAGAMENTO") || core.Contains("COM PAGAMENTO")
                 ? AgendadoComPagamento
                 : AgendadoSemPagamento;
-        if (core.Contains("FALTOU") || core.Contains("NAO_COMPARECEU") || core.Contains("NÃO_COMPARECEU"))
+        // A etapa do funil 2026 chama-se "NÃO COMPARECEU" — com acento e ESPAÇO. As grafias
+        // com underline abaixo cobriam só o funil antigo, então o nome real não batia aqui e
+        // caía no Contains("COMPARECEU") mais abaixo: 100 faltas ficaram gravadas como
+        // comparecimento (Marabá 54, Balsas 38). Comparar sem acento e sem separador cobre
+        // todas as grafias de uma vez.
+        var semSeparador = SemAcentoNemSeparador(core);
+        if (core.Contains("FALTOU")
+            || semSeparador.Contains("NAO COMPARECEU")
+            || semSeparador.Contains("NO SHOW"))
             return NaoCompareceu;
         if (core.Contains("CONTINUIDADE") || core.Contains("NAO_FECHOU") || core.Contains("NÃO_FECHOU"))
             return NaoDeuContinuidade;
@@ -93,6 +104,20 @@ public static class CanonicalStages
             return EntradaLead;
 
         return null;
+    }
+
+    /// <summary>
+    /// Tira acento e troca "_"/"-"/"." por espaço, colapsando espaços repetidos. Serve para
+    /// casar o mesmo nome de etapa escrito de jeitos diferentes entre unidades
+    /// ("NÃO COMPARECEU", "NAO_COMPARECEU", "nao-compareceu").
+    /// </summary>
+    private static string SemAcentoNemSeparador(string s)
+    {
+        var semAcento = new string(s.Normalize(NormalizationForm.FormD)
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .ToArray());
+        var trocado = semAcento.Replace('_', ' ').Replace('-', ' ').Replace('.', ' ');
+        return string.Join(' ', trocado.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     /// <summary>Remove um prefixo ordinal ("04_", "17-", "01 ", "3.") do início da string.</summary>

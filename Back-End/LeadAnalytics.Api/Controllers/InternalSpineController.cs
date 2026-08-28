@@ -68,10 +68,14 @@ public class InternalSpineController(
             de,
             ate,
             total = linhas.Count,
+            valorTotal = linhas.Sum(x => x.Price ?? 0m),
+            semPreco = linhas.Count(x => x.Price is null or 0m),
             tratamentos = linhas.Select(t => new
             {
                 t.IdTreatment,
                 paciente = t.ClientName,
+                price = t.Price,
+                situacao = t.StatusName,
                 created = t.Created,
                 createdDiaLocal = t.Created is null ? null : SpineApiClient.DiaLocal(t.Created.Value).ToString("yyyy-MM-dd"),
                 dateBegin = t.DateBegin,

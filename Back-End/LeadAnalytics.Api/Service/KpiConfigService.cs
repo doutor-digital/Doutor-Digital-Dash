@@ -436,7 +436,7 @@ public class KpiConfigService(
     {
         try
         {
-            if (metric == "tratamentos")
+            if (metric == "tratamentos" || metric == "receita")
             {
                 // Tratamentos LANÇADOS no período selecionado — o mesmo recorte da tela da
                 // franquia. Selecionar 01/07–31/07 tem que devolver o que a clínica vê ali.
@@ -456,6 +456,15 @@ public class KpiConfigService(
                 // A nota diz QUAL fonte respondeu: rota oficial e export do CRM web dão
                 // números diferentes, e sem isso um número que muda sozinho vira mistério.
                 var fonteNome = t.Fonte == "api" ? "rota oficial" : "export do CRM web";
+
+                // Receita sai da MESMA chamada, somando o `price` de cada tratamento —
+                // o campo existe na rota e chega como texto ("3680.00"). Vir daqui, e não
+                // do campo digitado na Kommo, tira a receita da dependência de alguém
+                // lembrar de preencher: o valor é o que a clínica lançou no sistema dela.
+                if (metric == "receita")
+                    return new FranquiaMedida((double)t.ValorTotal,
+                        $"fonte: franquia · {fonteNome} (valor lançado no período)");
+
                 return new FranquiaMedida(t.Total, $"fonte: franquia · {fonteNome} (lançados no período)");
             }
 

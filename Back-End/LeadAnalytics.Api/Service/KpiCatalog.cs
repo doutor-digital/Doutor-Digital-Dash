@@ -29,7 +29,7 @@ public static class KpiSourceTypes
     /// <summary>
     /// Puxa o número do CRM da FRANQUIA (Doutor Hérnia), não do Kommo. O Kommo é dono do
     /// comercial; agendamento/comparecimento/falta/tratamento são do sistema clínico. Config:
-    /// {"metric":"agendados"|"no_show"|"consultas"|"tratamentos"}.
+    /// {"metric":"agendados"|"no_show"|"consultas"|"tratamentos"|"receita"}.
     ///
     /// agendados/no_show/consultas vêm da API Spine (/avaliacoes). `tratamentos` vem da rota
     /// oficial /api/treatments/search — liberada em ago/2026 — e conta os LANÇADOS no período
@@ -48,7 +48,7 @@ public static class KpiSourceTypes
     /// escrita errada no seed de virar silenciosamente o número de outro card.
     /// </summary>
     public static readonly string[] MetricasFranquia =
-        { "agendados", "consultas", "no_show", "tratamentos" };
+        { "agendados", "consultas", "no_show", "tratamentos", "receita" };
 
     public static readonly string[] All =
         { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt, Franquia };

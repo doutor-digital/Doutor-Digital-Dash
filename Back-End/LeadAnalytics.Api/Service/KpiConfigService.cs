@@ -1426,6 +1426,17 @@ public class KpiConfigService(
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
+
+        // Quando a config traz stageIds, o breakdown respeita a etapa — igual ao
+        // StageFieldFilter já faz na contagem. É o que permite quebrar o "◉ Semáforo"
+        // dentro de COMPARECEU: o campo é o desfecho da consulta, e fora dessa etapa
+        // ele é sobra de card antigo, que contaminaria a distribuição.
+        if (p.StageIds.Count > 0)
+        {
+            var etapas = p.StageIds;
+            q = q.Where(l => l.CurrentStageId != null && etapas.Contains(l.CurrentStageId.Value));
+        }
+
         q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);
 
         var jsons = await q.OrderByDescending(l => l.CreatedAt)

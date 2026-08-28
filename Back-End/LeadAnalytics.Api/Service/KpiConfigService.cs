@@ -1420,21 +1420,50 @@ public class KpiConfigService(
         // filtro "por dia" porque sync/webhook bumpam UpdatedAt em todos os leads — um
         // re-sync jogava todo mundo para "hoje". Com o CreatedAt já corrigido (vem da
         // data real da Kommo), a quebra por período fica correta.
+        // `porEntradaNaEtapa` troca a PERGUNTA DA DATA. Sem ela, o período recorta por
+        // criação do lead — certo para origem, que é atributo de entrada. Errado para um
+        // DESFECHO: o lead entra em julho e a consulta acontece em agosto, então filtrar
+        // por criação faz o card do dia ficar vazio enquanto a clínica registra desfecho
+        // o dia inteiro. Medido em 28/08/2026: 31 leads com semáforo nos últimos 30 dias
+        // e ZERO criados naquele dia — o card mostrava "—" e parecia quebrado.
+        var porEntrada = p.StageIds.Count > 0
+            && config.TryGetProperty("porEntradaNaEtapa", out var flag)
+            && flag.ValueKind == JsonValueKind.True;
+
         var q = _db.Leads.AsNoTracking()
             .ExcludeDeleted()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to
-                        && l.CustomFieldsJson != null);
+            .Where(l => l.TenantId == clinicId && l.CustomFieldsJson != null);
+
+        if (!porEntrada)
+            q = q.Where(l => l.CreatedAt >= from && l.CreatedAt <= to);
+
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
-        // Quando a config traz stageIds, o breakdown respeita a etapa — igual ao
-        // StageFieldFilter já faz na contagem. É o que permite quebrar o "◉ Semáforo"
-        // dentro de COMPARECEU: o campo é o desfecho da consulta, e fora dessa etapa
-        // ele é sobra de card antigo, que contaminaria a distribuição.
         if (p.StageIds.Count > 0)
         {
             var etapas = p.StageIds;
-            q = q.Where(l => l.CurrentStageId != null && etapas.Contains(l.CurrentStageId.Value));
+            if (porEntrada)
+            {
+                // Quem ENTROU na etapa dentro do período — mesmo que já tenha saído dela
+                // depois. O desfecho aconteceu; mover o card não desfaz o que ocorreu.
+                //
+                // Linhas `legacy` ficam de fora: nelas ChangedAt é o updated_at do lead,
+                // não a data de entrada, e contá-las jogaria o desfecho para o dia do
+                // último sync.
+                var entraram = _db.LeadStageHistories.AsNoTracking()
+                    .Where(h => etapas.Contains(h.StageId)
+                                && h.EntrySource != Models.LeadStageHistory.SourceLegacy
+                                && h.ChangedAt >= from && h.ChangedAt <= to)
+                    .Select(h => h.LeadId);
+
+                q = q.Where(l => entraram.Contains(l.Id));
+            }
+            else
+            {
+                // Sem a flag: a etapa ATUAL do lead, como o StageFieldFilter faz.
+                q = q.Where(l => l.CurrentStageId != null && etapas.Contains(l.CurrentStageId.Value));
+            }
         }
 
         q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);

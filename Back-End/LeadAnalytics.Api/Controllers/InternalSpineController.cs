@@ -310,6 +310,71 @@ public class InternalSpineController(
     }
 
     /// <summary>
+    /// Roda o cruzamento em TODAS as unidades conectadas e grava os vínculos.
+    ///
+    /// É o que o cron chama uma vez por dia. Cada unidade custa duas chamadas por
+    /// tratamento, então elas vão em série, com respiro entre uma e outra: a Kommo
+    /// limita requisições e um lote apressado volta 429 no meio.
+    ///
+    /// Falha de uma unidade não para o lote — ela entra no relatório com o motivo.
+    /// Token vencido da Kommo é o caso mais comum, e precisa aparecer por unidade para
+    /// alguém saber qual renovar.
+    /// </summary>
+    [HttpPost("reconciliacao/todas")]
+    public async Task<IActionResult> ReconciliarTodas(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] int pausaMs = 1500,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var unidades = await _db.Units.AsNoTracking()
+            .Where(u => u.IsActive)
+            .OrderBy(u => u.Id)
+            .Select(u => new { u.Id, u.Slug })
+            .ToListAsync(ct);
+
+        var relatorio = new List<object>();
+        foreach (var u in unidades)
+        {
+            try
+            {
+                var r = await ReconciliarAsync(u.Id, de, ate, ct);
+                if (r is null)
+                {
+                    relatorio.Add(new { u.Id, u.Slug, situacao = "sem token da franquia" });
+                    continue;
+                }
+
+                var (linhas, _, _, erroKommo) = r.Value;
+                relatorio.Add(new
+                {
+                    u.Id,
+                    u.Slug,
+                    situacao = erroKommo is null ? "ok" : "kommo falhou",
+                    tratamentos = linhas.Count,
+                    casaram = linhas.Count(x => x.Casou),
+                    semValorNaKommo = linhas.Count(x => x.Casou && string.IsNullOrWhiteSpace(x.ValorKommo)),
+                    somaFranquia = linhas.Sum(x => x.PrecoFranquia ?? 0m),
+                    erroKommo,
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Reconciliacao em lote: unidade {UnitId} falhou", u.Id);
+                relatorio.Add(new { u.Id, u.Slug, situacao = "erro", erro = ex.Message });
+            }
+
+            if (pausaMs > 0) await Task.Delay(pausaMs, ct);
+        }
+
+        return Ok(new { de, ate, unidades = relatorio.Count, relatorio });
+    }
+
+    /// <summary>
     /// Captura a agenda recente da unidade e grava no nosso banco (preserva o que a
     /// API do Spine perde depois de 100 dias). O n8n só dispara; a API puxa e grava.
     /// Janela padrão: 7 dias (rolling), para corrigir status que mudaram.

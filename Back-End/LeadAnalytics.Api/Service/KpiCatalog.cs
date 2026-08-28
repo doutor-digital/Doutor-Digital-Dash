@@ -42,6 +42,14 @@ public static class KpiSourceTypes
     /// </summary>
     public const string Franquia = "franquia";
 
+    /// <summary>
+    /// As únicas métricas aceitas em <c>{"metric": "..."}</c> para <see cref="Franquia"/>.
+    /// Validar contra esta lista ANTES de bater na franquia é o que impede uma métrica
+    /// escrita errada no seed de virar silenciosamente o número de outro card.
+    /// </summary>
+    public static readonly string[] MetricasFranquia =
+        { "agendados", "consultas", "no_show", "tratamentos" };
+
     public static readonly string[] All =
         { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt, Franquia };
 

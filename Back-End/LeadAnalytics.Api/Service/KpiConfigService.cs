@@ -15,11 +15,13 @@ namespace LeadAnalytics.Api.Service;
 public class KpiConfigService(
     AppDbContext db,
     Spine.SpineAvaliacoesService spineAvaliacoes,
-    Spine.FranquiaTratamentosService franquiaTratamentos)
+    Spine.FranquiaTratamentosService franquiaTratamentos,
+    ILogger<KpiConfigService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly Spine.SpineAvaliacoesService _spineAvaliacoes = spineAvaliacoes;
     private readonly Spine.FranquiaTratamentosService _franquiaTratamentos = franquiaTratamentos;
+    private readonly ILogger<KpiConfigService> _logger = logger;
 
     // Chaves (em kpi_configurations) do mapeamento de campos do Perfil do Lead por unidade.
     public const string ProfileBirthdateKey = "profile_birthdate";
@@ -88,6 +90,30 @@ public class KpiConfigService(
             .Where(k => k.UnitId == unitId)
             .OrderBy(k => k.KpiKey)
             .ToListAsync(ct);
+
+    /// <summary>
+    /// Os KPIs de fonte <see cref="KpiSourceTypes.Franquia"/> do tenant, um por chave.
+    ///
+    /// Existe para o modo "Todas as unidades", onde não há unidade da qual ler a
+    /// configuração. Só a fonte `franquia` entra: a config dela é o nome da métrica, que
+    /// vale igual em qualquer conta. As outras fontes carregam ids de UMA conta da Kommo
+    /// (stageIds, fieldId) e, aplicadas ao agregado, dariam número errado com cara de certo.
+    /// </summary>
+    public async Task<List<KpiConfiguration>> GetFranquiaForClinicAsync(
+        int clinicId, CancellationToken ct = default)
+    {
+        var todas = await _db.KpiConfigurations.AsNoTracking()
+            .Where(k => k.ClinicId == clinicId && k.SourceType == KpiSourceTypes.Franquia)
+            .OrderBy(k => k.KpiKey)
+            .ToListAsync(ct);
+
+        // Uma linha por chave: as unidades repetem o mesmo mapeamento (o seed propaga o
+        // mesmo plano), e computar a mesma métrica N vezes só multiplicaria o trabalho.
+        return todas
+            .GroupBy(k => k.KpiKey)
+            .Select(g => g.First())
+            .ToList();
+    }
 
     /// <summary>Upsert (por KpiKey) de cada mapeamento enviado. Não remove os ausentes.</summary>
     public async Task SaveAsync(
@@ -203,75 +229,48 @@ public class KpiConfigService(
 
             case KpiSourceTypes.Franquia:
             {
-                // O número vem do CRM da FRANQUIA (sistema clínico), não do Kommo.
-                // no_show/consultas = API Spine (/avaliacoes); tratamentos = scrape do web.
-                if (!unitId.HasValue) return (0, sample, "franquia exige unidade");
+                // O número vem do CRM da FRANQUIA (sistema clínico), não do Kommo. O Kommo
+                // é dono do comercial; agenda, comparecimento e tratamento são do clínico.
                 var metric = config.TryGetProperty("metric", out var mEl) ? mEl.GetString() : null;
+
+                // Valida a métrica ANTES de qualquer I/O. Métrica errada é defeito de
+                // configuração e tem que aparecer como tal, na unidade e no agregado.
+                if (metric is null || !KpiSourceTypes.MetricasFranquia.Contains(metric))
+                    return (0, sample, $"métrica de franquia desconhecida: {metric ?? "(vazia)"}");
+
                 var de = DateOnly.FromDateTime(from);
                 var ate = DateOnly.FromDateTime(to);
-                try
+
+                // Uma unidade selecionada: o número é o dela.
+                if (unitId.HasValue)
                 {
-                    if (metric == "tratamentos")
-                    {
-                        // Tratamentos LANÇADOS no período selecionado — o mesmo recorte da
-                        // tela da franquia. Selecionar 01/07–31/07 tem que devolver o que
-                        // a clínica vê ali: em Imperatriz, 10 (9 Protocolo 03 Meses e
-                        // 1 Protocolo 01 Mês).
-                        //
-                        // ANTES ERA OUTRA PERGUNTA, e é a origem da confusão: contava
-                        // ATIVOS numa janela de 3 anos, ignorando o período do card. O
-                        // motivo alegado era estabilidade de borda, mas o preço foi um
-                        // número que não conversava com nenhuma tela — nem com a franquia,
-                        // nem com o filtro que o usuário acabara de escolher. A borda em si
-                        // já está resolvida onde é o lugar dela: SearchTreatmentsAsync pede
-                        // um dia a mais e recorta pelo dia da clínica.
-                        //
-                        // Conta TODOS os lançados, sem filtrar situação: um tratamento que
-                        // virou desistência ainda foi lançado naquele mês, e a franquia o
-                        // mostra na lista do mês. Filtrar aqui faria o número do passado
-                        // mudar sozinho conforme a recepção edita situação.
-                        var t = await _franquiaTratamentos.GetAsync(unitId.Value, de, ate, ct);
-                        if (t is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
-
-                        // A nota diz QUAL fonte respondeu: rota oficial e export do CRM web
-                        // dão números diferentes, e sem isso um número que muda sozinho
-                        // vira mistério.
-                        var fonteNome = t.Fonte == "api" ? "rota oficial" : "export do CRM web";
-                        return (t.Total, sample, $"fonte: franquia · {fonteNome} (lançados no período)");
-                    }
-                    var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
-                    if (av is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
-
-                    // Cada métrica é explícita. Antes existia um `_ => av.Realizadas`: uma
-                    // métrica escrita errada no seed virava "consultas" debaixo do rótulo de
-                    // OUTRO card — número errado e calado, que é o pior defeito que este
-                    // painel pode ter. Agora o desconhecido aparece como nota.
-                    (double Valor, string OQue)? medida = metric switch
-                    {
-                        "no_show" => (av.PorSituacao
-                            .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
-                            .Sum(s => s.Total), "faltas"),
-
-                        // Todos os horários marcados PARA o período, em qualquer situação —
-                        // o mesmo recorte da agenda da franquia. Existe porque na Kommo
-                        // "agendado" é a etapa que a SDR arrasta à mão: em 2026-08-18 o campo
-                        // `✓ Agendou` estava vazio em 9 das 10 unidades. Aqui o número é o
-                        // horário que a clínica de fato reservou, não a opinião de quem moveu
-                        // o card.
-                        "agendados" => (av.Total, "avaliações marcadas no período"),
-
-                        "consultas" => (av.Realizadas, "comparecimento real"),
-                        _ => null,
-                    };
-                    if (medida is null)
-                        return (0, sample, $"métrica de franquia desconhecida: {metric ?? "(vazia)"}");
-
-                    return (medida.Value.Valor, sample, $"fonte: CRM da franquia · {medida.Value.OQue}");
+                    var m = await MedirFranquiaAsync(unitId.Value, metric, de, ate, ct);
+                    return (m.Valor ?? 0, sample, m.Nota);
                 }
-                catch (Exception ex)
-                {
-                    return (0, sample, $"franquia indisponível: {ex.Message}");
-                }
+
+                // "Todas as unidades" (unitId nulo). Antes isto devolvia 0 com a nota
+                // "franquia exige unidade" — ou seja, o modo que o franqueador master mais
+                // usa era exatamente o que zerava a agenda, o comparecimento e os
+                // tratamentos. Agora soma as unidades do tenant, em paralelo e com
+                // isolamento de falha, igual ao comparativo da rede.
+                var unidades = await _db.Units.AsNoTracking()
+                    .Where(u => u.IsActive && u.ClinicId == clinicId)
+                    .Select(u => u.Id)
+                    .ToListAsync(ct);
+
+                var medidas = await Task.WhenAll(
+                    unidades.Select(id => MedirFranquiaAsync(id, metric, de, ate, ct)));
+
+                // Unidade sem token não entra como zero: ela sai da conta e o total diz
+                // quantas responderam. Zero mentiria — diria que a clínica não agendou
+                // nada, quando na verdade é a nossa vista que está tapada.
+                var responderam = medidas.Where(x => x.Valor.HasValue).ToList();
+                if (responderam.Count == 0) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
+
+                return (
+                    responderam.Sum(x => x.Valor!.Value),
+                    sample,
+                    $"fonte: CRM da franquia · soma de {responderam.Count} de {unidades.Count} unidades");
             }
 
             case KpiSourceTypes.KommoStage:
@@ -383,6 +382,81 @@ public class KpiConfigService(
 
             default:
                 return (0, sample, $"Tipo de fonte desconhecido: {sourceType}");
+        }
+    }
+
+    /// <summary>
+    /// Uma medida da franquia para UMA unidade. <c>Valor</c> nulo significa "não
+    /// respondeu" (sem token, ou a franquia caiu) — que é diferente de zero, e é o que
+    /// permite ao agregado somar só quem respondeu em vez de diluir a média com zeros
+    /// falsos. A <c>Nota</c> sempre diz de onde veio o número, ou por que não veio.
+    /// </summary>
+    private readonly record struct FranquiaMedida(double? Valor, string Nota);
+
+    /// <summary>
+    /// Resolve uma métrica da franquia para uma unidade. Assume a métrica já validada
+    /// contra <see cref="KpiSourceTypes.MetricasFranquia"/> pelo chamador.
+    /// </summary>
+    private async Task<FranquiaMedida> MedirFranquiaAsync(
+        int unitId, string metric, DateOnly de, DateOnly ate, CancellationToken ct)
+    {
+        try
+        {
+            if (metric == "tratamentos")
+            {
+                // Tratamentos LANÇADOS no período selecionado — o mesmo recorte da tela da
+                // franquia. Selecionar 01/07–31/07 tem que devolver o que a clínica vê ali.
+                //
+                // ANTES ERA OUTRA PERGUNTA, e é a origem da confusão: contava ATIVOS numa
+                // janela de 3 anos, ignorando o período do card. O preço foi um número que
+                // não conversava com nenhuma tela. A borda está resolvida onde é o lugar
+                // dela: SearchTreatmentsAsync pede um dia a mais e recorta pelo dia da clínica.
+                //
+                // Conta TODOS os lançados, sem filtrar situação: um tratamento que virou
+                // desistência ainda foi lançado naquele mês, e a franquia o mostra na lista
+                // do mês. Filtrar aqui faria o número do passado mudar sozinho conforme a
+                // recepção edita a situação.
+                var t = await _franquiaTratamentos.GetAsync(unitId, de, ate, ct);
+                if (t is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
+
+                // A nota diz QUAL fonte respondeu: rota oficial e export do CRM web dão
+                // números diferentes, e sem isso um número que muda sozinho vira mistério.
+                var fonteNome = t.Fonte == "api" ? "rota oficial" : "export do CRM web";
+                return new FranquiaMedida(t.Total, $"fonte: franquia · {fonteNome} (lançados no período)");
+            }
+
+            var av = await _spineAvaliacoes.GetAsync(unitId, de, ate, ct);
+            if (av is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
+
+            // Cada métrica é explícita. Nunca um `_ =>` que caia em Realizadas: era assim
+            // que uma métrica escrita errada no seed virava "consultas" debaixo do rótulo
+            // de OUTRO card — número errado e calado, o pior defeito que este painel pode ter.
+            return metric switch
+            {
+                "no_show" => new FranquiaMedida(
+                    av.PorSituacao
+                      .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
+                      .Sum(s => s.Total),
+                    "fonte: CRM da franquia · faltas"),
+
+                // Todos os horários marcados PARA o período, em qualquer situação — o mesmo
+                // recorte da agenda da franquia. Existe porque na Kommo "agendado" é a etapa
+                // que a SDR arrasta à mão: em 2026-08-18 o campo `✓ Agendou` estava vazio em
+                // 9 das 10 unidades. Aqui o número é o horário que a clínica de fato reservou.
+                "agendados" => new FranquiaMedida(av.Total,
+                    "fonte: CRM da franquia · avaliações marcadas no período"),
+
+                "consultas" => new FranquiaMedida(av.Realizadas,
+                    "fonte: CRM da franquia · comparecimento real"),
+
+                _ => new FranquiaMedida(null, $"métrica de franquia desconhecida: {metric}"),
+            };
+        }
+        catch (Exception ex)
+        {
+            // Falha de UMA unidade não pode derrubar o agregado das outras.
+            _logger.LogWarning(ex, "Franquia: unidade {UnitId} falhou na métrica {Metric}", unitId, metric);
+            return new FranquiaMedida(null, $"franquia indisponível: {ex.Message}");
         }
     }
 

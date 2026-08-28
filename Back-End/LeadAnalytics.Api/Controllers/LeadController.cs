@@ -644,6 +644,44 @@ public class WebhooksController(
                 result.CustomKpis = result.CustomKpis
                     .OrderBy(k => k.SortOrder).ThenBy(k => k.Label).ToList();
             }
+            else
+            {
+                // "Todas as unidades" (sem unidade selecionada) — o modo que o franqueador
+                // master mais usa. Antes deste bloco, kpi_overrides simplesmente não era
+                // preenchido aqui, então agenda, comparecimento e tratamentos apareciam
+                // zerados justamente para quem olha a rede inteira.
+                //
+                // Só a fonte `franquia` entra: a config dela é o nome da métrica, que vale
+                // em qualquer conta. As outras carregam ids de UMA conta da Kommo e, somadas
+                // entre unidades, dariam número errado com cara de certo.
+                var franquiaCfgs = await _kpiService.GetFranquiaForClinicAsync(
+                    clinicId, HttpContext.RequestAborted);
+
+                foreach (var cfg in franquiaCfgs)
+                {
+                    try
+                    {
+                        var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+                            string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
+
+                        // unitId null → o serviço soma as unidades do tenant que responderam.
+                        // As datas são as MESMAS do filtro da tela, então o período escolhido
+                        // chega na API da franquia também no agregado.
+                        var (value, _, note) = await _kpiService.ComputeAsync(
+                            clinicId, null, cfg.SourceType, config, dateFrom, dateTo,
+                            responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
+
+                        if (note == KpiNotes.SemAutorizacaoFranquia)
+                            result.KpisSemAutorizacao.Add(cfg.KpiKey);
+                        else
+                            result.KpiOverrides[cfg.KpiKey] = value;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Falha no KPI de franquia {Kpi} no agregado", cfg.KpiKey);
+                    }
+                }
+            }
 
             _cache.Set(cacheKey, result, DashboardOverviewCacheTtl);
             return Ok(result);

@@ -241,14 +241,32 @@ public class KpiConfigService(
                     }
                     var av = await _spineAvaliacoes.GetAsync(unitId.Value, de, ate, ct);
                     if (av is null) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
-                    double val = metric switch
+
+                    // Cada métrica é explícita. Antes existia um `_ => av.Realizadas`: uma
+                    // métrica escrita errada no seed virava "consultas" debaixo do rótulo de
+                    // OUTRO card — número errado e calado, que é o pior defeito que este
+                    // painel pode ter. Agora o desconhecido aparece como nota.
+                    (double Valor, string OQue)? medida = metric switch
                     {
-                        "no_show" => av.PorSituacao
+                        "no_show" => (av.PorSituacao
                             .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
-                            .Sum(s => s.Total),
-                        _ => av.Realizadas, // "consultas" (comparecimento real)
+                            .Sum(s => s.Total), "faltas"),
+
+                        // Todos os horários marcados PARA o período, em qualquer situação —
+                        // o mesmo recorte da agenda da franquia. Existe porque na Kommo
+                        // "agendado" é a etapa que a SDR arrasta à mão: em 2026-08-18 o campo
+                        // `✓ Agendou` estava vazio em 9 das 10 unidades. Aqui o número é o
+                        // horário que a clínica de fato reservou, não a opinião de quem moveu
+                        // o card.
+                        "agendados" => (av.Total, "avaliações marcadas no período"),
+
+                        "consultas" => (av.Realizadas, "comparecimento real"),
+                        _ => null,
                     };
-                    return (val, sample, "fonte: CRM da franquia");
+                    if (medida is null)
+                        return (0, sample, $"métrica de franquia desconhecida: {metric ?? "(vazia)"}");
+
+                    return (medida.Value.Valor, sample, $"fonte: CRM da franquia · {medida.Value.OQue}");
                 }
                 catch (Exception ex)
                 {

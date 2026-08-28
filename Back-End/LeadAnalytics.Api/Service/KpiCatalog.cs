@@ -28,13 +28,17 @@ public static class KpiSourceTypes
 
     /// <summary>
     /// Puxa o número do CRM da FRANQUIA (Doutor Hérnia), não do Kommo. O Kommo é dono do
-    /// comercial; comparecimento/falta/tratamento são do sistema clínico. Config:
-    /// {"metric":"no_show"|"consultas"|"tratamentos"}.
+    /// comercial; agendamento/comparecimento/falta/tratamento são do sistema clínico. Config:
+    /// {"metric":"agendados"|"no_show"|"consultas"|"tratamentos"}.
     ///
-    /// no_show/consultas vêm da API Spine (/avaliacoes). `tratamentos` vem da rota oficial
-    /// /api/treatments/search — liberada em ago/2026 — e conta os LANÇADOS no período
+    /// agendados/no_show/consultas vêm da API Spine (/avaliacoes). `tratamentos` vem da rota
+    /// oficial /api/treatments/search — liberada em ago/2026 — e conta os LANÇADOS no período
     /// selecionado, o mesmo recorte da tela da franquia. O scrape do CRM web ficou como
     /// reserva para unidade sem token.
+    ///
+    /// O recorte de TODAS elas é a data do FATO (o que aconteceu na clínica no período), não
+    /// a data de entrada do lead. É por isso que estes números não batem com um funil por
+    /// safra de lead da Kommo — são perguntas diferentes, as duas certas.
     /// </summary>
     public const string Franquia = "franquia";
 

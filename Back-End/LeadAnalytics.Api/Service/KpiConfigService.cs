@@ -240,8 +240,22 @@ public class KpiConfigService(
                 if (metric is null || !KpiSourceTypes.MetricasFranquia.Contains(metric))
                     return (0, sample, $"métrica de franquia desconhecida: {metric ?? "(vazia)"}");
 
-                var de = DateOnly.FromDateTime(from);
-                var ate = DateOnly.FromDateTime(to);
+                // O DIA COMERCIAL NÃO VALE AQUI, E ISSO CUSTOU UM CARD ERRADO.
+                //
+                // A tela manda o período em "dia comercial", que vira às 19h da véspera:
+                // pedir 28/08 chega como [27/08 19:00, 28/08 19:00) local. A regra existe
+                // para LEAD — quem chega às 20h conta para o dia seguinte — e não tem
+                // sentido para agenda de clínica nem para lançamento de tratamento.
+                //
+                // `DateOnly.FromDateTime(from)` devolvia 27/08 e a franquia era consultada
+                // por 27..28. Medido em 28/08/2026 em Marabá: o card mostrava 3 tratamentos
+                // que eram todos de 27/08, enquanto a tela da franquia mostrava 0. O número
+                // não era inventado — era do dia errado, que é pior, porque parece certo.
+                //
+                // Somar 5h joga o início (19:00 local) para a meia-noite do dia que a pessoa
+                // escolheu; numa janela já alinhada ao calendário, não muda nada. O fim
+                // recua 1 segundo para não capturar o dia seguinte quando termina às 00:00.
+                var (de, ate) = JanelaDaFranquia(from, to);
 
                 // Uma unidade selecionada: o número é o dela.
                 if (unitId.HasValue)
@@ -388,6 +402,21 @@ public class KpiConfigService(
             default:
                 return (0, sample, $"Tipo de fonte desconhecido: {sourceType}");
         }
+    }
+
+    /// <summary>
+    /// Converte a janela da tela (em "dia comercial") para os dias de calendário que a
+    /// franquia entende. Público para ser testável: é conversão de data, o tipo de código
+    /// que erra em silêncio e só aparece como número plausível do dia errado.
+    /// </summary>
+    public static (DateOnly De, DateOnly Ate) JanelaDaFranquia(DateTime from, DateTime to)
+    {
+        // Somar 5h leva o início (19:00 local da véspera) para a meia-noite do dia que a
+        // pessoa escolheu; numa janela já alinhada ao calendário, não muda o dia.
+        var de = Spine.SpineApiClient.DiaLocal(from.AddHours(5));
+        // Recua 1 segundo para não capturar o dia seguinte quando a janela termina às 00:00.
+        var ate = Spine.SpineApiClient.DiaLocal(to.AddSeconds(-1));
+        return ate < de ? (de, de) : (de, ate);
     }
 
     /// <summary>

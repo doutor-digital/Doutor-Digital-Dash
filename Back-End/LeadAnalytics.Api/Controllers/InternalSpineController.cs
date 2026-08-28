@@ -21,14 +21,64 @@ public class InternalSpineController(
     AppDbContext db,
     SpineAvaliacoesService avaliacoes,
     SpineHistoricoService historico,
+    SpineTokenStore tokens,
+    SpineApiClient api,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
     private readonly AppDbContext _db = db;
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineHistoricoService _historico = historico;
+    private readonly SpineTokenStore _tokens = tokens;
+    private readonly SpineApiClient _api = api;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
+
+    /// <summary>
+    /// Diagnóstico: LISTA os tratamentos que o card conta, com as datas de cada um.
+    ///
+    /// Existe porque "o card diz 3 e a tela da franquia diz 0" não se resolve olhando
+    /// código: precisa ver QUAIS são os três e por que a franquia não os mostra. Sem
+    /// isto a investigação vira tentativa e erro em produção — e o cache de 5 minutos
+    /// esconde o log da chamada, então nem o log ajuda.
+    ///
+    /// Só leitura, protegido pela mesma X-Admin-Key do resto do controller.
+    /// </summary>
+    [HttpGet("tratamentos/diagnostico")]
+    public async Task<IActionResult> TratamentosDiagnostico(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var token = await _tokens.GetTokenAsync(unitId, ct);
+        if (token is null) return Ok(new { unitId, conectado = false });
+
+        // Chama a rota direto, sem passar pelo cache do FranquiaTratamentosService:
+        // o objetivo é ver o dado de agora, não o que ficou guardado.
+        var linhas = await _api.SearchTreatmentsAsync(token, de, ate, ct);
+
+        return Ok(new
+        {
+            unitId,
+            de,
+            ate,
+            total = linhas.Count,
+            tratamentos = linhas.Select(t => new
+            {
+                t.IdTreatment,
+                paciente = t.ClientName,
+                created = t.Created,
+                createdDiaLocal = t.Created is null ? null : SpineApiClient.DiaLocal(t.Created.Value).ToString("yyyy-MM-dd"),
+                dateBegin = t.DateBegin,
+                dateBeginDiaLocal = t.DateBegin is null ? null : SpineApiClient.DiaLocal(t.DateBegin.Value).ToString("yyyy-MM-dd"),
+            }),
+        });
+    }
 
     /// <summary>
     /// Captura a agenda recente da unidade e grava no nosso banco (preserva o que a

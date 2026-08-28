@@ -176,6 +176,42 @@ public class InternalSpineController(
                 leadNome is not null));
         }
 
+        // Grava o vínculo: é o que permite ao KPI somar depois sem refazer 44 chamadas.
+        foreach (var l in linhas)
+        {
+            var dia = trats.First(x => x.IdTreatment == l.IdTreatment).Created is { } c
+                ? SpineApiClient.DiaLocal(c)
+                : DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var existente = await _db.FranquiaLeadLinks
+                .FirstOrDefaultAsync(x => x.UnitId == unitId && x.IdTreatment == l.IdTreatment, ct);
+            var vk = decimal.TryParse(l.ValorKommo, out var pv) ? pv : (decimal?)null;
+
+            if (existente is null)
+            {
+                _db.FranquiaLeadLinks.Add(new Models.FranquiaLeadLink
+                {
+                    UnitId = unitId, IdTreatment = l.IdTreatment, DiaLancamento = dia,
+                    Paciente = l.Paciente, Telefone = l.Whatsapp?.TrimStart('…'),
+                    PrecoFranquia = l.PrecoFranquia, LeadId = l.LeadId, ValorKommo = vk,
+                    AtualizadoEm = DateTime.UtcNow,
+                });
+            }
+            else
+            {
+                existente.DiaLancamento = dia;
+                existente.Paciente = l.Paciente;
+                existente.Telefone = l.Whatsapp?.TrimStart('…');
+                existente.PrecoFranquia = l.PrecoFranquia;
+                // Só sobrescreve o lead/valor quando a Kommo respondeu: um 401 não pode
+                // apagar um vínculo bom gravado antes.
+                if (l.LeadId is not null) existente.LeadId = l.LeadId;
+                if (vk is not null) existente.ValorKommo = vk;
+                existente.AtualizadoEm = DateTime.UtcNow;
+            }
+        }
+        await _db.SaveChangesAsync(ct);
+
         return (linhas, campoValor, unidade, erroKommo);
     }
 

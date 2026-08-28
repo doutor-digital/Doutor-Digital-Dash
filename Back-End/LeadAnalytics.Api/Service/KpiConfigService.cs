@@ -468,7 +468,28 @@ public class KpiConfigService(
     {
         try
         {
-            if (metric == "tratamentos" || metric == "receita")
+            if (metric == "receita")
+            {
+                // POPULAÇÃO da franquia, VALOR da Kommo — a regra do negócio. Soma o campo
+                // preenchido na Kommo, mas só dos leads vinculados aos tratamentos que a
+                // clínica lançou no período. Sem o vínculo, a Kommo somava quem entrou em
+                // EM TRATAMENTO por qualquer motivo: em Araguaína, 30 leads e R$ 107.360
+                // contra os 22 tratamentos reais e R$ 77.280.
+                var vinculos = await _db.FranquiaLeadLinks.AsNoTracking()
+                    .Where(v => v.UnitId == unitId
+                                && v.DiaLancamento >= de && v.DiaLancamento <= ate)
+                    .Select(v => v.ValorKommo)
+                    .ToListAsync(ct);
+
+                if (vinculos.Count == 0)
+                    return new FranquiaMedida(null, "cruzamento ainda não rodou para este período");
+
+                return new FranquiaMedida(
+                    (double)vinculos.Sum(v => v ?? 0m),
+                    $"fonte: Kommo · valor dos {vinculos.Count} tratamentos da franquia");
+            }
+
+            if (metric == "tratamentos")
             {
                 // Tratamentos LANÇADOS no período selecionado — o mesmo recorte da tela da
                 // franquia. Selecionar 01/07–31/07 tem que devolver o que a clínica vê ali.

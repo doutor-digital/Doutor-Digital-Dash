@@ -23,6 +23,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<Attendant> Attendants { get; set; }
     public DbSet<LeadAssignment> LeadAssignments { get; set; }
     public DbSet<LeadStageHistory> LeadStageHistories { get; set; }
+    public DbSet<FranquiaLeadLink> FranquiaLeadLinks { get; set; }
     public DbSet<LeadConversation> LeadConversations { get; set; }
     public DbSet<LeadInteraction> LeadInteractions { get; set; }
     public DbSet<Payment> Payments { get; set; }
@@ -251,6 +252,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(e => e.Attendant)
                   .WithMany(a => a.Assignments)
                   .HasForeignKey(e => e.AttendantId);
+        });
+
+        modelBuilder.Entity<FranquiaLeadLink>(e =>
+        {
+            e.ToTable("franquia_lead_link");
+            e.HasKey(x => x.Id);
+            // Um vínculo por tratamento: reprocessar atualiza, não duplica.
+            e.HasIndex(x => new { x.UnitId, x.IdTreatment }).IsUnique();
+            e.HasIndex(x => new { x.UnitId, x.DiaLancamento });
         });
 
         // ─── LeadStageHistory ────────────────────────────────────

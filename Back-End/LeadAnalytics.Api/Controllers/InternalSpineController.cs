@@ -97,19 +97,17 @@ public class InternalSpineController(
     /// Devolve os dois valores lado a lado para dizer, sem adivinhar, se as duas bases
     /// falam do mesmo paciente e do mesmo dinheiro.
     /// </summary>
-    [HttpGet("reconciliacao")]
-    public async Task<IActionResult> Reconciliacao(
-        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
-        [FromQuery] int unitId,
-        [FromQuery] DateOnly de,
-        [FromQuery] DateOnly ate,
-        CancellationToken ct = default)
+    /// <summary>
+    /// O cruzamento em si: tratamentos da franquia no período, com o lead da Kommo
+    /// encontrado por telefone e o valor que cada lado registra. Compartilhado pela
+    /// consulta e pelo preenchimento — duas rotas com a mesma verdade.
+    /// </summary>
+    private async Task<(List<LinhaReconciliacao> Linhas, long? CampoValor,
+        Models.Unit? Unidade, string? ErroKommo)?> ReconciliarAsync(
+        int unitId, DateOnly de, DateOnly ate, CancellationToken ct)
     {
-        if (!await _guard.IsAuthorizedAsync(adminKey))
-            return Unauthorized(new { message = "Acesso negado" });
-
         var token = await _tokens.GetTokenAsync(unitId, ct);
-        if (token is null) return Ok(new { unitId, conectado = false });
+        if (token is null) return null;
 
         // O campo de valor do tratamento na Kommo é o mesmo que o KPI de receita usa.
         var cfg = await _db.KpiConfigurations.AsNoTracking()
@@ -137,6 +135,7 @@ public class InternalSpineController(
             var ult8 = fone.Length >= 8 ? fone[^8..] : fone;
 
             string? leadNome = null, valorKommo = null;
+            long? leadId = null;
             if (ult8.Length >= 8 && unidade is not null
                 && !string.IsNullOrWhiteSpace(unidade.KommoSubdomain)
                 && !string.IsNullOrWhiteSpace(unidade.KommoAccessToken))
@@ -150,6 +149,7 @@ public class InternalSpineController(
                     var lead = achados?.Embedded?.Leads?.FirstOrDefault();
                     if (lead is not null)
                     {
+                        leadId = lead.Id;
                         leadNome = lead.Name;
                         var campo = lead.CustomFieldsValues?
                             .FirstOrDefault(f => campoValor is not null && f.FieldId == campoValor);
@@ -167,6 +167,7 @@ public class InternalSpineController(
 
             linhas.Add(new LinhaReconciliacao(
                 t.IdTreatment,
+                leadId,
                 t.ClientName,
                 string.IsNullOrEmpty(fone) ? null : "…" + ult8,
                 t.Price,
@@ -175,14 +176,100 @@ public class InternalSpineController(
                 leadNome is not null));
         }
 
+        return (linhas, campoValor, unidade, erroKommo);
+    }
+
+    [HttpGet("reconciliacao")]
+    public async Task<IActionResult> Reconciliacao(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var r = await ReconciliarAsync(unitId, de, ate, ct);
+        if (r is null) return Ok(new { unitId, conectado = false });
+
         return Ok(new
         {
             unitId, de, ate,
-            tratamentos = trats.Count,
+            tratamentos = r.Value.Linhas.Count,
+            erroKommo = r.Value.ErroKommo,
+            comTelefone = r.Value.Linhas.Count(x => x.Whatsapp is not null),
+            casaramComLead = r.Value.Linhas.Count(x => x.Casou),
+            linhas = r.Value.Linhas,
+        });
+    }
+
+    /// <summary>
+    /// Preenche na Kommo o valor do tratamento dos leads que fecharam e estão com o
+    /// campo em branco, usando o preço que a franquia registrou.
+    ///
+    /// NASCE EM SIMULAÇÃO. Sem <c>aplicar=true</c> nada é gravado: devolve a lista do
+    /// que MUDARIA. Escrever em ficha de paciente é irreversível pela API, então a
+    /// ordem é ver primeiro, gravar depois.
+    ///
+    /// Só toca em campo VAZIO. Onde a Kommo já tem valor, respeita o que está lá —
+    /// mesmo divergente — porque sobrescrever apagaria uma correção manual sem deixar
+    /// rastro.
+    /// </summary>
+    [HttpPost("reconciliacao/preencher")]
+    public async Task<IActionResult> PreencherValores(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] bool aplicar = false,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var resultado = await ReconciliarAsync(unitId, de, ate, ct);
+        if (resultado is null) return Ok(new { unitId, conectado = false });
+        var (linhas, campoValor, unidade, erroKommo) = resultado.Value;
+
+        if (campoValor is null)
+            return BadRequest(new { message = "Unidade sem campo de valor mapeado no KPI de receita." });
+        if (unidade is null || string.IsNullOrWhiteSpace(unidade.KommoSubdomain)
+            || string.IsNullOrWhiteSpace(unidade.KommoAccessToken))
+            return BadRequest(new { message = "Unidade sem credencial da Kommo." });
+
+        var alvos = linhas
+            .Where(l => l.LeadId is not null
+                        && l.PrecoFranquia is > 0
+                        && string.IsNullOrWhiteSpace(l.ValorKommo))
+            .ToList();
+
+        var gravados = new List<object>();
+        foreach (var l in alvos)
+        {
+            var valor = ((int)Math.Round(l.PrecoFranquia!.Value)).ToString();
+            if (aplicar)
+            {
+                await _kommo.PatchLeadCustomFieldsAsync(
+                    unidade.KommoSubdomain, unidade.KommoAccessToken, l.LeadId!.Value,
+                    new[] { new KommoCustomFieldPatch(campoValor.Value, "numeric", valor, null) }, ct);
+                _logger.LogInformation(
+                    "Reconciliacao: gravado valor {Valor} no lead {LeadId} (unidade {UnitId}, paciente {Paciente})",
+                    valor, l.LeadId, unitId, l.Paciente);
+            }
+            gravados.Add(new { l.LeadId, l.Paciente, l.Whatsapp, valor });
+        }
+
+        return Ok(new
+        {
+            unitId, de, ate,
+            modo = aplicar ? "GRAVADO" : "simulacao",
             erroKommo,
-            comTelefone = linhas.Count(x => x.Whatsapp is not null),
-            casaramComLead = linhas.Count(x => x.Casou),
-            linhas,
+            tratamentos = linhas.Count,
+            jaPreenchidos = linhas.Count(l => !string.IsNullOrWhiteSpace(l.ValorKommo)),
+            semLeadNaKommo = linhas.Count(l => l.LeadId is null),
+            alterados = gravados.Count,
+            leads = gravados,
         });
     }
 
@@ -280,6 +367,7 @@ public class InternalSpineController(
 /// <summary>Uma linha da reconciliação: o mesmo paciente visto pelos dois sistemas.</summary>
 public record LinhaReconciliacao(
     long IdTreatment,
+    long? LeadId,
     string? Paciente,
     string? Whatsapp,
     decimal? PrecoFranquia,

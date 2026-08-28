@@ -607,8 +607,10 @@ public class WebhooksController(
                         // abaixo — quem decide o que desenhar é o front, pela lista de chaves.
                         if (note == KpiNotes.SemAutorizacaoFranquia)
                             result.KpisSemAutorizacao.Add(cfg.KpiKey);
-                        else
+                        else if (note != KpiNotes.SemValorFranquia)
                             result.KpiOverrides[cfg.KpiKey] = value;
+                        // SemValorFranquia: não publica número nenhum. O card cai no
+                        // "—" com o motivo, em vez de exibir um zero que mente.
 
                         // KPIs criados do zero viram cards próprios no dashboard.
                         if (cfg.IsCustom)
@@ -678,8 +680,10 @@ public class WebhooksController(
 
                         if (note == KpiNotes.SemAutorizacaoFranquia)
                             result.KpisSemAutorizacao.Add(cfg.KpiKey);
-                        else
+                        else if (note != KpiNotes.SemValorFranquia)
                             result.KpiOverrides[cfg.KpiKey] = value;
+                        // SemValorFranquia: não publica número nenhum. O card cai no
+                        // "—" com o motivo, em vez de exibir um zero que mente.
                     }
                     catch (Exception ex)
                     {

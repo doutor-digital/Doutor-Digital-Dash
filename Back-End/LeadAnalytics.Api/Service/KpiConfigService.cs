@@ -462,8 +462,15 @@ public class KpiConfigService(
                 // do campo digitado na Kommo, tira a receita da dependência de alguém
                 // lembrar de preencher: o valor é o que a clínica lançou no sistema dela.
                 if (metric == "receita")
+                {
+                    // Tratamento existe mas nenhum trouxe preço: é dado que a franquia
+                    // não devolveu, não venda que não houve.
+                    if (t.Total > 0 && t.ValorTotal <= 0)
+                        return new FranquiaMedida(null, KpiNotes.SemValorFranquia);
+
                     return new FranquiaMedida((double)t.ValorTotal,
                         $"fonte: franquia · {fonteNome} (valor lançado no período)");
+                }
 
                 return new FranquiaMedida(t.Total, $"fonte: franquia · {fonteNome} (lançados no período)");
             }

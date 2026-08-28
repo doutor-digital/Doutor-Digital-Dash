@@ -67,6 +67,16 @@ public static class KpiNotes
     /// "Sem autorização da franquia" no lugar de um zero — zero mentiria.
     /// </summary>
     public const string SemAutorizacaoFranquia = "sem_autorizacao_franquia";
+
+    /// <summary>
+    /// A unidade TEM autorização, mas a franquia devolveu os tratamentos sem preço —
+    /// medido em 28/08/2026: em Açailândia, Balsas e Serra as linhas vêm todas com
+    /// `price` nulo, enquanto nas outras sete vem preenchido.
+    ///
+    /// Preço ausente não é receita zero. Publicar 0 diria "não vendeu nada" numa
+    /// unidade que lançou 18 tratamentos — o mesmo erro de sempre, com outra cara.
+    /// </summary>
+    public const string SemValorFranquia = "sem_valor_franquia";
 }
 
 /// <summary>Um KPI do dashboard que pode ser mapeado nas Configurações Técnicas.</summary>

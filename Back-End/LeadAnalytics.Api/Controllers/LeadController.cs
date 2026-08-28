@@ -654,8 +654,13 @@ public class WebhooksController(
                 // Só a fonte `franquia` entra: a config dela é o nome da métrica, que vale
                 // em qualquer conta. As outras carregam ids de UMA conta da Kommo e, somadas
                 // entre unidades, dariam número errado com cara de certo.
+                // Super admin somando "Todas as unidades" quer a REDE, não o próprio tenant:
+                // cada clínica é um tenant separado, então passar o dele devolveria uma
+                // unidade só. 0 = escopo rede.
+                var escopoKpi = _currentUser.IsSuperAdmin ? 0 : clinicId;
+
                 var franquiaCfgs = await _kpiService.GetFranquiaForClinicAsync(
-                    clinicId, HttpContext.RequestAborted);
+                    escopoKpi, HttpContext.RequestAborted);
 
                 foreach (var cfg in franquiaCfgs)
                 {
@@ -668,7 +673,7 @@ public class WebhooksController(
                         // As datas são as MESMAS do filtro da tela, então o período escolhido
                         // chega na API da franquia também no agregado.
                         var (value, _, note) = await _kpiService.ComputeAsync(
-                            clinicId, null, cfg.SourceType, config, dateFrom, dateTo,
+                            escopoKpi, null, cfg.SourceType, config, dateFrom, dateTo,
                             responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
 
                         if (note == KpiNotes.SemAutorizacaoFranquia)

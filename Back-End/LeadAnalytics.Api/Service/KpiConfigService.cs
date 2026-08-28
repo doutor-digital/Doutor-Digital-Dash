@@ -102,8 +102,10 @@ public class KpiConfigService(
     public async Task<List<KpiConfiguration>> GetFranquiaForClinicAsync(
         int clinicId, CancellationToken ct = default)
     {
+        // clinicId <= 0 = escopo rede (super admin). Ver a nota em ComputeAsync.
         var todas = await _db.KpiConfigurations.AsNoTracking()
-            .Where(k => k.ClinicId == clinicId && k.SourceType == KpiSourceTypes.Franquia)
+            .Where(k => (clinicId <= 0 || k.ClinicId == clinicId)
+                        && k.SourceType == KpiSourceTypes.Franquia)
             .OrderBy(k => k.KpiKey)
             .ToListAsync(ct);
 
@@ -253,8 +255,11 @@ public class KpiConfigService(
                 // usa era exatamente o que zerava a agenda, o comparecimento e os
                 // tratamentos. Agora soma as unidades do tenant, em paralelo e com
                 // isolamento de falha, igual ao comparativo da rede.
+                // clinicId <= 0 significa ESCOPO REDE (super admin): cada clínica é um tenant
+                // próprio — 21 ClinicId, uma unidade em cada — então filtrar por tenant
+                // devolveria sempre uma unidade só, nunca a rede.
                 var unidades = await _db.Units.AsNoTracking()
-                    .Where(u => u.IsActive && u.ClinicId == clinicId)
+                    .Where(u => u.IsActive && (clinicId <= 0 || u.ClinicId == clinicId))
                     .Select(u => u.Id)
                     .ToListAsync(ct);
 

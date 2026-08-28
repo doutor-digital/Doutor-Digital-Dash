@@ -77,6 +77,15 @@ public class SpineRedeService(
                 _logger.LogWarning(ex, "Comparativo: unidade {UnitId} falhou", u.Id);
                 return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, 0, ex.Motivo);
             }
+            catch (Exception ex)
+            {
+                // Antes só SpineApiException era capturada. Qualquer outra coisa — timeout,
+                // DNS, socket — escapava do Task.WhenAll e derrubava o comparativo INTEIRO
+                // com 500, deixando a tela da rede sem nenhum número por causa de uma única
+                // unidade. Uma clínica com problema não pode apagar as outras nove.
+                _logger.LogWarning(ex, "Comparativo: unidade {UnitId} falhou (não-Spine)", u.Id);
+                return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, 0, "indisponível agora");
+            }
         }));
 
         var ok = linhas.Where(l => l.Erro is null).ToList();

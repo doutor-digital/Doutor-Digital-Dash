@@ -27,8 +27,10 @@ public class SpineController(
     AuditoriaProntuarioService auditoria,
     ConsultaSituacaoSyncService consultaSync,
     TenantUnitGuard tenantGuard,
+    ICurrentUser currentUser,
     ILogger<SpineController> logger) : ControllerBase
 {
+    private readonly ICurrentUser _currentUser = currentUser;
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineAgendaService _agenda = agenda;
     private readonly SpinePacienteService _pacientes = pacientes;
@@ -154,7 +156,13 @@ public class SpineController(
                 Status = 400,
             });
 
-        var dto = await _rede.ComparativoAsync(tenantId, inicio, fim, ct);
+        // Cada clínica é um tenant próprio: 21 ClinicId, uma unidade em cada. Filtrar por
+        // tenant devolve sempre UMA unidade, nunca a rede. O guard libera o super admin mas
+        // não zera o tenant dele, então quem vê a rede inteira precisa entrar aqui com
+        // escopo nulo — que é o contrato que ComparativoAsync já documenta.
+        var escopo = _currentUser.IsSuperAdmin ? null : tenantId;
+
+        var dto = await _rede.ComparativoAsync(escopo, inicio, fim, ct);
         return Ok(dto);
     }
 

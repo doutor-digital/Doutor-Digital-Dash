@@ -18,6 +18,8 @@ public record SpineRedeUnidadeDto(
     string Unidade,
     int Agendadas,
     int Compareceram,
+    /// <summary>Tratamentos lançados no período (rota oficial da franquia).</summary>
+    int Tratamentos,
     int NaoCompareceram,
     int Desmarcadas,
     double TaxaComparecimento,
@@ -31,4 +33,5 @@ public record SpineRedeTotaisDto(
     int Unidades,
     int Agendadas,
     int Compareceram,
+    int Tratamentos,
     double TaxaComparecimento);

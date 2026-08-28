@@ -17,11 +17,13 @@ public class SpineRedeService(
     AppDbContext db,
     SpineTokenStore tokens,
     SpineAvaliacoesService avaliacoes,
+    FranquiaTratamentosService tratamentos,
     ILogger<SpineRedeService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
+    private readonly FranquiaTratamentosService _tratamentos = tratamentos;
     private readonly ILogger<SpineRedeService> _logger = logger;
 
     /// <param name="tenantId">null = super admin, vê todas as unidades ativas.</param>
@@ -48,10 +50,24 @@ public class SpineRedeService(
             {
                 var dto = await _avaliacoes.GetAsync(u.Id, de, ate, ct);
                 if (dto is null)
-                    return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, "sem token");
+                    return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, 0, "sem token");
                 int Sit(int idStatus) => dto.PorSituacao.FirstOrDefault(s => s.IdStatus == idStatus)?.Total ?? 0;
+
+                // Tratamentos são de outra rota da franquia e podem falhar sozinhos.
+                // Um erro aqui não pode zerar a linha inteira da unidade: a agenda já
+                // veio e vale mais que o número de tratamentos.
+                int trat = 0;
+                try
+                {
+                    trat = (await _tratamentos.GetAsync(u.Id, de, ate, ct))?.Total ?? 0;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Comparativo: tratamentos da unidade {UnitId} falharam", u.Id);
+                }
+
                 return new SpineRedeUnidadeDto(
-                    u.Id, u.Nome, dto.Total, dto.Realizadas,
+                    u.Id, u.Nome, dto.Total, dto.Realizadas, trat,
                     Sit(SpineApiClient.ScheduleStatus.NaoCompareceu),
                     Sit(SpineApiClient.ScheduleStatus.Desmarcado),
                     dto.TaxaComparecimento, dto.PacientesDistintos, null);
@@ -59,7 +75,7 @@ public class SpineRedeService(
             catch (SpineApiException ex)
             {
                 _logger.LogWarning(ex, "Comparativo: unidade {UnitId} falhou", u.Id);
-                return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, ex.Motivo);
+                return new SpineRedeUnidadeDto(u.Id, u.Nome, 0, 0, 0, 0, 0, 0, 0, ex.Motivo);
             }
         }));
 
@@ -67,7 +83,7 @@ public class SpineRedeService(
         var totAg = ok.Sum(l => l.Agendadas);
         var totComp = ok.Sum(l => l.Compareceram);
         var totais = new SpineRedeTotaisDto(
-            ok.Count, totAg, totComp,
+            ok.Count, totAg, totComp, ok.Sum(l => l.Tratamentos),
             totAg == 0 ? 0 : Math.Round((double)totComp / totAg * 100, 1));
 
         // Ranking: melhor comparecimento primeiro; sem token/erro vão pro fim.

@@ -85,6 +85,87 @@ public class InternalSpineController(
     }
 
     /// <summary>
+    /// Reconciliação tratamento (franquia) × lead (Kommo), casando por TELEFONE.
+    ///
+    /// O tratamento não traz telefone — traz idClient. O caminho é
+    /// tratamento → ficha do paciente (/api/clients/{id}, que tem whatsapp) → lead da
+    /// Kommo pelo telefone normalizado. Nome não serve: em Araguaína, 17 de 30 leads
+    /// têm a DATA da consulta escrita dentro do campo do nome.
+    ///
+    /// Devolve os dois valores lado a lado para dizer, sem adivinhar, se as duas bases
+    /// falam do mesmo paciente e do mesmo dinheiro.
+    /// </summary>
+    [HttpGet("reconciliacao")]
+    public async Task<IActionResult> Reconciliacao(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var token = await _tokens.GetTokenAsync(unitId, ct);
+        if (token is null) return Ok(new { unitId, conectado = false });
+
+        // O campo de valor do tratamento na Kommo é o mesmo que o KPI de receita usa.
+        var cfg = await _db.KpiConfigurations.AsNoTracking()
+            .Where(k => k.UnitId == unitId && k.KpiKey == "receita")
+            .Select(k => k.ConfigJson).FirstOrDefaultAsync(ct);
+        long? campoValor = null;
+        if (!string.IsNullOrWhiteSpace(cfg))
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(cfg);
+            if (doc.RootElement.TryGetProperty("fieldId", out var fid) && fid.TryGetInt64(out var v))
+                campoValor = v;
+        }
+
+        var trats = await _api.SearchTreatmentsAsync(token, de, ate, ct);
+        var linhas = new List<LinhaReconciliacao>();
+
+        foreach (var t in trats)
+        {
+            var ficha = await _api.GetClientAsync(token, t.IdClient, ct);
+            var fone = ContactImportService.NormalizePhone(ficha?.Whatsapp ?? "") ?? "";
+            var ult8 = fone.Length >= 8 ? fone[^8..] : fone;
+
+            string? leadNome = null, valorKommo = null;
+            if (ult8.Length >= 8)
+            {
+                var lead = await _db.Leads.AsNoTracking()
+                    .Where(l => l.UnitId == unitId && l.Phone != null && l.Phone.Contains(ult8))
+                    .Select(l => new { l.Name, l.CustomFieldsJson })
+                    .FirstOrDefaultAsync(ct);
+                if (lead is not null)
+                {
+                    leadNome = lead.Name;
+                    if (campoValor is not null && lead.CustomFieldsJson is not null)
+                        valorKommo = KpiConfigService.ExtractFieldValue(lead.CustomFieldsJson, campoValor, null);
+                }
+            }
+
+            linhas.Add(new LinhaReconciliacao(
+                t.IdTreatment,
+                t.ClientName,
+                string.IsNullOrEmpty(fone) ? null : "…" + ult8,
+                t.Price,
+                leadNome,
+                valorKommo,
+                leadNome is not null));
+        }
+
+        return Ok(new
+        {
+            unitId, de, ate,
+            tratamentos = trats.Count,
+            comTelefone = linhas.Count(x => x.Whatsapp is not null),
+            casaramComLead = linhas.Count(x => x.Casou),
+            linhas,
+        });
+    }
+
+    /// <summary>
     /// Captura a agenda recente da unidade e grava no nosso banco (preserva o que a
     /// API do Spine perde depois de 100 dias). O n8n só dispara; a API puxa e grava.
     /// Janela padrão: 7 dias (rolling), para corrigir status que mudaram.
@@ -174,3 +255,13 @@ public class InternalSpineController(
         }
     }
 }
+
+/// <summary>Uma linha da reconciliação: o mesmo paciente visto pelos dois sistemas.</summary>
+public record LinhaReconciliacao(
+    long IdTreatment,
+    string? Paciente,
+    string? Whatsapp,
+    decimal? PrecoFranquia,
+    string? LeadKommo,
+    string? ValorKommo,
+    bool Casou);

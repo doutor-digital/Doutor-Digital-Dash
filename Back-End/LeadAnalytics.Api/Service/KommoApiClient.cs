@@ -75,6 +75,21 @@ public class KommoApiClient
         return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
     }
 
+    /// <summary>
+    /// Busca leads pelo texto livre da Kommo (<c>?query=</c>), que cobre telefone do
+    /// contato. É o caminho para casar um paciente da franquia com o lead: o telefone
+    /// vive na Kommo, não no nosso espelho — a coluna Phone da tabela leads está vazia
+    /// em todas as unidades (medido em 28/08/2026).
+    /// </summary>
+    public async Task<KommoLeadsPageResponse?> SearchLeadsAsync(
+        string subdomainOrHost, string token, string query, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return new KommoLeadsPageResponse();
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads"
+                + $"?query={Uri.EscapeDataString(query)}&limit=10&with=contacts";
+        return await GetAsync<KommoLeadsPageResponse>(url, token, ct);
+    }
+
     public async Task<KommoContactsPageResponse?> GetContactsByIdsAsync(
         string subdomainOrHost, string token, IEnumerable<long> ids, CancellationToken ct)
     {

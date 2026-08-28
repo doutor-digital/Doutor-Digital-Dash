@@ -23,6 +23,7 @@ public class InternalSpineController(
     SpineHistoricoService historico,
     SpineTokenStore tokens,
     SpineApiClient api,
+    KommoApiClient kommo,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
@@ -31,6 +32,7 @@ public class InternalSpineController(
     private readonly SpineHistoricoService _historico = historico;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _api = api;
+    private readonly KommoApiClient _kommo = kommo;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
 
@@ -121,6 +123,9 @@ public class InternalSpineController(
                 campoValor = v;
         }
 
+        var unidade = await _db.Units.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == unitId, ct);
+
         var trats = await _api.SearchTreatmentsAsync(token, de, ate, ct);
         var linhas = new List<LinhaReconciliacao>();
 
@@ -131,17 +136,21 @@ public class InternalSpineController(
             var ult8 = fone.Length >= 8 ? fone[^8..] : fone;
 
             string? leadNome = null, valorKommo = null;
-            if (ult8.Length >= 8)
+            if (ult8.Length >= 8 && unidade is not null
+                && !string.IsNullOrWhiteSpace(unidade.KommoSubdomain)
+                && !string.IsNullOrWhiteSpace(unidade.KommoAccessToken))
             {
-                var lead = await _db.Leads.AsNoTracking()
-                    .Where(l => l.UnitId == unitId && l.Phone != null && l.Phone.Contains(ult8))
-                    .Select(l => new { l.Name, l.CustomFieldsJson })
-                    .FirstOrDefaultAsync(ct);
+                // Busca na KOMMO, não no espelho: a coluna Phone do nosso banco está
+                // vazia em todas as unidades, então procurar aqui dava sempre zero.
+                var achados = await _kommo.SearchLeadsAsync(
+                    unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
+                var lead = achados?.Embedded?.Leads?.FirstOrDefault();
                 if (lead is not null)
                 {
                     leadNome = lead.Name;
-                    if (campoValor is not null && lead.CustomFieldsJson is not null)
-                        valorKommo = KpiConfigService.ExtractFieldValue(lead.CustomFieldsJson, campoValor, null);
+                    var campo = lead.CustomFieldsValues?
+                        .FirstOrDefault(f => campoValor is not null && f.FieldId == campoValor);
+                    valorKommo = campo?.Values?.FirstOrDefault()?.Value?.ToString();
                 }
             }
 

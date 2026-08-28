@@ -258,4 +258,94 @@ public class SemaforoPorEntradaTests
         Assert.Equal(2, r[0].Value);
         Assert.Equal("VERDE — fechou e pagou tudo", r[1].Label);
     }
+
+    // ─── Receita pela Kommo: soma so o que FECHOU no periodo ────────────────────
+
+    private const long CampoValor = 2445206;
+
+    private static Lead LeadComValor(int id, DateTime criadoEm, string valor, int? etapa)
+    {
+        var l = NovoLead(id, criadoEm, null, etapa);
+        l.CustomFieldsJson =
+            $$"""[{"field_id":{{CampoValor}},"field_name":"¤ Valor do tratamento","value":"{{valor}}"}]""";
+        return l;
+    }
+
+    private static JsonElement ConfigSoma() =>
+        JsonDocument.Parse(
+            $$"""
+            {"fieldId": {{CampoValor}}, "stageIds": [{{EtapaCompareceu}}], "porEntradaNaEtapa": true}
+            """).RootElement;
+
+    /// Fechou hoje, mas o lead nasceu mes passado: o dinheiro é de hoje.
+    [Fact]
+    public async Task Soma_o_que_fechou_no_periodo_mesmo_com_lead_antigo()
+    {
+        using var db = NovoBanco(nameof(Soma_o_que_fechou_no_periodo_mesmo_com_lead_antigo));
+        db.Leads.Add(LeadComValor(1, new DateTime(2026, 6, 10, 9, 0, 0, DateTimeKind.Utc), "3800", EtapaCompareceu));
+        db.LeadStageHistories.Add(Entrada(1, 1,
+            new DateTime(2026, 8, 28, 14, 0, 0, DateTimeKind.Utc), LeadStageHistory.SourceWebhook));
+        await db.SaveChangesAsync();
+
+        var (valor, _, _) = await NovoServico(db).ComputeAsync(
+            Tenant, Unidade, "custom_field_sum", ConfigSoma(), De, Ate);
+
+        Assert.Equal(3800d, valor);
+    }
+
+    /// O caso que motivou tudo: lead criado HOJE, com valor preenchido, que NAO fechou.
+    /// Nao pode entrar na receita do dia.
+    [Fact]
+    public async Task Nao_soma_valor_de_lead_que_nao_fechou()
+    {
+        using var db = NovoBanco(nameof(Nao_soma_valor_de_lead_que_nao_fechou));
+        db.Leads.Add(LeadComValor(1, new DateTime(2026, 8, 28, 9, 0, 0, DateTimeKind.Utc), "5000", etapa: 999999));
+        await db.SaveChangesAsync();
+
+        var (valor, _, _) = await NovoServico(db).ComputeAsync(
+            Tenant, Unidade, "custom_field_sum", ConfigSoma(), De, Ate);
+
+        Assert.Equal(0d, valor);
+    }
+
+    /// Fechou ONTEM: sai da receita de hoje.
+    [Fact]
+    public async Task Nao_soma_o_que_fechou_fora_da_janela()
+    {
+        using var db = NovoBanco(nameof(Nao_soma_o_que_fechou_fora_da_janela));
+        db.Leads.Add(LeadComValor(1, new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), "3800", EtapaCompareceu));
+        db.LeadStageHistories.Add(Entrada(1, 1,
+            new DateTime(2026, 8, 27, 14, 0, 0, DateTimeKind.Utc), LeadStageHistory.SourceWebhook));
+        await db.SaveChangesAsync();
+
+        var (valor, _, _) = await NovoServico(db).ComputeAsync(
+            Tenant, Unidade, "custom_field_sum", ConfigSoma(), De, Ate);
+
+        Assert.Equal(0d, valor);
+    }
+
+    /// Dois fechamentos no dia somam; o de outra unidade nao entra.
+    [Fact]
+    public async Task Soma_varios_e_respeita_a_unidade()
+    {
+        using var db = NovoBanco(nameof(Soma_varios_e_respeita_a_unidade));
+        var criado = new DateTime(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc);
+        var fechou = new DateTime(2026, 8, 28, 11, 0, 0, DateTimeKind.Utc);
+
+        db.Leads.Add(LeadComValor(1, criado, "3800", EtapaCompareceu));
+        db.Leads.Add(LeadComValor(2, criado, "1800", EtapaCompareceu));
+        var deOutra = LeadComValor(3, criado, "9999", EtapaCompareceu);
+        deOutra.UnitId = 99;
+        db.Leads.Add(deOutra);
+        db.LeadStageHistories.AddRange(
+            Entrada(1, 1, fechou, LeadStageHistory.SourceWebhook),
+            Entrada(2, 2, fechou, LeadStageHistory.SourceWebhook),
+            Entrada(3, 3, fechou, LeadStageHistory.SourceWebhook));
+        await db.SaveChangesAsync();
+
+        var (valor, _, _) = await NovoServico(db).ComputeAsync(
+            Tenant, Unidade, "custom_field_sum", ConfigSoma(), De, Ate);
+
+        Assert.Equal(5600d, valor);
+    }
 }

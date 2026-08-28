@@ -340,10 +340,42 @@ public class KpiConfigService(
                     return (0, sample, "Selecione o campo customizado.");
 
                 var q = baseQuery;
-                if (sourceType == KpiSourceTypes.StageFieldFilter && p.StageIds.Count > 0)
+
+                if (p.StageIds.Count > 0)
                 {
                     var ids = p.StageIds;
-                    q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+
+                    // `porEntradaNaEtapa` responde a pergunta que a soma de dinheiro
+                    // exige: "quanto FECHOU no período", e não "quanto vale o campo dos
+                    // leads que ENTRARAM no período". São coisas diferentes — o lead
+                    // chega em julho e fecha em agosto — e sem isto a receita do dia
+                    // soma valor de quem nao fechou nada e perde quem fechou hoje.
+                    var porEntradaAqui = config.TryGetProperty("porEntradaNaEtapa", out var pe)
+                                         && pe.ValueKind == JsonValueKind.True;
+
+                    if (porEntradaAqui)
+                    {
+                        // Linhas `legacy` ficam de fora: nelas ChangedAt e o updated_at do
+                        // lead, e contá-las jogaria todo fechamento para o dia do sync.
+                        var entraram = _db.LeadStageHistories.AsNoTracking()
+                            .Where(h => ids.Contains(h.StageId)
+                                        && h.EntrySource != Models.LeadStageHistory.SourceLegacy
+                                        && h.ChangedAt >= from && h.ChangedAt <= to)
+                            .Select(h => h.LeadId);
+
+                        // Sem a janela de CRIACAO: quem fechou no periodo entra, tenha o
+                        // lead nascido quando for.
+                        q = _db.Leads.AsNoTracking().ExcludeDeleted()
+                            .Where(l => l.TenantId == clinicId && entraram.Contains(l.Id));
+                        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+                        q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);
+                    }
+                    else
+                    {
+                        // Antes o filtro de etapa so valia para StageFieldFilter, e um
+                        // custom_field_sum com stageIds somava a base inteira em silencio.
+                        q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+                    }
                 }
 
                 var rows = await q

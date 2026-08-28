@@ -128,6 +128,7 @@ public class InternalSpineController(
 
         var trats = await _api.SearchTreatmentsAsync(token, de, ate, ct);
         var linhas = new List<LinhaReconciliacao>();
+        string? erroKommo = null;
 
         foreach (var t in trats)
         {
@@ -142,15 +143,25 @@ public class InternalSpineController(
             {
                 // Busca na KOMMO, não no espelho: a coluna Phone do nosso banco está
                 // vazia em todas as unidades, então procurar aqui dava sempre zero.
-                var achados = await _kommo.SearchLeadsAsync(
-                    unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
-                var lead = achados?.Embedded?.Leads?.FirstOrDefault();
-                if (lead is not null)
+                try
                 {
-                    leadNome = lead.Name;
-                    var campo = lead.CustomFieldsValues?
-                        .FirstOrDefault(f => campoValor is not null && f.FieldId == campoValor);
-                    valorKommo = campo?.Values?.FirstOrDefault()?.Value?.ToString();
+                    var achados = await _kommo.SearchLeadsAsync(
+                        unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
+                    var lead = achados?.Embedded?.Leads?.FirstOrDefault();
+                    if (lead is not null)
+                    {
+                        leadNome = lead.Name;
+                        var campo = lead.CustomFieldsValues?
+                            .FirstOrDefault(f => campoValor is not null && f.FieldId == campoValor);
+                        valorKommo = campo?.Values?.FirstOrDefault()?.Value?.ToString();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Token da Kommo vencido derrubava a requisição inteira e a lista dos
+                    // pacientes da franquia — que não depende da Kommo — ia junto. Uma
+                    // ponta quebrada não pode apagar a outra.
+                    erroKommo ??= ex.Message.Length > 160 ? ex.Message[..160] : ex.Message;
                 }
             }
 
@@ -168,6 +179,7 @@ public class InternalSpineController(
         {
             unitId, de, ate,
             tratamentos = trats.Count,
+            erroKommo,
             comTelefone = linhas.Count(x => x.Whatsapp is not null),
             casaramComLead = linhas.Count(x => x.Casou),
             linhas,

@@ -486,7 +486,30 @@ public class KpiConfigService(
                     .ToListAsync(ct);
 
                 if (vinculos.Count == 0)
-                    return new FranquiaMedida(null, "cruzamento ainda não rodou para este período");
+                {
+                    // Zero linhas tem DOIS significados, e confundi-los é o defeito clássico
+                    // deste painel: "nenhum tratamento no período" vale R$ 0 de verdade;
+                    // "o cruzamento nunca olhou este período" não vale número nenhum.
+                    // A marca de cobertura, gravada pelo cruzamento, separa os dois.
+                    var cobertura = await _db.AppConfigurations.AsNoTracking()
+                        .Where(c => c.Key == $"cruzamento:cobertura:{unitId}")
+                        .Select(c => c.Value)
+                        .FirstOrDefaultAsync(ct);
+
+                    var olhou = false;
+                    if (!string.IsNullOrWhiteSpace(cobertura))
+                    {
+                        var partes = cobertura.Split('|');
+                        olhou = partes.Length == 2
+                                && DateOnly.TryParse(partes[0], out var pCob)
+                                && DateOnly.TryParse(partes[1], out var uCob)
+                                && de >= pCob && ate <= uCob;
+                    }
+
+                    return olhou
+                        ? new FranquiaMedida(0, "nenhum tratamento lançado no período")
+                        : new FranquiaMedida(null, "cruzamento ainda não rodou para este período");
+                }
 
                 // O denominador do ticket é quantos tratamentos TÊM valor — dividir pelo
                 // total incluiria os que a Kommo deixou em branco e derrubaria a média.

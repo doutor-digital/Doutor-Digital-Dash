@@ -212,6 +212,36 @@ public class InternalSpineController(
                 existente.AtualizadoEm = DateTime.UtcNow;
             }
         }
+        // Registra ATÉ ONDE o cruzamento já olhou nesta unidade.
+        //
+        // Sem isto não dá para diferenciar "não teve tratamento no período" (receita R$ 0,
+        // verdade) de "o cruzamento nunca rodou aqui" (não sabemos, e o card tem de dizer
+        // isso). No dia 1º de cada mês as duas situações são idênticas no banco — zero
+        // linhas — e mostrar "—" num mês que legitimamente começou zerado assusta à toa.
+        var chaveCobertura = $"cruzamento:cobertura:{unitId}";
+        var marca = await _db.AppConfigurations.FirstOrDefaultAsync(c => c.Key == chaveCobertura, ct);
+        var primeiro = de;
+        var ultimo = ate;
+        if (marca is not null && !string.IsNullOrWhiteSpace(marca.Value))
+        {
+            var partes = marca.Value.Split('|');
+            if (partes.Length == 2
+                && DateOnly.TryParse(partes[0], out var pAntigo)
+                && DateOnly.TryParse(partes[1], out var uAntigo))
+            {
+                if (pAntigo < primeiro) primeiro = pAntigo;
+                if (uAntigo > ultimo) ultimo = uAntigo;
+            }
+        }
+        var valorCobertura = $"{primeiro:yyyy-MM-dd}|{ultimo:yyyy-MM-dd}";
+        if (marca is null)
+            _db.AppConfigurations.Add(new Models.AppConfiguration
+            {
+                Key = chaveCobertura, Value = valorCobertura,
+            });
+        else
+            marca.Value = valorCobertura;
+
         await _db.SaveChangesAsync(ct);
 
         return (linhas, campoValor, unidade, erroKommo);

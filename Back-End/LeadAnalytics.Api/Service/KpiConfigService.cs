@@ -535,6 +535,35 @@ public class KpiConfigService(
                 return new FranquiaMedida(t.Total, $"fonte: franquia · {fonteNome} (lançados no período)");
             }
 
+            // NO-SHOW OLHA A AGENDA INTEIRA, NÃO SÓ A AVALIAÇÃO.
+            //
+            // Os outros KPIs contam só avaliação, porque o funil comercial é sobre paciente
+            // novo. Falta é outra pergunta: a cadeira ficou vazia igual, seja de quem vinha
+            // conhecer a clínica ou de quem já está em tratamento. Em Araguaína, agosto: a
+            // tela da franquia filtrada por "NÃO COMPARECEU" mostra 4, e as 4 são SESSÃO —
+            // contar só avaliação devolvia zero e contradizia a tela que a clínica olha.
+            if (metric == "no_show")
+            {
+                var agenda = await _spineAvaliacoes.GetPorCategoriasAsync(
+                    unitId, de, ate,
+                    new[]
+                    {
+                        Spine.SpineApiClient.ScheduleCategory.Avaliacao,
+                        Spine.SpineApiClient.ScheduleCategory.Sessao,
+                        Spine.SpineApiClient.ScheduleCategory.Retorno,
+                        Spine.SpineApiClient.ScheduleCategory.RetornoComExames,
+                        Spine.SpineApiClient.ScheduleCategory.RetornoAposTratamento,
+                    }, ct);
+                if (agenda is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
+
+                var faltas = agenda.PorSituacao
+                    .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
+                    .Sum(s => s.Total);
+
+                return new FranquiaMedida(faltas,
+                    "fonte: CRM da franquia · faltas em toda a agenda (avaliação, sessão e retorno)");
+            }
+
             var av = await _spineAvaliacoes.GetAsync(unitId, de, ate, ct);
             if (av is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
 
@@ -543,20 +572,9 @@ public class KpiConfigService(
             // de OUTRO card — número errado e calado, o pior defeito que este painel pode ter.
             return metric switch
             {
-                // AGENDA QUE NÃO ACONTECEU, não só o status "NÃO COMPARECEU".
-                //
-                // Medido em 01-31/08/2026: Boa Vista tinha 55 agendados, 39 consultas e
-                // ZERO faltas registradas; Araguaína, 16 atendidos, 8 desmarcados e zero
-                // faltas. Só Marabá usa o status. As outras marcam DESMARCADO para tudo,
-                // inclusive para quem simplesmente não apareceu — então o card prometia
-                // "faltas" e entregava zero, que se lê como "ninguém faltou".
-                //
-                // Resolvidas já exclui o que ainda não chegou (agendado/confirmado), então
-                // esta conta é: horário que JÁ PASSOU e não virou atendimento. Desmarcado,
-                // remarcado ou falta, a cadeira ficou vazia do mesmo jeito.
-                "no_show" => new FranquiaMedida(
-                    Math.Max(0, av.Resolvidas - av.Realizadas),
-                    "fonte: CRM da franquia · agenda que já passou e não virou atendimento"),
+                // Este ramo nunca roda: no_show é tratado antes, sobre a agenda INTEIRA.
+                // Fica como guarda para o caso de alguém mexer na ordem.
+                "no_show" => new FranquiaMedida(null, "no_show é calculado fora deste ramo"),
 
                 // Todos os horários marcados PARA o período, em qualquer situação — o mesmo
                 // recorte da agenda da franquia. Existe porque na Kommo "agendado" é a etapa

@@ -378,6 +378,121 @@ public class InternalSpineController(
         return Ok(new { de, ate, unidades = relatorio.Count, relatorio });
     }
 
+
+    /// <summary>
+    /// Carimba a data REAL nas movimentações de migração retroativa.
+    ///
+    /// O PROBLEMA
+    /// ----------
+    /// Quando a SDR arrasta hoje um card que virou tratamento em maio, a Kommo registra
+    /// a entrada na etapa com a data de HOJE, e esse carimbo não é editável lá. Todo KPI
+    /// que conta por entrada na etapa — receita, semáforo, funil — joga maio dentro de
+    /// hoje. Numa migração de centenas de cards, o dia da migração vira o melhor mês da
+    /// história da unidade, e os meses reais ficam vazios.
+    ///
+    /// A SAÍDA
+    /// -------
+    /// A data verdadeira existe: é o dia em que a franquia lançou o tratamento, que o
+    /// cruzamento já guardou em <c>franquia_lead_link</c>. E o modelo já tem
+    /// <see cref="Models.LeadStageHistory.CorrectedChangedAt"/>, que os KPIs preferem à
+    /// <c>ChangedAt</c> — foi feito para a SDR que move o card no dia seguinte. Aqui a
+    /// gente preenche esse campo em lote, com a data da franquia, em vez de pedir para
+    /// alguém corrigir card por card.
+    ///
+    /// NÃO INVENTA DATA: só toca em linha de lead que tem tratamento correspondente na
+    /// franquia. Card movido sem tratamento casado fica como está e volta no relatório —
+    /// é melhor um número que falta do que um número inventado.
+    ///
+    /// Correção humana já existente nunca é sobrescrita.
+    /// </summary>
+    /// <param name="de">Início da janela de LANÇAMENTO na franquia (o mês real do tratamento).</param>
+    /// <param name="ate">Fim dessa janela.</param>
+    /// <param name="movidoDe">Quando os cards foram arrastados. Padrão: hoje 00:00 UTC.</param>
+    /// <param name="movidoAte">Fim do arraste. Padrão: agora.</param>
+    [HttpPost("datar-migracao")]
+    public async Task<IActionResult> DatarMigracao(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] DateTime? movidoDe = null,
+        [FromQuery] DateTime? movidoAte = null,
+        [FromQuery] bool aplicar = false,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var janelaDe = movidoDe ?? DateTime.UtcNow.Date;
+        var janelaAte = movidoAte ?? DateTime.UtcNow;
+
+        // O vínculo guarda o id da KOMMO; o histórico de etapas usa o id interno.
+        // leads.ExternalId é a ponte (medido em 01/09/2026: casa 100% dos vínculos).
+        var lancamentoPorLead = await (
+            from v in _db.FranquiaLeadLinks.AsNoTracking()
+            join l in _db.Leads.AsNoTracking()
+                // ExternalId é int e o vínculo guarda long?: comparar sem alinhar o tipo
+                // não compila, e um cast só de um lado faz o EF traduzir errado.
+                // ExternalId é int e o vínculo guarda long?; Lead.UnitId é int? e o do
+                // vínculo é int. Os dois lados do join precisam do MESMO tipo, senão a
+                // inferência do Join falha na compilação.
+                on new { E = (long?)v.LeadId, U = (int?)v.UnitId }
+                equals new { E = (long?)l.ExternalId, U = l.UnitId }
+            where v.UnitId == unitId && v.LeadId != null
+                  && v.DiaLancamento >= de && v.DiaLancamento <= ate
+            select new { l.Id, v.DiaLancamento })
+            .ToDictionaryAsync(x => x.Id, x => x.DiaLancamento, ct);
+
+        var movimentos = await (
+            from h in _db.LeadStageHistories
+            join l in _db.Leads.AsNoTracking() on h.LeadId equals l.Id
+            where l.UnitId == unitId
+                  && h.ChangedAt >= janelaDe && h.ChangedAt <= janelaAte
+            select h)
+            .ToListAsync(ct);
+
+        var (corrigir, ignorados) = DatacaoDeMigracao.Separar(
+            movimentos.Select(h => new MovimentoParaDatar(
+                h.Id, h.LeadId, h.StageLabel, h.ChangedAt, h.CorrectedChangedAt)),
+            lancamentoPorLead);
+
+        if (aplicar)
+        {
+            var porId = movimentos.ToDictionary(h => h.Id);
+            foreach (var (mov, nova) in corrigir)
+            {
+                var h = porId[mov.HistoryId];
+                h.CorrectedChangedAt = nova;
+                h.CorrectedAt = DateTime.UtcNow;
+                h.CorrectedByEmail = "reconciliacao-franquia";
+                h.CorrectionReason =
+                    "migração retroativa: data do lançamento do tratamento na franquia";
+            }
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation(
+                "Datação de migração: {N} movimentações corrigidas na unidade {UnitId}",
+                corrigir.Count, unitId);
+        }
+
+        return Ok(new
+        {
+            unitId,
+            modo = aplicar ? "GRAVADO" : "simulacao",
+            janela = new { de = janelaDe, ate = janelaAte },
+            lancamentosConsiderados = lancamentoPorLead.Count,
+            movimentacoesNaJanela = movimentos.Count,
+            corrigidas = corrigir.Count,
+            // Movimentação sem tratamento casado na franquia: NÃO tocada. Continua
+            // contando no dia do arraste, e é isso que precisa de olho humano.
+            semVinculo = ignorados.Count,
+            detalhe = corrigir.Take(200).Select(c => new
+            {
+                c.Mov.LeadIdInterno, etapa = c.Mov.Etapa,
+                arrastadoEm = c.Mov.ChangedAt, dataReal = c.Nova,
+            }),
+        });
+    }
+
     /// <summary>
     /// Captura a agenda recente da unidade e grava no nosso banco (preserva o que a
     /// API do Spine perde depois de 100 dias). O n8n só dispara; a API puxa e grava.
@@ -510,6 +625,53 @@ public static class SelecaoDeEscrita
         }
 
         return (gravar, suspeitos);
+    }
+}
+
+/// <summary>Uma entrada em etapa candidata a receber a data real.</summary>
+public record MovimentoParaDatar(
+    int HistoryId, int LeadIdInterno, string Etapa, DateTime ChangedAt, DateTime? CorrectedChangedAt);
+
+/// <summary>
+/// Decide quais movimentações recebem a data da franquia no lugar da data do arraste.
+///
+/// As duas regras que importam, e por quê:
+///  • correção humana existente nunca é sobrescrita — quem corrigiu à mão sabia de algo
+///    que a franquia não conta;
+///  • lead sem tratamento casado não é tocado — sem data verdadeira, o certo é deixar o
+///    número faltando e visível, não fabricar um.
+/// </summary>
+public static class DatacaoDeMigracao
+{
+    /// <summary>
+    /// Meio-dia local (UTC−3) do dia em que a franquia lançou o tratamento.
+    ///
+    /// Não é detalhe: o dashboard trabalha em dia COMERCIAL, cuja janela não começa à
+    /// meia-noite. Carimbar 00:00 jogaria metade das correções para o dia anterior.
+    /// Meio-dia cai dentro do dia certo em qualquer uma das janelas que o painel usa.
+    /// </summary>
+    public static DateTime MeioDoDia(DateOnly dia) =>
+        new(dia.Year, dia.Month, dia.Day, 15, 0, 0, DateTimeKind.Utc);
+
+    public static (List<(MovimentoParaDatar Mov, DateTime Nova)> Corrigir,
+                   List<MovimentoParaDatar> Ignorados) Separar(
+        IEnumerable<MovimentoParaDatar> movimentos,
+        IReadOnlyDictionary<int, DateOnly> lancamentoPorLead)
+    {
+        var corrigir = new List<(MovimentoParaDatar, DateTime)>();
+        var ignorados = new List<MovimentoParaDatar>();
+
+        foreach (var m in movimentos)
+        {
+            if (m.CorrectedChangedAt is not null) continue;
+
+            if (lancamentoPorLead.TryGetValue(m.LeadIdInterno, out var dia))
+                corrigir.Add((m, MeioDoDia(dia)));
+            else
+                ignorados.Add(m);
+        }
+
+        return (corrigir, ignorados);
     }
 }
 

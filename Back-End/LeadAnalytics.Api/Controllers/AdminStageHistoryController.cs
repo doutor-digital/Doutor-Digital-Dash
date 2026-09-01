@@ -28,6 +28,13 @@ public class AdminStageHistoryController(
     DatacaoDeMigracaoService datacao,
     ILogger<AdminStageHistoryController> logger) : ControllerBase
 {
+    /// <summary>
+    /// Teto de linhas devolvidas na lista informativa. Existe porque uma janela larga
+    /// devolve milhares de movimentações que não são migração, e a pessoa não vai ler
+    /// duas mil linhas — só precisa saber que existem e quantas.
+    /// </summary>
+    private const int TetoDaLista = 200;
+
     /// <summary>Corpo do "carimbar a data da franquia": só ids, nunca uma data.</summary>
     public record AplicarMigracaoBody(
         [property: JsonPropertyName("history_ids")] List<int>? HistoryIds);
@@ -77,14 +84,21 @@ public class AdminStageHistoryController(
             leads_com_mais_de_um_tratamento = p.LeadsComMaisDeUmTratamento,
             datar = p.Datar.Select(m => new
             {
-                history_id = m.HistoryId, paciente = m.Paciente, etapa = m.Etapa,
+                history_id = m.HistoryId, paciente = m.Paciente,
+                etapa = m.Etapa, etapa_id = m.EtapaId,
                 arrastado_em = m.ArrastadoEm, lancado_em = m.LancadoEm,
             }),
             // Sem tratamento casado na franquia: a SDR NÃO corrige. Sobe para o gestor,
             // porque aí a data teria de ser digitada — e digitar data é decisão de gestão.
-            sem_vinculo = p.SemVinculo.Select(m => new
+            //
+            // A lista vai TRUNCADA: numa janela de 30 dias ela chega a milhares de linhas
+            // (2.041 medidas na Imperatriz em agosto), e mandar tudo trava o navegador de
+            // quem só precisa saber que existem e quantas são. O total vai inteiro.
+            sem_vinculo_total = p.SemVinculo.Count,
+            sem_vinculo = p.SemVinculo.Take(TetoDaLista).Select(m => new
             {
-                history_id = m.HistoryId, paciente = m.Paciente, etapa = m.Etapa,
+                history_id = m.HistoryId, paciente = m.Paciente,
+                etapa = m.Etapa, etapa_id = m.EtapaId,
                 arrastado_em = m.ArrastadoEm,
             }),
         });

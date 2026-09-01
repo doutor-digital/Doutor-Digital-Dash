@@ -9,7 +9,12 @@ public record MovimentoDeMigracao(
     int HistoryId,
     int LeadIdInterno,
     string? Paciente,
+    /// <summary>Rótulo gravado na linha. NÃO é confiável para agrupar: a mesma etapa
+    /// aparece ora com nome canônico, ora com o id cru (medido na Imperatriz em
+    /// 01/09/2026 — o id 143 gravado como "TRATAMENTO_CANCELADO" e como "143").</summary>
     string Etapa,
+    /// <summary>O id da etapa na Kommo. É por ele que se agrupa e se resolve o nome.</summary>
+    int EtapaId,
     DateTime ArrastadoEm,
     DateOnly? LancadoEm);
 
@@ -110,7 +115,7 @@ public class DatacaoDeMigracaoService(AppDbContext db, ILogger<DatacaoDeMigracao
                   // sabia de algo que a franquia não conta.
                   && h.CorrectedChangedAt == null
             orderby h.ChangedAt
-            select new { h.Id, h.LeadId, l.Name, h.StageLabel, h.ChangedAt })
+            select new { h.Id, h.LeadId, l.Name, h.StageLabel, h.StageId, h.ChangedAt })
             .ToListAsync(ct);
 
         var datar = new List<MovimentoDeMigracao>();
@@ -120,7 +125,7 @@ public class DatacaoDeMigracaoService(AppDbContext db, ILogger<DatacaoDeMigracao
         {
             var achou = lancamento.TryGetValue(x.LeadId, out var dia);
             var mov = new MovimentoDeMigracao(
-                x.Id, x.LeadId, x.Name, x.StageLabel, x.ChangedAt, achou ? dia : null);
+                x.Id, x.LeadId, x.Name, x.StageLabel, x.StageId, x.ChangedAt, achou ? dia : null);
 
             // Só entra na lista de datar quando a data da franquia é DIFERENTE do dia do
             // arraste. No dia a dia normal as duas coincidem — carimbar aí seria encher a

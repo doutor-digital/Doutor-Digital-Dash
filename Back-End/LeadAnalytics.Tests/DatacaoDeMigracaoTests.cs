@@ -87,7 +87,7 @@ public class DatacaoDeMigracaoTests
         db.LeadStageHistories.Add(new LeadStageHistory
         {
             Id = historyId == 0 ? db.LeadStageHistories.Count() + 1 : historyId,
-            LeadId = leadId, StageId = 1, StageLabel = etapa,
+            LeadId = leadId, StageId = etapa.GetHashCode() & 0x7fffffff, StageLabel = etapa,
             ChangedAt = arrastadoEm, EntrySource = LeadStageHistory.SourceWebhook,
             CorrectedChangedAt = jaCorrigido,
         });
@@ -277,5 +277,22 @@ public class DatacaoDeMigracaoTests
         Assert.Empty(p.Datar);
         Assert.Empty(p.SemVinculo);
         Assert.Equal(0, p.MovimentacoesNaJanela);
+    }
+
+    /// O id da etapa tem de chegar junto: o RÓTULO não serve para agrupar. Medido na
+    /// Imperatriz (01/09/2026), a mesma etapa 143 aparece gravada ora como
+    /// "TRATAMENTO_CANCELADO", ora como "143" — agrupar por texto quebraria a lista em
+    /// dois blocos da mesma coisa.
+    [Fact]
+    public async Task Movimento_carrega_o_id_da_etapa_e_nao_so_o_rotulo()
+    {
+        using var db = NovoBanco();
+        Semear(db, 500, "2026-05-14", Mutirao, etapa: "EM TRATAMENTO");
+
+        var p = await Prever(db);
+
+        var m = Assert.Single(p.Datar);
+        Assert.True(m.EtapaId > 0);
+        Assert.Equal("EM TRATAMENTO", m.Etapa);
     }
 }

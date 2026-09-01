@@ -445,7 +445,7 @@ public class InternalSpineController(
             semVinculo = previa.SemVinculo.Count,
             detalhe = previa.Datar.Take(200).Select(m => new
             {
-                LeadIdInterno = m.LeadIdInterno, etapa = m.Etapa,
+                LeadIdInterno = m.LeadIdInterno, etapa = m.Etapa, etapaId = m.EtapaId,
                 arrastadoEm = m.ArrastadoEm, dataReal = m.LancadoEm,
             }),
         });

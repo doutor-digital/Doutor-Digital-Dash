@@ -237,10 +237,17 @@ public class InternalSpineController(
         if (marca is null)
             _db.AppConfigurations.Add(new Models.AppConfiguration
             {
-                Key = chaveCobertura, Value = valorCobertura,
+                Key = chaveCobertura,
+                Value = valorCobertura,
+                // NOT NULL sem default no banco: sem preencher aqui a linha nem entra.
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
             });
         else
+        {
             marca.Value = valorCobertura;
+            marca.UpdatedAt = DateTime.UtcNow;
+        }
 
         await _db.SaveChangesAsync(ct);
 

@@ -118,4 +118,19 @@ public class DatacaoDeMigracaoTests
         Assert.Empty(corrigir);
         Assert.Empty(ignorados);
     }
+
+    /// Paciente que voltou para operar outra hérnia tem dois tratamentos. O card entrou
+    /// em EM TRATAMENTO pela primeira vez por causa do PRIMEIRO — é essa data que vale.
+    /// (A escolha do mínimo é feita na consulta; aqui fica o contrato que ela alimenta:
+    /// um lead, uma data.)
+    [Fact]
+    public void Lead_com_dois_tratamentos_usa_a_data_do_primeiro()
+    {
+        var lancamentos = new[] { new DateOnly(2026, 7, 30), new DateOnly(2026, 5, 14) };
+        var mapa = new Dictionary<int, DateOnly> { [500] = lancamentos.Min() };
+
+        var (corrigir, _) = DatacaoDeMigracao.Separar(new[] { Mov(1, 500) }, mapa);
+
+        Assert.Equal(new DateOnly(2026, 5, 14), DateOnly.FromDateTime(Assert.Single(corrigir).Nova));
+    }
 }

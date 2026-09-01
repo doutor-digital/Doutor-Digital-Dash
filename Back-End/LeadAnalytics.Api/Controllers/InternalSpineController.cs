@@ -428,11 +428,14 @@ public class InternalSpineController(
 
         // O vínculo guarda o id da KOMMO; o histórico de etapas usa o id interno.
         // leads.ExternalId é a ponte (medido em 01/09/2026: casa 100% dos vínculos).
-        var lancamentoPorLead = await (
+        //
+        // Um lead pode ter MAIS DE UM tratamento (paciente que voltou para operar outra
+        // hérnia). Vale o mais ANTIGO: a primeira entrada em EM TRATAMENTO pertence ao
+        // primeiro tratamento. Esses leads voltam contados no relatório — se o card foi
+        // arrastado uma vez só, o segundo tratamento fica sem data própria.
+        var porLead = await (
             from v in _db.FranquiaLeadLinks.AsNoTracking()
             join l in _db.Leads.AsNoTracking()
-                // ExternalId é int e o vínculo guarda long?: comparar sem alinhar o tipo
-                // não compila, e um cast só de um lado faz o EF traduzir errado.
                 // ExternalId é int e o vínculo guarda long?; Lead.UnitId é int? e o do
                 // vínculo é int. Os dois lados do join precisam do MESMO tipo, senão a
                 // inferência do Join falha na compilação.
@@ -440,8 +443,12 @@ public class InternalSpineController(
                 equals new { E = (long?)l.ExternalId, U = l.UnitId }
             where v.UnitId == unitId && v.LeadId != null
                   && v.DiaLancamento >= de && v.DiaLancamento <= ate
-            select new { l.Id, v.DiaLancamento })
-            .ToDictionaryAsync(x => x.Id, x => x.DiaLancamento, ct);
+            group v by l.Id into g
+            select new { LeadId = g.Key, Primeiro = g.Min(x => x.DiaLancamento), Quantos = g.Count() })
+            .ToListAsync(ct);
+
+        var lancamentoPorLead = porLead.ToDictionary(x => x.LeadId, x => x.Primeiro);
+        var comMaisDeUmTratamento = porLead.Count(x => x.Quantos > 1);
 
         var movimentos = await (
             from h in _db.LeadStageHistories
@@ -480,6 +487,9 @@ public class InternalSpineController(
             modo = aplicar ? "GRAVADO" : "simulacao",
             janela = new { de = janelaDe, ate = janelaAte },
             lancamentosConsiderados = lancamentoPorLead.Count,
+            // Lead com dois tratamentos: usamos a data do primeiro. Se o card foi
+            // arrastado uma vez só, o segundo tratamento fica sem data própria.
+            leadsComMaisDeUmTratamento = comMaisDeUmTratamento,
             movimentacoesNaJanela = movimentos.Count,
             corrigidas = corrigir.Count,
             // Movimentação sem tratamento casado na franquia: NÃO tocada. Continua

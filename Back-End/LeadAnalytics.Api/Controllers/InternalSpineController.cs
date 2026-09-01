@@ -259,6 +259,7 @@ public class InternalSpineController(
         [FromQuery] DateOnly de,
         [FromQuery] DateOnly ate,
         [FromQuery] bool aplicar = false,
+        [FromQuery] decimal minimoValor = SelecaoDeEscrita.PisoPadrao,
         CancellationToken ct = default)
     {
         if (!await _guard.IsAuthorizedAsync(adminKey))
@@ -274,11 +275,7 @@ public class InternalSpineController(
             || string.IsNullOrWhiteSpace(unidade.KommoAccessToken))
             return BadRequest(new { message = "Unidade sem credencial da Kommo." });
 
-        var alvos = linhas
-            .Where(l => l.LeadId is not null
-                        && l.PrecoFranquia is > 0
-                        && string.IsNullOrWhiteSpace(l.ValorKommo))
-            .ToList();
+        var (alvos, suspeitos) = SelecaoDeEscrita.Separar(linhas, minimoValor);
 
         var gravados = new List<object>();
         foreach (var l in alvos)
@@ -301,11 +298,18 @@ public class InternalSpineController(
             unitId, de, ate,
             modo = aplicar ? "GRAVADO" : "simulacao",
             erroKommo,
+            minimoValor,
             tratamentos = linhas.Count,
             jaPreenchidos = linhas.Count(l => !string.IsNullOrWhiteSpace(l.ValorKommo)),
             semLeadNaKommo = linhas.Count(l => l.LeadId is null),
             alterados = gravados.Count,
             leads = gravados,
+            // Preço com cara de dígito faltando: NÃO gravado, e devolvido para alguém
+            // corrigir na franquia — lá o número também está errado.
+            suspeitos = suspeitos.Select(l => new
+            {
+                l.LeadId, l.Paciente, l.Whatsapp, precoFranquia = l.PrecoFranquia,
+            }),
         });
     }
 
@@ -462,6 +466,50 @@ public class InternalSpineController(
             _logger.LogWarning(ex, "Resumo do dia falhou (unidade {UnitId})", unitId);
             return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Motivo });
         }
+    }
+}
+
+/// <summary>
+/// Separa o que pode ser gravado na Kommo do que precisa de olho humano antes.
+///
+/// POR QUE EXISTE UM PISO
+/// ----------------------
+/// Medido em 01/09/2026 sobre agosto inteiro, nas 10 unidades com token da franquia:
+/// TODO preço abaixo de R$ 1.000 da rede é de Parauapebas — seis de R$ 368 e dois de
+/// R$ 420 — e cada um é exatamente um décimo de um valor que a própria unidade
+/// pratica (3.680 e 4.200). O menor preço legítimo em qualquer unidade é R$ 1.600.
+/// É digitação com um zero a menos.
+///
+/// Gravar isso trocaria um campo VAZIO por um número ERRADO, e essa troca é ruim:
+/// campo vazio ninguém soma, número errado entra na receita e vira decisão. Por isso
+/// a linha suspeita não é escrita — ela volta no relatório, para a clínica corrigir
+/// na origem, onde o número também está errado.
+/// </summary>
+public static class SelecaoDeEscrita
+{
+    /// <summary>Piso padrão em reais. Parametrizável na rota, para o dia em que a rede vender algo barato.</summary>
+    public const decimal PisoPadrao = 1000m;
+
+    /// <param name="piso">Abaixo disto a linha é suspeita, não gravada. 0 desliga a trava.</param>
+    public static (List<LinhaReconciliacao> Gravar, List<LinhaReconciliacao> Suspeitos) Separar(
+        IEnumerable<LinhaReconciliacao> linhas, decimal piso)
+    {
+        var gravar = new List<LinhaReconciliacao>();
+        var suspeitos = new List<LinhaReconciliacao>();
+
+        foreach (var l in linhas)
+        {
+            // Sem lead casado não há onde gravar; sem preço não há o que gravar; e campo
+            // já preenchido nunca é tocado — a rota só completa vazio, não corrige humano.
+            if (l.LeadId is null || l.PrecoFranquia is not > 0
+                || !string.IsNullOrWhiteSpace(l.ValorKommo))
+                continue;
+
+            if (l.PrecoFranquia < piso) suspeitos.Add(l);
+            else gravar.Add(l);
+        }
+
+        return (gravar, suspeitos);
     }
 }
 

@@ -55,7 +55,10 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
         // ── 1. Agendados: o card contra a contagem crua ─────────────────────
         var entradasAgendado = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
-                        && h.ChangedAt >= de && h.ChangedAt <= ate
+                        // Data corrigida manda: a conferência tem de olhar o MESMO
+                        // número que o card, senão ela acusa divergência que não existe.
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) >= de
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= ate
                         && h.StageLabel.Contains("AGENDADO")
                         && h.Lead.TenantId == tenantId
                         && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
@@ -223,7 +226,10 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
     {
         var noPeriodo = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
-                        && h.ChangedAt >= de && h.ChangedAt <= ate
+                        // Data corrigida manda: a conferência tem de olhar o MESMO
+                        // número que o card, senão ela acusa divergência que não existe.
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) >= de
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= ate
                         && h.StageLabel.Contains("AGENDADO")
                         && h.Lead.TenantId == tenantId
                         && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))

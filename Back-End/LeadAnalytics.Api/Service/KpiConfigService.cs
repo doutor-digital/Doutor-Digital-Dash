@@ -360,7 +360,11 @@ public class KpiConfigService(
                         var entraram = _db.LeadStageHistories.AsNoTracking()
                             .Where(h => ids.Contains(h.StageId)
                                         && h.EntrySource != Models.LeadStageHistory.SourceLegacy
-                                        && h.ChangedAt >= from && h.ChangedAt <= to)
+                                        // A data que vale é a CORRIGIDA quando existe. Sem isto a
+                                        // correção do admin (e a datação de migração) não chegava
+                                        // ao número: o dinheiro ficava no mês do mutirão.
+                                        && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
                             .Select(h => h.LeadId);
 
                         // Sem a janela de CRIACAO: quem fechou no periodo entra, tenha o
@@ -1592,7 +1596,9 @@ public class KpiConfigService(
                 var entraram = _db.LeadStageHistories.AsNoTracking()
                     .Where(h => etapas.Contains(h.StageId)
                                 && h.EntrySource != Models.LeadStageHistory.SourceLegacy
-                                && h.ChangedAt >= from && h.ChangedAt <= to)
+                                // Idem: a data corrigida manda sobre a do arraste.
+                                && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
+                                && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
                     .Select(h => h.LeadId);
 
                 q = q.Where(l => entraram.Contains(l.Id));

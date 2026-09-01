@@ -73,7 +73,10 @@ public class RelatorioCompletoService(
         // ── Movimento: entradas e agendamentos com data confiável ───────────
         dto.Agendaram = await _db.LeadStageHistories.AsNoTracking()
             .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
-                        && h.ChangedAt >= de && h.ChangedAt <= ate
+                        // Data corrigida manda: a conferência tem de olhar o MESMO
+                        // número que o card, senão ela acusa divergência que não existe.
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) >= de
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= ate
                         && h.StageLabel.Contains("AGENDADO")
                         && h.Lead.TenantId == tenantId
                         && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))

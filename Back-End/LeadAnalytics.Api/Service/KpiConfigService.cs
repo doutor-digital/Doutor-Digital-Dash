@@ -468,7 +468,7 @@ public class KpiConfigService(
     {
         try
         {
-            if (metric == "receita")
+            if (metric is "receita" or "receita_qtd")
             {
                 // POPULAÇÃO da franquia, VALOR da Kommo — a regra do negócio. Soma o campo
                 // preenchido na Kommo, mas só dos leads vinculados aos tratamentos que a
@@ -483,6 +483,13 @@ public class KpiConfigService(
 
                 if (vinculos.Count == 0)
                     return new FranquiaMedida(null, "cruzamento ainda não rodou para este período");
+
+                // O denominador do ticket é quantos tratamentos TÊM valor — dividir pelo
+                // total incluiria os que a Kommo deixou em branco e derrubaria a média.
+                if (metric == "receita_qtd")
+                    return new FranquiaMedida(
+                        vinculos.Count(v => v is > 0m),
+                        "tratamentos da franquia com valor na Kommo");
 
                 return new FranquiaMedida(
                     (double)vinculos.Sum(v => v ?? 0m),

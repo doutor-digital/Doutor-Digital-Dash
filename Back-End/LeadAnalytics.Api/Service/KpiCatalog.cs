@@ -48,7 +48,7 @@ public static class KpiSourceTypes
     /// escrita errada no seed de virar silenciosamente o número de outro card.
     /// </summary>
     public static readonly string[] MetricasFranquia =
-        { "agendados", "consultas", "no_show", "tratamentos", "receita" };
+        { "agendados", "consultas", "no_show", "tratamentos", "receita", "receita_qtd" };
 
     public static readonly string[] All =
         { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt, Franquia };

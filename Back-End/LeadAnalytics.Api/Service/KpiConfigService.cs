@@ -543,11 +543,20 @@ public class KpiConfigService(
             // de OUTRO card — número errado e calado, o pior defeito que este painel pode ter.
             return metric switch
             {
+                // AGENDA QUE NÃO ACONTECEU, não só o status "NÃO COMPARECEU".
+                //
+                // Medido em 01-31/08/2026: Boa Vista tinha 55 agendados, 39 consultas e
+                // ZERO faltas registradas; Araguaína, 16 atendidos, 8 desmarcados e zero
+                // faltas. Só Marabá usa o status. As outras marcam DESMARCADO para tudo,
+                // inclusive para quem simplesmente não apareceu — então o card prometia
+                // "faltas" e entregava zero, que se lê como "ninguém faltou".
+                //
+                // Resolvidas já exclui o que ainda não chegou (agendado/confirmado), então
+                // esta conta é: horário que JÁ PASSOU e não virou atendimento. Desmarcado,
+                // remarcado ou falta, a cadeira ficou vazia do mesmo jeito.
                 "no_show" => new FranquiaMedida(
-                    av.PorSituacao
-                      .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
-                      .Sum(s => s.Total),
-                    "fonte: CRM da franquia · faltas"),
+                    Math.Max(0, av.Resolvidas - av.Realizadas),
+                    "fonte: CRM da franquia · agenda que já passou e não virou atendimento"),
 
                 // Todos os horários marcados PARA o período, em qualquer situação — o mesmo
                 // recorte da agenda da franquia. Existe porque na Kommo "agendado" é a etapa

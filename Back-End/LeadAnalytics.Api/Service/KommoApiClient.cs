@@ -228,6 +228,43 @@ public class KommoApiClient
         }
     }
 
+    /// <summary>
+    /// Move UM lead para outra etapa (PATCH /api/v4/leads/{id}).
+    ///
+    /// Manda <c>pipeline_id</c> junto de propósito: a Kommo reaproveita os ids 142/143 em
+    /// todos os funis, então mandar só o status pode deixar o card no funil errado — ou
+    /// ser recusado, quando a etapa não existe no funil em que o lead está hoje.
+    ///
+    /// ESCRITA COM EFEITO COLATERAL: mudar de etapa dispara o Pipeline Digital e os bots
+    /// da conta, que podem mandar mensagem para o paciente. Quem chama tem de saber disso.
+    /// </summary>
+    public async Task MoverLeadDeEtapaAsync(
+        string subdomainOrHost, string token, long leadId,
+        int pipelineId, int statusId, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/leads/{leadId}";
+        var payload = new Dictionary<string, object?>
+        {
+            ["pipeline_id"] = pipelineId,
+            ["status_id"] = statusId,
+        };
+
+        using var req = new HttpRequestMessage(HttpMethod.Patch, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Content = new StringContent(
+            JsonSerializer.Serialize(payload, JsonOpts), System.Text.Encoding.UTF8, "application/json");
+
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Kommo PATCH etapa {Status} no lead {LeadId}: {Body}",
+                (int)resp.StatusCode, leadId, body);
+            throw new HttpRequestException($"Kommo PATCH etapa retornou {(int)resp.StatusCode}: {body}");
+        }
+    }
+
     private static bool IsDateType(string? type) =>
         type is "date" or "birthday" or "date_time";
 

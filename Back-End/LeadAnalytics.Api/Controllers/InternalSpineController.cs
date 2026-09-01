@@ -25,6 +25,7 @@ public class InternalSpineController(
     SpineApiClient api,
     KommoApiClient kommo,
     DatacaoDeMigracaoService datacao,
+    MoverParaTratamentoService mover,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
@@ -35,6 +36,7 @@ public class InternalSpineController(
     private readonly SpineApiClient _api = api;
     private readonly KommoApiClient _kommo = kommo;
     private readonly DatacaoDeMigracaoService _datacao = datacao;
+    private readonly MoverParaTratamentoService _mover = mover;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
 
@@ -485,6 +487,63 @@ public class InternalSpineController(
                 LeadIdInterno = m.LeadIdInterno, etapa = m.Etapa, etapaId = m.EtapaId,
                 arrastadoEm = m.ArrastadoEm, dataReal = m.LancadoEm,
             }),
+        });
+    }
+
+
+    /// <summary>
+    /// Move para a etapa de tratamento os cards de quem a clínica registrou como
+    /// tratamento fechado no período.
+    ///
+    /// ESCREVE NA CONTA DO CLIENTE e a escrita tem efeito colateral: mudar de etapa
+    /// dispara o Pipeline Digital e os bots da conta, que podem mandar mensagem para o
+    /// paciente. Por isso <c>aplicar=false</c> é o padrão e existe <c>limite</c>: mover
+    /// UM card primeiro e olhar o que acontece é mais barato que descobrir com dezesseis.
+    ///
+    /// O funil e a etapa de destino são obrigatórios, sem valor padrão. A Kommo reutiliza
+    /// os ids 142/143 entre funis; um destino "óbvio" chutado aqui moveria card para o
+    /// lugar errado numa unidade cuja estrutura é diferente.
+    /// </summary>
+    [HttpPost("mover-para-tratamento")]
+    public async Task<IActionResult> MoverParaTratamento(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] int funilDestino,
+        [FromQuery] int etapaDestino,
+        [FromQuery] bool aplicar = false,
+        [FromQuery] int limite = 1,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var decisoes = await _mover.PrepararAsync(unitId, de, ate, funilDestino, etapaDestino, ct);
+        var aMover = decisoes.Where(d => d.Mover).ToList();
+
+        var movidos = aplicar
+            ? await _mover.MoverAsync(unitId, decisoes, funilDestino, etapaDestino, limite, ct)
+            : 0;
+
+        return Ok(new
+        {
+            unitId, de, ate, funilDestino, etapaDestino,
+            modo = aplicar ? "MOVIDO" : "simulacao",
+            limite = aplicar ? limite : (int?)null,
+            cards = decisoes.Count,
+            aMover = aMover.Count,
+            movidos,
+            mover = aMover.Select(d => new
+            {
+                d.Card.LeadId, d.Card.Paciente, lancadoEm = d.Card.DiaLancamento,
+                etapaAtual = d.Card.EtapaAtual, funilAtual = d.Card.FunilAtual,
+            }),
+            // Quem ficou de fora e por quê: é aqui que aparece a alta que não foi desfeita.
+            ficaramDeFora = decisoes.Where(d => !d.Mover)
+                .GroupBy(d => d.Motivo)
+                .Select(g => new { motivo = g.Key, quantos = g.Count(),
+                                   pacientes = g.Take(10).Select(d => d.Card.Paciente) }),
         });
     }
 

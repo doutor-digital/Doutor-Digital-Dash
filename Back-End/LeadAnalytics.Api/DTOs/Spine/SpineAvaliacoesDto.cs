@@ -32,6 +32,14 @@ public record SpineAvaliacoesDto(
     double TaxaComparecimento,
     int PacientesDistintos,
     bool AlertaQualidadeDados,
+    /// <summary>
+    /// Desmarcados cuja baixa foi registrada DEPOIS da hora do atendimento. Ninguém
+    /// desmarca uma consulta que já passou: é a recepção fechando o horário como
+    /// DESMARCADO porque o paciente não veio. Medido em 28/08/2026: 39% dos desmarques
+    /// de Parauapebas e 35% dos de Balsas são assim, contra 5% em Marabá — a única
+    /// unidade que usa o status NÃO COMPARECEU de verdade.
+    /// </summary>
+    int DesmarcadoAposHorario,
     IReadOnlyList<SpineSituacaoDto> PorSituacao,
     IReadOnlyList<SpineAvaliacoesPorDiaDto> PorDia,
     IReadOnlyList<SpineAvaliacoesPorProfissionalDto> PorProfissional);

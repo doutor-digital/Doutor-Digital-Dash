@@ -556,12 +556,18 @@ public class KpiConfigService(
                     }, ct);
                 if (agenda is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
 
-                var faltas = agenda.PorSituacao
+                var registradas = agenda.PorSituacao
                     .Where(s => s.Nome.Contains("NÃO COMPARECEU", StringComparison.OrdinalIgnoreCase))
                     .Sum(s => s.Total);
 
-                return new FranquiaMedida(faltas,
-                    "fonte: CRM da franquia · faltas em toda a agenda (avaliação, sessão e retorno)");
+                // Some o desmarque tardio: só uma unidade usa o status de falta de verdade
+                // (Marabá, 5% de desmarques após o horário, contra 39% em Parauapebas). Sem
+                // isso o card compara clínicas pelo hábito da recepção, não pela operação.
+                var total = registradas + agenda.DesmarcadoAposHorario;
+
+                return new FranquiaMedida(total,
+                    $"fonte: CRM da franquia · {registradas} registradas + "
+                    + $"{agenda.DesmarcadoAposHorario} desmarcadas depois do horário");
             }
 
             var av = await _spineAvaliacoes.GetAsync(unitId, de, ate, ct);

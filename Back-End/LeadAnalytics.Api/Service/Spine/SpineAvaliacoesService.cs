@@ -106,6 +106,14 @@ public class SpineAvaliacoesService(
         var taxa = resolvidas == 0 ? 0d : Math.Round((double)realizadas / resolvidas * 100, 1);
 
         var naoCompareceu = Contar(SpineApiClient.ScheduleStatus.NaoCompareceu);
+
+        // Falta disfarçada de desmarque: a baixa entrou DEPOIS da hora do atendimento.
+        // Ninguém desmarca uma consulta que já passou — é a recepção fechando o horário
+        // porque o paciente não veio.
+        var desmarcadoTarde = rows.Count(r =>
+            r.IdStatus == SpineApiClient.ScheduleStatus.Desmarcado
+            && r.Modified is not null && r.DateAttendance is not null
+            && r.Modified >= r.DateAttendance);
         var desmarcadas = Contar(SpineApiClient.ScheduleStatus.Desmarcado);
         var alerta = desmarcadas >= 3 && naoCompareceu <= desmarcadas / 5;
 
@@ -133,7 +141,7 @@ public class SpineAvaliacoesService(
             .Count();
 
         return new SpineAvaliacoesDto(
-            de, ate, total, realizadas, resolvidas, taxa, pacientes, alerta,
+            de, ate, total, realizadas, resolvidas, taxa, pacientes, alerta, desmarcadoTarde,
             porSituacao, porDia, porProfissional);
     }
 }

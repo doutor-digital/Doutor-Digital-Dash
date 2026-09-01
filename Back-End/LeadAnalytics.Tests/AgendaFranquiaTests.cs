@@ -250,4 +250,79 @@ public class AgendaFranquiaTests
         Assert.Equal(2, dto.Total);
         Assert.Single(dto.PorDia);
     }
+
+    // ─── Falta disfarçada de desmarque ──────────────────────────────────────────
+
+    private static SpineSchedule Desmarcado(long id, DateTime quando, DateTime baixa)
+    {
+        var s = Horario(id, SpineApiClient.ScheduleStatus.Desmarcado, quando);
+        s.Modified = baixa;
+        return s;
+    }
+
+    /// Desmarcar DEPOIS da hora não é cancelamento: é a recepção fechando o horário
+    /// porque o paciente não veio. Medido em 28/08/2026: 39% dos desmarques de
+    /// Parauapebas e 35% dos de Balsas são assim, contra 5% em Marabá — a única que
+    /// usa o status de falta de verdade.
+    [Fact]
+    public void Desmarque_depois_da_hora_conta_como_falta()
+    {
+        var hora = Utc(2026, 8, 28, 14);
+        var dto = SpineAvaliacoesService.Montar(Dia, Dia, new[]
+        {
+            Desmarcado(1, hora, hora.AddMinutes(30)),
+        });
+
+        Assert.Equal(1, dto.DesmarcadoAposHorario);
+    }
+
+    /// Cancelar com antecedência é cancelamento de verdade — dá tempo de encaixar
+    /// outro paciente. Contar como falta puniria a clínica por um aviso educado.
+    [Fact]
+    public void Desmarque_com_antecedencia_nao_conta_como_falta()
+    {
+        var hora = Utc(2026, 8, 28, 14);
+        var dto = SpineAvaliacoesService.Montar(Dia, Dia, new[]
+        {
+            Desmarcado(1, hora, hora.AddDays(-3)),
+        });
+
+        Assert.Equal(0, dto.DesmarcadoAposHorario);
+    }
+
+    /// Desmarque exatamente na hora conta: o paciente já devia estar lá.
+    [Fact]
+    public void Desmarque_na_hora_exata_conta()
+    {
+        var hora = Utc(2026, 8, 28, 14);
+        var dto = SpineAvaliacoesService.Montar(Dia, Dia, new[] { Desmarcado(1, hora, hora) });
+
+        Assert.Equal(1, dto.DesmarcadoAposHorario);
+    }
+
+    /// Sem data de baixa não dá para julgar — e chutar viraria falta inventada.
+    [Fact]
+    public void Desmarque_sem_data_de_baixa_nao_conta()
+    {
+        var s = Horario(1, SpineApiClient.ScheduleStatus.Desmarcado, Utc(2026, 8, 28, 14));
+        s.Modified = null;
+        var dto = SpineAvaliacoesService.Montar(Dia, Dia, new[] { s });
+
+        Assert.Equal(0, dto.DesmarcadoAposHorario);
+    }
+
+    /// Atendido e remarcado nunca entram nessa conta, mesmo com baixa tardia.
+    [Fact]
+    public void So_desmarcado_entra_na_conta_de_falta_disfarcada()
+    {
+        var hora = Utc(2026, 8, 28, 14);
+        var atendido = Horario(1, SpineApiClient.ScheduleStatus.Atendido, hora);
+        atendido.Modified = hora.AddHours(2);
+        var remarcado = Horario(2, SpineApiClient.ScheduleStatus.Remarcado, hora);
+        remarcado.Modified = hora.AddHours(2);
+
+        var dto = SpineAvaliacoesService.Montar(Dia, Dia, new[] { atendido, remarcado });
+
+        Assert.Equal(0, dto.DesmarcadoAposHorario);
+    }
 }

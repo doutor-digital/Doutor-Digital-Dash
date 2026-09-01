@@ -174,6 +174,7 @@ builder.Services.AddScoped<BuscasService>();
 builder.Services.AddScoped<NoShowService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.CampanhasService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.AnunciosDesempenhoService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Ads.RastreioCoberturaService>();
 builder.Services.AddScoped<RelatorioCompletoService>();
 builder.Services.AddScoped<InternalApiKeyGuard>();
 builder.Services.AddScoped<DailyRelatoryService>();

@@ -22,6 +22,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     NoShowService noShow,
     Service.Ads.AnunciosDesempenhoService midia,
     LeadAnalytics.Api.Service.Ads.CampanhasService campanhas,
+    LeadAnalytics.Api.Service.Ads.RastreioCoberturaService rastreio,
     RelatorioCompletoService relatorioCompleto, TenantUnitGuard tenantGuard) : ControllerBase
 {
     private readonly SaudeService _saude = saude;
@@ -34,6 +35,7 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
     private readonly NoShowService _noShow = noShow;
     private readonly Service.Ads.AnunciosDesempenhoService _midia = midia;
     private readonly LeadAnalytics.Api.Service.Ads.CampanhasService _campanhas = campanhas;
+    private readonly LeadAnalytics.Api.Service.Ads.RastreioCoberturaService _rastreio = rastreio;
     private readonly RelatorioCompletoService _relatorioCompleto = relatorioCompleto;
     private readonly TenantUnitGuard _tenantGuard = tenantGuard;
 
@@ -174,6 +176,26 @@ public class SaudeController(SaudeService saude, AgendaDoDiaService agenda, Higi
         if (tenantId is not int tid) return Forbid();
 
         return Ok(await _relatorioCompleto.GetAsync(tid, unitId, de, ate, ct));
+    }
+
+    /// <summary>
+    /// Quanto do que veio de anúncio o rastreio identificou, unidade por unidade.
+    ///
+    /// É a única tela que denuncia rastreio parado: quando ele para, a Mídia só mostra menos
+    /// anúncios, com a mesma cara de sempre.
+    ///
+    /// Vem sem filtro de unidade de propósito — a graça é comparar as unidades entre si. O
+    /// recorte de quem pode ver o quê continua sendo o do tenant: super admin vê a rede toda,
+    /// usuário comum vê as unidades da clínica dele.
+    /// </summary>
+    [HttpGet("rastreio")]
+    public async Task<IActionResult> Rastreio(
+        [FromQuery] DateTime de, [FromQuery] DateTime ate, CancellationToken ct = default)
+    {
+        var (error, tenantId) = await _tenantGuard.ResolveTenantAsync(null, ct);
+        if (error is not null) return error;
+
+        return Ok(await _rastreio.GetAsync(tenantId, de, ate, ct));
     }
 
     /// <summary>Cada anúncio do período com gasto, entrega e custo por conversa.</summary>

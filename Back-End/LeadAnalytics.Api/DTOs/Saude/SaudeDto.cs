@@ -406,3 +406,36 @@ public class AnuncioLinhaDto
     /// <summary>Nulo sem conversa: zero seria lido como "de graça".</summary>
     public decimal? CustoPorConversa { get; set; }
 }
+
+/// <summary>
+/// Cobertura do rastreio de anúncio numa unidade, no período.
+///
+/// A cobertura é sobre <see cref="DeAnuncio"/>, não sobre <see cref="Leads"/> — o motivo está
+/// no resumo de RastreioCoberturaService. Fica nula quando ninguém veio de anúncio: sem
+/// denominador, qualquer número seria invenção.
+/// </summary>
+public class RastreioCoberturaDto
+{
+    public int UnidadeId { get; set; }
+    public string Unidade { get; set; } = string.Empty;
+
+    /// <summary>Todos os leads do período nesta unidade.</summary>
+    public int Leads { get; set; }
+
+    /// <summary>Os que a origem do cartão diz ter vindo de mídia paga.</summary>
+    public int DeAnuncio { get; set; }
+
+    /// <summary>Os que chegaram com o anúncio identificado pelo rastreio.</summary>
+    public int Rastreados { get; set; }
+
+    /// <summary>Nulo quando não há lead de anúncio no período.</summary>
+    public int? CoberturaPct { get; set; }
+
+    public DateTime? UltimoRastreado { get; set; }
+
+    /// <summary>ok · parcial · falha · sem_rastreio · sem_anuncio</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>A frase que a tela mostra — já explica o que fazer com o número.</summary>
+    public string Detalhe { get; set; } = string.Empty;
+}

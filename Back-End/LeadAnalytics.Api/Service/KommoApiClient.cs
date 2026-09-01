@@ -265,6 +265,61 @@ public class KommoApiClient
         }
     }
 
+    /// <summary>
+    /// Cria uma tarefa presa a um lead (POST /api/v4/tasks).
+    ///
+    /// Tarefa e não mensagem, de propósito: ela cai na fila da própria SDR, dentro do
+    /// card, a um clique da ação — e fica registrado quem resolveu. Aviso em grupo vira
+    /// ruído e ninguém é dono dele.
+    /// </summary>
+    /// <param name="prazo">Quando vence. A Kommo espera unix em segundos.</param>
+    /// <param name="responsavelId">Dono da tarefa. Null deixa a Kommo escolher.</param>
+    public async Task CriarTarefaAsync(
+        string subdomainOrHost, string token, long leadId, string texto,
+        DateTime prazo, long? responsavelId, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/tasks";
+        var tarefa = new Dictionary<string, object?>
+        {
+            ["text"] = texto,
+            ["entity_id"] = leadId,
+            ["entity_type"] = "leads",
+            ["complete_till"] = new DateTimeOffset(DateTime.SpecifyKind(prazo, DateTimeKind.Utc))
+                .ToUnixTimeSeconds(),
+        };
+        if (responsavelId is > 0) tarefa["responsible_user_id"] = responsavelId;
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Content = new StringContent(
+            JsonSerializer.Serialize(new[] { tarefa }, JsonOpts),
+            System.Text.Encoding.UTF8, "application/json");
+
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("Kommo POST tarefa {Status} no lead {LeadId}: {Body}",
+                (int)resp.StatusCode, leadId, body);
+            throw new HttpRequestException($"Kommo POST tarefa retornou {(int)resp.StatusCode}: {body}");
+        }
+    }
+
+    /// <summary>
+    /// Tarefas ABERTAS de um lead. Serve para não empilhar a mesma cobrança todo dia:
+    /// uma tarefa repetida vira ruído e treina a equipe a fechar sem ler.
+    /// </summary>
+    public async Task<List<string>> TextosDeTarefasAbertasAsync(
+        string subdomainOrHost, string token, long leadId, CancellationToken ct)
+    {
+        var url = $"{ResolveBaseUrl(subdomainOrHost)}/api/v4/tasks"
+                + $"?filter[entity_type]=leads&filter[entity_id][]={leadId}"
+                + "&filter[is_completed]=0&limit=50";
+        var page = await GetAsync<KommoTasksPageResponse>(url, token, ct);
+        return page?.Embedded?.Tasks?.Select(t => t.Text ?? string.Empty).ToList() ?? new List<string>();
+    }
+
     private static bool IsDateType(string? type) =>
         type is "date" or "birthday" or "date_time";
 
@@ -834,4 +889,22 @@ public class KommoEventLeadStatus
 {
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("pipeline_id")] public long? PipelineId { get; set; }
+}
+
+public class KommoTasksPageResponse
+{
+    [JsonPropertyName("_embedded")] public KommoTasksEmbedded? Embedded { get; set; }
+}
+
+public class KommoTasksEmbedded
+{
+    [JsonPropertyName("tasks")] public List<KommoApiTask>? Tasks { get; set; }
+}
+
+public class KommoApiTask
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("text")] public string? Text { get; set; }
+    [JsonPropertyName("is_completed")] public bool IsCompleted { get; set; }
+    [JsonPropertyName("complete_till")] public long? CompleteTill { get; set; }
 }

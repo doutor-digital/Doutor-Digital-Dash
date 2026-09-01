@@ -26,6 +26,7 @@ public class InternalSpineController(
     KommoApiClient kommo,
     DatacaoDeMigracaoService datacao,
     MoverParaTratamentoService mover,
+    PendenciasDeTratamentoService pendencias,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
@@ -37,6 +38,7 @@ public class InternalSpineController(
     private readonly KommoApiClient _kommo = kommo;
     private readonly DatacaoDeMigracaoService _datacao = datacao;
     private readonly MoverParaTratamentoService _mover = mover;
+    private readonly PendenciasDeTratamentoService _pendencias = pendencias;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
 
@@ -544,6 +546,57 @@ public class InternalSpineController(
                 .GroupBy(d => d.Motivo)
                 .Select(g => new { motivo = g.Key, quantos = g.Count(),
                                    pacientes = g.Take(10).Select(d => d.Card.Paciente) }),
+        });
+    }
+
+
+    /// <summary>
+    /// Cobra da SDR o que só ela pode fazer no card: mover para EM TRATAMENTO e
+    /// preencher o valor do tratamento.
+    ///
+    /// Cria uma TAREFA no próprio card, para o responsável dele, com prazo hoje. Tarefa
+    /// e não aviso em grupo: aviso não tem dono, a tarefa cai na fila de quem tem de
+    /// agir e registra quem resolveu. Card que já tem a cobrança aberta é pulado — a
+    /// mesma tarefa repetida todo dia treina a equipe a fechar sem ler.
+    ///
+    /// Escreve na conta do cliente, então <c>aplicar=false</c> é o padrão. É uma escrita
+    /// bem menos perigosa que mover card: tarefa não dispara bot nem manda mensagem
+    /// para paciente.
+    /// </summary>
+    [HttpPost("pendencias-tratamento")]
+    public async Task<IActionResult> PendenciasTratamento(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] bool aplicar = false,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var estrutura = await _pendencias.DescobrirEstruturaAsync(unitId, ct);
+        if (estrutura is null)
+            return Ok(new { unitId, erro = "não achei a etapa EM TRATAMENTO ou o campo de valor nesta conta" });
+
+        var lista = await _pendencias.LevantarAsync(unitId, de, ate, ct);
+        var criadas = aplicar ? await _pendencias.CobrarAsync(unitId, lista, ct) : 0;
+
+        return Ok(new
+        {
+            unitId, de, ate,
+            modo = aplicar ? "COBRADO" : "simulacao",
+            estrutura = new { estrutura.FunilId, estrutura.EtapaId, estrutura.CampoValor },
+            pendentes = lista.Count,
+            precisamMover = lista.Count(p => p.PrecisaMover),
+            precisamValor = lista.Count(p => p.PrecisaValor),
+            tarefasCriadas = criadas,
+            cards = lista.Select(p => new
+            {
+                p.LeadId, p.Paciente, lancadoEm = p.DiaLancamento, p.PrecoFranquia,
+                p.PrecisaMover, p.PrecisaValor,
+                tarefa = Service.PendenciasDeTratamentoService.TextoDaTarefa(p),
+            }),
         });
     }
 

@@ -25,8 +25,92 @@ public class AdminStageHistoryController(
     AppDbContext db,
     TenantUnitGuard tenantGuard,
     ICurrentUser currentUser,
+    DatacaoDeMigracaoService datacao,
     ILogger<AdminStageHistoryController> logger) : ControllerBase
 {
+    /// <summary>Corpo do "carimbar a data da franquia": só ids, nunca uma data.</summary>
+    public record AplicarMigracaoBody(
+        [property: JsonPropertyName("history_ids")] List<int>? HistoryIds);
+
+    /// <summary>
+    /// Quem pode carimbar a data da franquia num card que moveu.
+    ///
+    /// A SDR entra nesta lista de propósito: é ela que faz o mutirão e é ela que sabe
+    /// qual card acabou de arrastar. O que a protege — e protege o número — é que a
+    /// data NÃO é digitada: vem do lançamento na franquia, e a rota recalcula a lista
+    /// antes de gravar, então um id fora dela não carimba nada. Digitar data à mão
+    /// continua sendo só do admin, na correção individual.
+    /// </summary>
+    private IActionResult? PodeDatarMigracao() =>
+        Roles.CanDateMigration(currentUser.Role)
+            ? null
+            : StatusCode(403, new { error = "sem permissão para datar migração" });
+
+    /// <summary>
+    /// O que a migração retroativa fez com os números — e o botão para desfazer o estrago.
+    ///
+    /// A Kommo carimba a entrada na etapa com a hora do ARRASTE. Num mutirão de cards
+    /// antigos, um mês inteiro desaba no dia de hoje. Aqui a pessoa vê exatamente quais
+    /// movimentações são migração (o tratamento existe na franquia, lançado em outro dia)
+    /// e carimba a data real de uma vez.
+    /// </summary>
+    [HttpGet("migracao")]
+    public async Task<IActionResult> PreviaMigracao(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromQuery] DateTime? movidoDe = null,
+        [FromQuery] DateTime? movidoAte = null,
+        CancellationToken ct = default)
+    {
+        if (PodeDatarMigracao() is { } negado) return negado;
+        if (await tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } fora) return fora;
+
+        var p = await datacao.PreverAsync(unitId, de, ate, movidoDe, movidoAte, ct);
+        return Ok(new
+        {
+            unit_id = p.UnitId,
+            janela_de = p.JanelaDe,
+            janela_ate = p.JanelaAte,
+            movimentacoes_na_janela = p.MovimentacoesNaJanela,
+            leads_com_tratamento = p.LeadsComTratamento,
+            leads_com_mais_de_um_tratamento = p.LeadsComMaisDeUmTratamento,
+            datar = p.Datar.Select(m => new
+            {
+                history_id = m.HistoryId, paciente = m.Paciente, etapa = m.Etapa,
+                arrastado_em = m.ArrastadoEm, lancado_em = m.LancadoEm,
+            }),
+            // Sem tratamento casado na franquia: a SDR NÃO corrige. Sobe para o gestor,
+            // porque aí a data teria de ser digitada — e digitar data é decisão de gestão.
+            sem_vinculo = p.SemVinculo.Select(m => new
+            {
+                history_id = m.HistoryId, paciente = m.Paciente, etapa = m.Etapa,
+                arrastado_em = m.ArrastadoEm,
+            }),
+        });
+    }
+
+    /// <summary>Carimba a data da franquia. Sem history_ids, carimba tudo o que a prévia autoriza.</summary>
+    [HttpPost("migracao/aplicar")]
+    public async Task<IActionResult> AplicarMigracao(
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly de,
+        [FromQuery] DateOnly ate,
+        [FromBody] AplicarMigracaoBody? body,
+        [FromQuery] DateTime? movidoDe = null,
+        [FromQuery] DateTime? movidoAte = null,
+        CancellationToken ct = default)
+    {
+        if (PodeDatarMigracao() is { } negado) return negado;
+        if (await tenantGuard.EnsureUnitBelongsToTenantAsync(unitId, ct) is { } fora) return fora;
+
+        var n = await datacao.AplicarAsync(
+            unitId, de, ate, movidoDe, movidoAte,
+            body?.HistoryIds, currentUser.Email, currentUser.UserId, ct);
+
+        return Ok(new { ok = true, corrigidas = n });
+    }
+
     // Corpo em snake_case (corrected_at); sem JsonPropertyName a data não vincula e
     // a correção viraria 0001-01-01 silenciosamente.
     public record CorrectDateBody(

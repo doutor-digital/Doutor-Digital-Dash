@@ -44,6 +44,21 @@ public static class Roles
         return r is "trafego_pago" or "trafego-pago";
     }
 
+    /// <summary>
+    /// Quem pode carimbar nos cards que moveu a data em que a franquia lançou o
+    /// tratamento (mutirão de migração retroativa).
+    ///
+    /// A SDR entra aqui de propósito: é ela quem faz o mutirão e quem sabe qual card
+    /// acabou de arrastar. O que protege o número é que a data NÃO é digitada — vem do
+    /// cruzamento com a franquia, e a rota recalcula a lista antes de gravar. Digitar
+    /// data à mão continua sendo só do admin, na correção individual.
+    /// </summary>
+    public static bool CanDateMigration(string? role)
+    {
+        var r = Norm(role);
+        return IsAdminLevel(role) || r is "sdr" or "manager";
+    }
+
     /// <summary>Quem pode criar convites.</summary>
     public static bool CanInvite(string? role)
     {

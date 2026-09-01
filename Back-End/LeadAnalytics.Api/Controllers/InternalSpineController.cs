@@ -24,6 +24,7 @@ public class InternalSpineController(
     SpineTokenStore tokens,
     SpineApiClient api,
     KommoApiClient kommo,
+    DatacaoDeMigracaoService datacao,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
@@ -33,6 +34,7 @@ public class InternalSpineController(
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _api = api;
     private readonly KommoApiClient _kommo = kommo;
+    private readonly DatacaoDeMigracaoService _datacao = datacao;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
 
@@ -423,82 +425,28 @@ public class InternalSpineController(
         if (!await _guard.IsAuthorizedAsync(adminKey))
             return Unauthorized(new { message = "Acesso negado" });
 
-        var janelaDe = movidoDe ?? DateTime.UtcNow.Date;
-        var janelaAte = movidoAte ?? DateTime.UtcNow;
+        // A regra mora no serviço, que é o mesmo usado pela tela da SDR. Duas cópias da
+        // regra viram duas datas diferentes para o mesmo card.
+        var previa = await _datacao.PreverAsync(unitId, de, ate, movidoDe, movidoAte, ct);
 
-        // O vínculo guarda o id da KOMMO; o histórico de etapas usa o id interno.
-        // leads.ExternalId é a ponte (medido em 01/09/2026: casa 100% dos vínculos).
-        //
-        // Um lead pode ter MAIS DE UM tratamento (paciente que voltou para operar outra
-        // hérnia). Vale o mais ANTIGO: a primeira entrada em EM TRATAMENTO pertence ao
-        // primeiro tratamento. Esses leads voltam contados no relatório — se o card foi
-        // arrastado uma vez só, o segundo tratamento fica sem data própria.
-        var porLead = await (
-            from v in _db.FranquiaLeadLinks.AsNoTracking()
-            join l in _db.Leads.AsNoTracking()
-                // ExternalId é int e o vínculo guarda long?; Lead.UnitId é int? e o do
-                // vínculo é int. Os dois lados do join precisam do MESMO tipo, senão a
-                // inferência do Join falha na compilação.
-                on new { E = (long?)v.LeadId, U = (int?)v.UnitId }
-                equals new { E = (long?)l.ExternalId, U = l.UnitId }
-            where v.UnitId == unitId && v.LeadId != null
-                  && v.DiaLancamento >= de && v.DiaLancamento <= ate
-            group v by l.Id into g
-            select new { LeadId = g.Key, Primeiro = g.Min(x => x.DiaLancamento), Quantos = g.Count() })
-            .ToListAsync(ct);
-
-        var lancamentoPorLead = porLead.ToDictionary(x => x.LeadId, x => x.Primeiro);
-        var comMaisDeUmTratamento = porLead.Count(x => x.Quantos > 1);
-
-        var movimentos = await (
-            from h in _db.LeadStageHistories
-            join l in _db.Leads.AsNoTracking() on h.LeadId equals l.Id
-            where l.UnitId == unitId
-                  && h.ChangedAt >= janelaDe && h.ChangedAt <= janelaAte
-            select h)
-            .ToListAsync(ct);
-
-        var (corrigir, ignorados) = DatacaoDeMigracao.Separar(
-            movimentos.Select(h => new MovimentoParaDatar(
-                h.Id, h.LeadId, h.StageLabel, h.ChangedAt, h.CorrectedChangedAt)),
-            lancamentoPorLead);
-
-        if (aplicar)
-        {
-            var porId = movimentos.ToDictionary(h => h.Id);
-            foreach (var (mov, nova) in corrigir)
-            {
-                var h = porId[mov.HistoryId];
-                h.CorrectedChangedAt = nova;
-                h.CorrectedAt = DateTime.UtcNow;
-                h.CorrectedByEmail = "reconciliacao-franquia";
-                h.CorrectionReason =
-                    "migração retroativa: data do lançamento do tratamento na franquia";
-            }
-            await _db.SaveChangesAsync(ct);
-            _logger.LogInformation(
-                "Datação de migração: {N} movimentações corrigidas na unidade {UnitId}",
-                corrigir.Count, unitId);
-        }
+        var corrigidas = aplicar
+            ? await _datacao.AplicarAsync(unitId, de, ate, movidoDe, movidoAte, null, null, null, ct)
+            : 0;
 
         return Ok(new
         {
             unitId,
             modo = aplicar ? "GRAVADO" : "simulacao",
-            janela = new { de = janelaDe, ate = janelaAte },
-            lancamentosConsiderados = lancamentoPorLead.Count,
-            // Lead com dois tratamentos: usamos a data do primeiro. Se o card foi
-            // arrastado uma vez só, o segundo tratamento fica sem data própria.
-            leadsComMaisDeUmTratamento = comMaisDeUmTratamento,
-            movimentacoesNaJanela = movimentos.Count,
-            corrigidas = corrigir.Count,
-            // Movimentação sem tratamento casado na franquia: NÃO tocada. Continua
-            // contando no dia do arraste, e é isso que precisa de olho humano.
-            semVinculo = ignorados.Count,
-            detalhe = corrigir.Take(200).Select(c => new
+            janela = new { de = previa.JanelaDe, ate = previa.JanelaAte },
+            lancamentosConsiderados = previa.LeadsComTratamento,
+            leadsComMaisDeUmTratamento = previa.LeadsComMaisDeUmTratamento,
+            movimentacoesNaJanela = previa.MovimentacoesNaJanela,
+            corrigidas = aplicar ? corrigidas : previa.Datar.Count,
+            semVinculo = previa.SemVinculo.Count,
+            detalhe = previa.Datar.Take(200).Select(m => new
             {
-                c.Mov.LeadIdInterno, etapa = c.Mov.Etapa,
-                arrastadoEm = c.Mov.ChangedAt, dataReal = c.Nova,
+                LeadIdInterno = m.LeadIdInterno, etapa = m.Etapa,
+                arrastadoEm = m.ArrastadoEm, dataReal = m.LancadoEm,
             }),
         });
     }
@@ -635,53 +583,6 @@ public static class SelecaoDeEscrita
         }
 
         return (gravar, suspeitos);
-    }
-}
-
-/// <summary>Uma entrada em etapa candidata a receber a data real.</summary>
-public record MovimentoParaDatar(
-    int HistoryId, int LeadIdInterno, string Etapa, DateTime ChangedAt, DateTime? CorrectedChangedAt);
-
-/// <summary>
-/// Decide quais movimentações recebem a data da franquia no lugar da data do arraste.
-///
-/// As duas regras que importam, e por quê:
-///  • correção humana existente nunca é sobrescrita — quem corrigiu à mão sabia de algo
-///    que a franquia não conta;
-///  • lead sem tratamento casado não é tocado — sem data verdadeira, o certo é deixar o
-///    número faltando e visível, não fabricar um.
-/// </summary>
-public static class DatacaoDeMigracao
-{
-    /// <summary>
-    /// Meio-dia local (UTC−3) do dia em que a franquia lançou o tratamento.
-    ///
-    /// Não é detalhe: o dashboard trabalha em dia COMERCIAL, cuja janela não começa à
-    /// meia-noite. Carimbar 00:00 jogaria metade das correções para o dia anterior.
-    /// Meio-dia cai dentro do dia certo em qualquer uma das janelas que o painel usa.
-    /// </summary>
-    public static DateTime MeioDoDia(DateOnly dia) =>
-        new(dia.Year, dia.Month, dia.Day, 15, 0, 0, DateTimeKind.Utc);
-
-    public static (List<(MovimentoParaDatar Mov, DateTime Nova)> Corrigir,
-                   List<MovimentoParaDatar> Ignorados) Separar(
-        IEnumerable<MovimentoParaDatar> movimentos,
-        IReadOnlyDictionary<int, DateOnly> lancamentoPorLead)
-    {
-        var corrigir = new List<(MovimentoParaDatar, DateTime)>();
-        var ignorados = new List<MovimentoParaDatar>();
-
-        foreach (var m in movimentos)
-        {
-            if (m.CorrectedChangedAt is not null) continue;
-
-            if (lancamentoPorLead.TryGetValue(m.LeadIdInterno, out var dia))
-                corrigir.Add((m, MeioDoDia(dia)));
-            else
-                ignorados.Add(m);
-        }
-
-        return (corrigir, ignorados);
     }
 }
 

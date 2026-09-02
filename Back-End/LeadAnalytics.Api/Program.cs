@@ -8,6 +8,7 @@ using LeadAnalytics.Api.Service.Insights;
 using LeadAnalytics.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using QuestPDF.Infrastructure;
@@ -119,6 +120,25 @@ builder.Services
             },
         };
     });
+
+// ── Atrás do Traefik: o TLS termina nele, e sem isto Request.Scheme vale "http" ──
+//
+// O sintoma não foi um erro nosso, foi a Meta recusando o login: o botão "Conectar" do
+// Meta Ads monta o redirect_uri a partir de Request.Scheme, e mandava
+// http://api-vps.../callback. A Meta só aceita redirect em HTTPS, então o OAuth de mídia
+// paga nunca poderia ter funcionado em produção — e a mensagem que aparecia falava de
+// domínio, não de esquema, o que mandava a investigação para o lado errado.
+//
+// KnownNetworks/KnownProxies são esvaziados porque o proxy tem IP dinâmico na rede
+// overlay do Swarm. Isso só é seguro porque o serviço NÃO publica porta nenhuma
+// (Endpoint.Ports = null): o único caminho até ele é o Traefik, então não há como
+// alguém de fora forjar o cabeçalho.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+});
 
 builder.Services.AddAuthorization();
 
@@ -356,6 +376,9 @@ catch (Exception ex)
     var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
     startupLogger.LogError(ex, "Falha no seed de super-admin");
 }
+
+// Antes de qualquer middleware que leia esquema ou host — inclusive o CORS.
+app.UseForwardedHeaders();
 
 app.UseCors("AllowAll");
 

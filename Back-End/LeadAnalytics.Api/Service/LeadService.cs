@@ -2492,24 +2492,43 @@ public class LeadService(
 
         var total = await q.CountAsync(ct);
 
-        var items = await q
+        // O cartão vem junto porque a origem sai dele, não da coluna Source — que vale
+        // "Kommo" em todo lead e fazia a tela dizer "Top origens: Kommo". Ver OrigemDoLead.
+        var brutos = await q
             .OrderByDescending(l => l.CreatedAt)
             .Take(limit)
-            .Select(l => new RecentLeadDto
+            .Select(l => new
             {
-                Id = l.Id,
-                ExternalId = l.ExternalId,
-                Name = l.Name,
-                Phone = l.Phone,
-                Source = l.Source,
-                Channel = l.Channel,
-                CurrentStage = l.CurrentStage,
-                ConversationState = l.ConversationState,
-                UnitId = l.UnitId,
+                l.Id,
+                l.ExternalId,
+                l.Name,
+                l.Phone,
+                l.Source,
+                l.CustomFieldsJson,
+                l.Channel,
+                l.CurrentStage,
+                l.ConversationState,
+                l.UnitId,
                 UnitName = l.Unit != null ? l.Unit.Name : null,
-                CreatedAt = l.CreatedAt,
+                l.CreatedAt,
             })
             .ToListAsync(ct);
+
+        var items = brutos.Select(l => new RecentLeadDto
+        {
+            Id = l.Id,
+            ExternalId = l.ExternalId,
+            Name = l.Name,
+            Phone = l.Phone,
+            // Sem origem no cartão, a coluna antiga ainda é melhor que campo vazio.
+            Source = OrigemDoLead.Ler(l.CustomFieldsJson) ?? l.Source,
+            Channel = l.Channel,
+            CurrentStage = l.CurrentStage,
+            ConversationState = l.ConversationState,
+            UnitId = l.UnitId,
+            UnitName = l.UnitName,
+            CreatedAt = l.CreatedAt,
+        }).ToList();
 
         return new RecentLeadsResponseDto
         {
@@ -2650,15 +2669,33 @@ public class LeadService(
         int? unitId,
         CancellationToken ct = default)
     {
-        var q = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId);
-        if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
+        // Origem sai do campo do cartão, não da coluna Source — que vale "Kommo" em todo
+        // lead e deixava o filtro do dashboard com uma opção só. Ver OrigemDoLead.
+        //
+        // Vai em SQL cru porque a alternativa seria trazer o cartão de todo lead do tenant
+        // para a memória só para descobrir uma lista de uma dúzia de rótulos. O `lateral`
+        // resolve no banco; o TrimStart da classe vira o `btrim` daqui, e os dois têm de
+        // continuar concordando sobre quais símbolos a Kommo usa como prefixo.
+        // A coluna precisa se chamar "Value": é o nome que o SqlQuery escalar do EF procura.
+        // O filtro de unidade entra por concatenação em vez de "{1} is null or ...", porque
+        // um NULL sem tipo declarado faz o Npgsql recusar o parâmetro.
+        var filtroUnidade = unitId.HasValue ? @" and l.""UnitId"" = {1}" : string.Empty;
 
-        return await q
-            .Where(l => l.Source != null && l.Source != "")
-            .Select(l => l.Source!)
-            .Distinct()
-            .OrderBy(s => s)
-            .ToListAsync(ct);
+        var sql = $@"
+            select distinct btrim(e.value->>'value') as ""Value""
+            from leads l
+            cross join lateral jsonb_array_elements(l.""CustomFieldsJson"") e(value)
+            where l.""TenantId"" = {{0}}{filtroUnidade}
+              and l.""CustomFieldsJson"" is not null
+              and btrim(lower(e.value->>'field_name'), '⚑⌂☎ ') = 'origem'
+              and coalesce(btrim(e.value->>'value'), '') <> ''
+            order by 1";
+
+        var consulta = unitId.HasValue
+            ? _db.Database.SqlQueryRaw<string>(sql, clinicId, unitId.Value)
+            : _db.Database.SqlQueryRaw<string>(sql, clinicId);
+
+        return await consulta.ToListAsync(ct);
     }
 
     // ════════════════════════════════════════════════════════════════

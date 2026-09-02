@@ -161,25 +161,13 @@ public class RastreioCoberturaService(AppDbContext db)
 
                 if (!rastreado && nome.Contains(NomeCampoAnuncio)) rastreado = true;
 
-                if (!deAnuncio && EhCampoOrigem(nome) && EhAnuncio(valor)) deAnuncio = true;
+                if (!deAnuncio && OrigemDoLead.EhCampoOrigem(nome) && EhAnuncio(valor)) deAnuncio = true;
             }
         }
         catch (JsonException) { /* cartão torto não conta, e não derruba a página */ }
 
         return (rastreado, deAnuncio);
     }
-
-    /// <summary>
-    /// O campo de origem, e só ele: aparece como "⚑ Origem" e, em base antiga, como "Origem".
-    ///
-    /// Comparar pelo fim do nome pareceria bastar, mas a Kommo tem outros três campos que
-    /// terminam em "origem" — "Canal de origem", "⌂ Plataforma de origem" e "⌂ URL de origem
-    /// do clique". Hoje nenhum deles tem valor que passaria por <see cref="EhAnuncio"/>, mas
-    /// "Canal de origem" é lista editável pela clínica: no dia em que alguém cadastrar
-    /// "WhatsApp anúncio" ali, o denominador desta tela inflaria sem aviso.
-    /// </summary>
-    private static bool EhCampoOrigem(string nomeMinusculo)
-        => nomeMinusculo.TrimStart('⚑', '⌂', '☎', ' ', '\t') == "origem";
 
     /// <summary>
     /// Meta-Facebook, Meta-Instagram, Meta-WhatsApp e "WhatsApp anúncio" são mídia paga.

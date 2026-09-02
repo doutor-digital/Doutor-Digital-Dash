@@ -27,6 +27,7 @@ public class InternalSpineController(
     DatacaoDeMigracaoService datacao,
     MoverParaTratamentoService mover,
     PendenciasDeTratamentoService pendencias,
+    ConsultaSituacaoSyncService consultaSync,
     InternalApiKeyGuard guard,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
@@ -39,8 +40,41 @@ public class InternalSpineController(
     private readonly DatacaoDeMigracaoService _datacao = datacao;
     private readonly MoverParaTratamentoService _mover = mover;
     private readonly PendenciasDeTratamentoService _pendencias = pendencias;
+    private readonly ConsultaSituacaoSyncService _consultaSync = consultaSync;
     private readonly InternalApiKeyGuard _guard = guard;
     private readonly ILogger<InternalSpineController> _logger = logger;
+
+    /// <summary>
+    /// Sync da situação da consulta (franquia → Kommo), chamável por orquestrador
+    /// (n8n/cron) com X-Admin-Key. Item #1 da esteira "Franquia → Kommo".
+    ///
+    /// <c>simular</c> nasce TRUE de propósito: o padrão é o dry-run, e escrever exige
+    /// pedir explicitamente — a mesma postura do preencher do cruzamento. Janela
+    /// padrão: últimos 7 dias, o bastante para reprocessar fim de semana e feriado.
+    /// </summary>
+    [HttpPost("consulta-situacao/sync")]
+    public async Task<IActionResult> ConsultaSituacaoSync(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        [FromQuery] bool simular = true,
+        CancellationToken ct = default)
+    {
+        if (!await _guard.IsAuthorizedAsync(adminKey))
+            return Unauthorized(new { message = "Acesso negado" });
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var ini = de ?? fim.AddDays(-7);
+        try
+        {
+            return Ok(await _consultaSync.SincronizarAsync(unitId, ini, fim, simular, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Ok(new { unitId, conectado = false, motivo = ex.Message });
+        }
+    }
 
     /// <summary>
     /// Diagnóstico: LISTA os tratamentos que o card conta, com as datas de cada um.

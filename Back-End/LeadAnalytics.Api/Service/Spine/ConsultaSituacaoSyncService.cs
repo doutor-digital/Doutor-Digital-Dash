@@ -41,10 +41,49 @@ public class ConsultaSituacaoSyncService(
     ProtectedTokenService protector,
     ILogger<ConsultaSituacaoSyncService> logger)
 {
-    // Campos criados no grupo COMERCIAL do cartão da ITZ (leads_97011783632936).
-    private const long CampoSituacao = 2444735;   // select · SPINE_SCHEDULE_STATUS
-    private const long CampoCategoria = 2444737;  // select · SPINE_SCHEDULE_CATEGORY
+    // ONDE ESCREVER, POR UNIDADE
+    // --------------------------
+    // A ITZ tem campos dedicados (code SPINE_SCHEDULE_STATUS/SPINE_SCHEDULE_CATEGORY);
+    // as demais unidades têm os canônicos "✓ Situação da consulta"/"⌂ Categoria da
+    // consulta", replicados do blueprint. Os ids de campo E de enum mudam por conta,
+    // então a resolução é em runtime: primeiro pelo code, senão pelo nome canônico, e
+    // o enum pelo TEXTO da opção. Unidade sem a opção correspondente cai em "sem mapa"
+    // no relatório em vez de escrever id de outra conta — que era o bug à espreita.
+    private const string CodeSituacao = "SPINE_SCHEDULE_STATUS";
+    private const string NomeSituacao = "✓ Situação da consulta";
+    private const string CodeCategoria = "SPINE_SCHEDULE_CATEGORY";
+    private const string NomeCategoria = "⌂ Categoria da consulta";
 
+    /// <summary>Texto esperado da opção, por status da agenda da franquia.</summary>
+    internal static string? ValorSituacao(int idStatus) => idStatus switch
+    {
+        SpineApiClient.ScheduleStatus.Agendado => "agendado",
+        SpineApiClient.ScheduleStatus.Confirmado => "confirmado",
+        SpineApiClient.ScheduleStatus.Atendido => "atendido",
+        SpineApiClient.ScheduleStatus.NaoCompareceu => "não compareceu",
+        SpineApiClient.ScheduleStatus.Remarcado => "remarcado",
+        SpineApiClient.ScheduleStatus.Desmarcado => "desmarcado",
+        _ => null,
+    };
+
+    internal static string? ValorCategoria(int idCategoria) => idCategoria switch
+    {
+        SpineApiClient.ScheduleCategory.Avaliacao => "avaliação",
+        SpineApiClient.ScheduleCategory.Sessao => "sessão",
+        SpineApiClient.ScheduleCategory.Retorno => "retorno",
+        SpineApiClient.ScheduleCategory.RetornoComExames => "retorno com exames",
+        SpineApiClient.ScheduleCategory.RetornoAposTratamento => "retorno após tratamento",
+        _ => null,
+    };
+
+    /// <summary>Campo + mapa (status da franquia → enum_id da conta), resolvidos por unidade.</summary>
+    internal sealed record MapaDeCampos(
+        long CampoSituacao, IReadOnlyDictionary<int, long> Situacoes,
+        long? CampoCategoria, IReadOnlyDictionary<int, long> Categorias);
+
+    // Mapa histórico da ITZ, preservado pelos testes de contrato. A produção usa a
+    // resolução por unidade acima; se estes ids divergirem do que a resolução achar
+    // na própria ITZ, é a resolução que está certa.
     internal static long? EnumSituacao(int idStatus) => idStatus switch
     {
         SpineApiClient.ScheduleStatus.Agendado => 1840173,
@@ -106,6 +145,11 @@ public class ConsultaSituacaoSyncService(
 
         var dados = await agenda.GetAsync(unitId, de, ate, ct)
             ?? throw new InvalidOperationException("Unidade sem autorização no sistema da franquia.");
+
+        var mapa = await ResolverCamposAsync(unit.KommoSubdomain!, token!, ct)
+            ?? throw new InvalidOperationException(
+                "Unidade sem campo de situação da consulta na Kommo (nem por code SPINE_SCHEDULE_STATUS, " +
+                "nem pelo canônico \"✓ Situação da consulta\" com as opções esperadas).");
 
         // Nome em branco vira chave vazia, e chave vazia casaria com qualquer lead
         // sem nome na Kommo — escreveria falta num cartão aleatório.
@@ -176,11 +220,10 @@ public class ConsultaSituacaoSyncService(
             }
             ids = escolhidos;
 
-            var situacao = EnumSituacao(item.IdStatus);
-            if (situacao is null)
+            if (!mapa.Situacoes.TryGetValue(item.IdStatus, out var situacao))
             {
                 semMapa++;
-                problemas.Add($"{item.Paciente}: situação {item.IdStatus} ({item.Status}) sem correspondência");
+                problemas.Add($"{item.Paciente}: situação {item.IdStatus} ({item.Status}) sem opção correspondente no campo desta unidade");
                 continue;
             }
 
@@ -188,10 +231,10 @@ public class ConsultaSituacaoSyncService(
 
             var campos = new List<KommoCustomFieldPatch>
             {
-                new(CampoSituacao, "select", null, situacao),
+                new(mapa.CampoSituacao, "select", null, situacao),
             };
-            if (EnumCategoria(item.IdCategoria) is long cat)
-                campos.Add(new(CampoCategoria, "select", null, cat));
+            if (mapa.CampoCategoria is long campoCat && mapa.Categorias.TryGetValue(item.IdCategoria, out var cat))
+                campos.Add(new(campoCat, "select", null, cat));
 
             try
             {
@@ -214,6 +257,63 @@ public class ConsultaSituacaoSyncService(
         return new ConsultaSyncResultado(
             dados.Total, desfechos.Count, escritos, porTelefone, conflitoTelefone,
             semLead, ambiguos, problemas);
+    }
+
+    /// <summary>
+    /// Resolve, na conta Kommo da unidade, onde escrever: o campo de situação (por code
+    /// dedicado ou pelo nome canônico) e o mapa status-da-franquia → enum_id daquela
+    /// conta, casado pelo TEXTO da opção. Categoria é opcional — unidade sem o campo
+    /// só deixa de receber a categoria, a situação segue.
+    /// </summary>
+    private async Task<MapaDeCampos?> ResolverCamposAsync(string subdominio, string token, CancellationToken ct)
+    {
+        var resp = await kommo.GetCustomFieldsAsync(subdominio, token, ct);
+        var campos = resp?.Embedded?.CustomFields ?? [];
+
+        static string Norm(string? s) => (s ?? string.Empty).Trim().ToLowerInvariant();
+
+        KommoApiCustomFieldDef? Achar(string code, string nome) =>
+            campos.FirstOrDefault(f => string.Equals(f.Code, code, StringComparison.OrdinalIgnoreCase))
+            ?? campos.FirstOrDefault(f => Norm(f.Name) == Norm(nome));
+
+        Dictionary<int, long> Mapear(KommoApiCustomFieldDef campo, Func<int, string?> valorEsperado, int[] idsSpine)
+        {
+            var porTexto = (campo.Enums ?? [])
+                .Where(e => !string.IsNullOrWhiteSpace(e.Value))
+                .GroupBy(e => Norm(e.Value))
+                .ToDictionary(g => g.Key, g => g.First().Id);
+            var mapa = new Dictionary<int, long>();
+            foreach (var id in idsSpine)
+                if (valorEsperado(id) is string v && porTexto.TryGetValue(v, out var eid))
+                    mapa[id] = eid;
+            return mapa;
+        }
+
+        var situacaoCampo = Achar(CodeSituacao, NomeSituacao);
+        if (situacaoCampo is null) return null;
+        var situacoes = Mapear(situacaoCampo, ValorSituacao,
+        [
+            SpineApiClient.ScheduleStatus.Agendado, SpineApiClient.ScheduleStatus.Confirmado,
+            SpineApiClient.ScheduleStatus.Atendido, SpineApiClient.ScheduleStatus.NaoCompareceu,
+            SpineApiClient.ScheduleStatus.Remarcado, SpineApiClient.ScheduleStatus.Desmarcado,
+        ]);
+        // Sem os desfechos mapeados o sync não tem o que escrever — melhor recusar
+        // com mensagem clara do que rodar "com sucesso" sem efeito.
+        if (!situacoes.ContainsKey(SpineApiClient.ScheduleStatus.Atendido) ||
+            !situacoes.ContainsKey(SpineApiClient.ScheduleStatus.NaoCompareceu))
+            return null;
+
+        var categoriaCampo = Achar(CodeCategoria, NomeCategoria);
+        var categorias = categoriaCampo is null
+            ? new Dictionary<int, long>()
+            : Mapear(categoriaCampo, ValorCategoria,
+            [
+                SpineApiClient.ScheduleCategory.Avaliacao, SpineApiClient.ScheduleCategory.Sessao,
+                SpineApiClient.ScheduleCategory.Retorno, SpineApiClient.ScheduleCategory.RetornoComExames,
+                SpineApiClient.ScheduleCategory.RetornoAposTratamento,
+            ]);
+
+        return new MapaDeCampos(situacaoCampo.Id, situacoes, categoriaCampo?.Id, categorias);
     }
 
     /// <summary>

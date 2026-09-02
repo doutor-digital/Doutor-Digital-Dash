@@ -139,7 +139,10 @@ public class ConsultaSituacaoSyncService(
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct)
             ?? throw new InvalidOperationException("Unidade não encontrada.");
 
-        var token = protector.Unprotect(unit.KommoAccessToken);
+        // O token da Kommo fica em texto puro na coluna (todos os outros serviços o
+        // usam cru); só os tokens de Ads/Spine são cifrados. O Unprotect devolve null
+        // para texto puro, então ele é tentativa — o valor cru é o caminho normal.
+        var token = protector.Unprotect(unit.KommoAccessToken) ?? unit.KommoAccessToken;
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(unit.KommoSubdomain))
             throw new InvalidOperationException("Unidade sem token da Kommo configurado.");
 

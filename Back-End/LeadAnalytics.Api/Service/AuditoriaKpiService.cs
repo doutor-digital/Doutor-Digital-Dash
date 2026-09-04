@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Data;
+using LeadAnalytics.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Service;
@@ -32,6 +33,17 @@ public sealed class AuditoriaKpiService(AppDbContext db)
     /// <summary>Uma linha de quebra (origem, motivo, tipo de tratamento…).</summary>
     public sealed record Fatia(string Rotulo, int Quantidade, decimal? Valor = null);
 
+    /// <summary>
+    /// Quanto do período o card consegue LER. Sem isto um card com metade do
+    /// histórico ilegível mostra um número redondo e ninguém desconfia — foi o
+    /// caso por 90 dias: 25% das linhas apontam para etapas apagadas na Kommo
+    /// durante as replicações, e o nome delas não existe mais em lugar nenhum.
+    /// </summary>
+    public sealed record Cobertura(int Total, int Legiveis, string Nota)
+    {
+        public int Percentual => Total == 0 ? 100 : (int)Math.Round(100.0 * Legiveis / Total);
+    }
+
     public sealed record Bloco(
         string Kpi,
         string Fonte,
@@ -39,7 +51,8 @@ public sealed class AuditoriaKpiService(AppDbContext db)
         int? Conferencia,
         string? Leitura,
         IReadOnlyList<Fatia> Quebra,
-        IReadOnlyList<Divergencia> Divergentes);
+        IReadOnlyList<Divergencia> Divergentes,
+        Cobertura? Cobertura = null);
 
     private static string NomeCurto(string? n) => string.IsNullOrWhiteSpace(n) ? "(sem nome)" : n.Trim();
 
@@ -82,7 +95,8 @@ public sealed class AuditoriaKpiService(AppDbContext db)
             semCarimbo.Count == 0
                 ? "carimbo e etapa batem"
                 : $"{semCarimbo.Count} cartão(ões) na etapa AGENDADO sem o carimbo — o card está subcontando",
-            quebra, semCarimbo);
+            quebra, semCarimbo,
+            await CoberturaDoHistoricoAsync(unitId, de, ate, ct));
     }
 
     /// <summary>
@@ -92,30 +106,65 @@ public sealed class AuditoriaKpiService(AppDbContext db)
     /// </summary>
     public async Task<Bloco> ConsultasAsync(int unitId, DateTime de, DateTime ate, CancellationToken ct)
     {
-        var compareceram = await db.Leads.AsNoTracking()
-            .Where(l => l.UnitId == unitId
-                && l.AttendanceStatusAt >= de && l.AttendanceStatusAt < ate
-                && l.AttendanceStatus != null && l.AttendanceStatus.ToUpper().Contains("COMPARECEU"))
-            .Select(l => new { l.Id, l.Name, l.Source })
+        // O campo AttendanceStatus só é preenchido por quem usa a tela do painel, e
+        // quase ninguém usa: na Imperatriz ele deu ZERO consultas num mês com 190
+        // agendamentos. Quem sabe do comparecimento é a ETAPA no Kommo — a SDR move
+        // o cartão porque o funil obriga. Então a etapa é a fonte e o campo vira
+        // conferência, não o contrário.
+        var etapas = new[] { LeadStages.Compareceu, LeadStages.EmTratamento };
+        var entradas = await db.LeadStageHistories.AsNoTracking()
+            .Where(h => h.ChangedAt >= de && h.ChangedAt < ate
+                && etapas.Contains(h.StageLabel)
+                && h.EntrySource != LeadStageHistory.SourceLegacy
+                && db.Leads.Any(l => l.Id == h.LeadId && l.UnitId == unitId))
+            .Select(h => new { h.LeadId, h.Lead.Name, h.Lead.Source, h.Lead.AttendanceStatus })
+            .Distinct()
             .ToListAsync(ct);
 
-        var quebra = compareceram
+        var quebra = entradas
             .GroupBy(x => string.IsNullOrWhiteSpace(x.Source) ? "Sem origem" : x.Source)
             .Select(g => new Fatia(g.Key, g.Count()))
             .OrderByDescending(f => f.Quantidade)
             .ToList();
 
-        var semOrigem = compareceram
+        var semOrigem = entradas
             .Where(x => string.IsNullOrWhiteSpace(x.Source) || x.Source == "DESCONHECIDO")
-            .Select(x => new Divergencia(x.Id, NomeCurto(x.Name),
+            .Select(x => new Divergencia(x.LeadId, NomeCurto(x.Name),
                 "compareceu mas está sem origem — a consulta não é atribuída a nenhum anúncio"))
             .ToList();
 
-        return new Bloco("consultas", "franquia (fato) + origem da Kommo", compareceram.Count, null,
+        var pelaTela = entradas.Count(x =>
+            x.AttendanceStatus != null && x.AttendanceStatus.ToUpper().Contains("COMPARECEU"));
+
+        return new Bloco("consultas", "etapa no Kommo (fato) + origem do lead", entradas.Count, pelaTela,
             semOrigem.Count == 0
                 ? "toda consulta tem origem"
                 : $"{semOrigem.Count} consulta(s) sem origem — some da conta de retorno por canal",
-            quebra, semOrigem);
+            quebra, semOrigem,
+            await CoberturaDoHistoricoAsync(unitId, de, ate, ct));
+    }
+
+    /// <summary>
+    /// Quantas linhas do histórico do período dá pra ler. Rótulo com o id cru
+    /// ("143") não casa com etapa nenhuma: o cartão existe, a movimentação
+    /// aconteceu, e mesmo assim ele não entra em card nenhum.
+    /// </summary>
+    private async Task<Cobertura> CoberturaDoHistoricoAsync(
+        int unitId, DateTime de, DateTime ate, CancellationToken ct)
+    {
+        var doPeriodo = db.LeadStageHistories.AsNoTracking()
+            .Where(h => h.ChangedAt >= de && h.ChangedAt < ate
+                && db.Leads.Any(l => l.Id == h.LeadId && l.UnitId == unitId));
+
+        var total = await doPeriodo.CountAsync(ct);
+        var crus = await doPeriodo.CountAsync(
+            h => h.StageLabel != null
+                && System.Text.RegularExpressions.Regex.IsMatch(h.StageLabel, "^[0-9]+$"), ct);
+
+        return new Cobertura(total, total - crus,
+            crus == 0
+                ? "todo o histórico do período é legível"
+                : $"{crus} movimentação(ões) com a etapa apagada na Kommo — não entram em card nenhum");
     }
 
     /// <summary>TRATAMENTOS — quebra pelo tipo do plano fechado.</summary>
@@ -133,15 +182,36 @@ public sealed class AuditoriaKpiService(AppDbContext db)
             .OrderByDescending(f => f.Quantidade)
             .ToList();
 
-        var semTipo = fechados
+        var problemas = fechados
             .Where(x => string.IsNullOrWhiteSpace(x.TreatmentPlanCategory))
             .Select(x => new Divergencia(x.Id, NomeCurto(x.Name),
                 "fechou tratamento sem informar o tipo — não dá pra saber o que a unidade vende"))
             .ToList();
 
-        return new Bloco("tratamentos", "CRM (Kommo)", fechados.Count, null,
-            semTipo.Count == 0 ? "todo tratamento fechado tem tipo" : $"{semTipo.Count} sem tipo de tratamento",
-            quebra, semTipo);
+        // A clínica é o fato: o tratamento foi lançado na franquia, com valor. O CRM
+        // é a intenção. Contar só o CRM escondia o buraco mais grave que a auditoria
+        // achou — "0 tratamentos fechados" convivendo com R$48 mil lançados na
+        // clínica no mesmo período, no mesmo painel, sem ninguém estranhar.
+        var deDia = DateOnly.FromDateTime(de);
+        var ateDia = DateOnly.FromDateTime(ate.AddDays(-1));
+        var naFranquia = await db.FranquiaLeadLinks.AsNoTracking()
+            .Where(v => v.UnitId == unitId && v.DiaLancamento >= deDia && v.DiaLancamento <= ateDia)
+            .Select(v => new { v.Paciente, v.LeadId, v.PrecoFranquia })
+            .ToListAsync(ct);
+
+        var idsNoCrm = fechados.Select(x => (long)x.Id).ToHashSet();
+        foreach (var v in naFranquia.Where(v => v.LeadId is null || !idsNoCrm.Contains(v.LeadId.Value)))
+            problemas.Add(new Divergencia((int)(v.LeadId ?? 0), NomeCurto(v.Paciente),
+                $"tratamento lançado na clínica ({v.PrecoFranquia ?? 0m:C0}) e o cartão não está marcado como fechado no CRM"));
+
+        var soNaClinica = naFranquia.Count - fechados.Count;
+        return new Bloco("tratamentos", "CRM (Kommo) × franquia (fato)", fechados.Count, naFranquia.Count,
+            problemas.Count == 0
+                ? "CRM e clínica contam o mesmo, e todo tratamento tem tipo"
+                : soNaClinica > 0
+                    ? $"a clínica lançou {naFranquia.Count} e o CRM marcou {fechados.Count} — {problemas.Count} cartão(ões) a acertar"
+                    : $"{problemas.Count} tratamento(s) sem tipo informado",
+            quebra, problemas);
     }
 
     /// <summary>

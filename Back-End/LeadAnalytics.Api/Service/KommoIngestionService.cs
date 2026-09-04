@@ -295,6 +295,7 @@ public class KommoIngestionService(
                     {
                         LeadId = lead.Id,
                         StageId = lead.CurrentStageId ?? 0,
+                        PipelineId = long.TryParse(ev.PipelineId, out var funilId) ? funilId : null,
                         StageLabel = newCurrentStage,
                         ChangedAt = stageChangedAt,
                         EntrySource = LeadStageHistory.SourceWebhook,

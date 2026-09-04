@@ -18,7 +18,8 @@ public sealed class KommoStageMapService(
     ILogger<KommoStageMapService> logger)
 {
     public sealed record ResultadoSync(int UnitId, int Etapas, int Funis, string? Erro = null);
-    public sealed record ResultadoBackfill(int UnitId, int Examinados, int Corrigidos, int SemMapa);
+    public sealed record ResultadoBackfill(
+        int UnitId, int Examinados, int Corrigidos, int SemMapa, int Ambiguos);
 
     /// <summary>Lê os funis da conta e regrava o mapa da unidade.</summary>
     public async Task<ResultadoSync> SincronizarAsync(int unitId, CancellationToken ct)
@@ -86,20 +87,42 @@ public sealed class KommoStageMapService(
     public async Task<ResultadoBackfill> CorrigirRotulosAsync(
         int unitId, int dias, bool simular, CancellationToken ct)
     {
-        var mapa = await db.KommoStages.AsNoTracking()
+        var etapas = await db.KommoStages.AsNoTracking()
             .Where(s => s.UnitId == unitId)
-            .ToDictionaryAsync(s => s.StatusId, s => s.StatusName, ct);
-        if (mapa.Count == 0) return new ResultadoBackfill(unitId, 0, 0, 0);
+            .ToListAsync(ct);
+        if (etapas.Count == 0) return new ResultadoBackfill(unitId, 0, 0, 0, 0);
+
+        // Chave exata: (funil, etapa). É a única que não confunde os ids universais
+        // 142/143 (Ganho/Perdido), que existem em todos os funis da conta.
+        var porFunilEtapa = etapas
+            .GroupBy(s => (s.PipelineId, s.StatusId))
+            .ToDictionary(g => g.Key, g => g.First().StatusName);
+
+        // Fallback só para linhas sem funil (legado e mudanças pelo painel): vale quando
+        // o id da etapa tem UM nome só na conta inteira. Se tem dois, reescrever seria
+        // escolher no chute — melhor deixar como está e contar como ambíguo.
+        var porEtapaUnica = etapas
+            .GroupBy(s => s.StatusId)
+            .Where(g => g.Select(s => s.StatusName).Distinct(StringComparer.Ordinal).Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().StatusName);
 
         var desde = DateTime.UtcNow.AddDays(-dias);
         var linhas = await db.LeadStageHistories
             .Where(h => h.ChangedAt >= desde && db.Leads.Any(l => l.Id == h.LeadId && l.UnitId == unitId))
             .ToListAsync(ct);
 
-        int corrigidos = 0, semMapa = 0;
+        int corrigidos = 0, semMapa = 0, ambiguos = 0;
         foreach (var h in linhas)
         {
-            if (!mapa.TryGetValue(h.StageId, out var nome) || string.IsNullOrWhiteSpace(nome))
+            string? nome = null;
+            if (h.PipelineId is long fid && porFunilEtapa.TryGetValue((fid, h.StageId), out var exato))
+                nome = exato;
+            else if (porEtapaUnica.TryGetValue(h.StageId, out var unico))
+                nome = unico;
+            else if (etapas.Any(s => s.StatusId == h.StageId))
+                ambiguos++; // existe no mapa, mas em mais de um funil com nomes diferentes
+
+            if (string.IsNullOrWhiteSpace(nome))
             {
                 if (h.StageLabel is null || System.Text.RegularExpressions.Regex.IsMatch(h.StageLabel, "^[0-9]+$"))
                     semMapa++;
@@ -114,8 +137,8 @@ public sealed class KommoStageMapService(
 
         if (!simular && corrigidos > 0) await db.SaveChangesAsync(ct);
         logger.LogInformation(
-            "🏷️ Rótulos do histórico | unidade={Unit} examinados={Ex} corrigidos={Corr} sem mapa={Sem}{Sim}",
-            unitId, linhas.Count, corrigidos, semMapa, simular ? " (simulação)" : "");
-        return new ResultadoBackfill(unitId, linhas.Count, corrigidos, semMapa);
+            "🏷️ Rótulos do histórico | unidade={Unit} examinados={Ex} corrigidos={Corr} sem mapa={Sem} ambíguos={Amb}{Sim}",
+            unitId, linhas.Count, corrigidos, semMapa, ambiguos, simular ? " (simulação)" : "");
+        return new ResultadoBackfill(unitId, linhas.Count, corrigidos, semMapa, ambiguos);
     }
 }

@@ -13,6 +13,19 @@ public class LeadStageHistory
     public int LeadId { get; set; }
     public Lead Lead { get; set; } = null!;
     public int StageId { get; set; }
+
+    /// <summary>
+    /// Funil em que a transição aconteceu. Sem ele o <see cref="StageId"/> é ambíguo:
+    /// 142 e 143 (Ganho/Perdido) existem em TODOS os funis da conta, então "143" tanto
+    /// pode ser PERDIDO no comercial quanto TRATAMENTO CANCELADO no de tratamento.
+    /// A dupla (PipelineId, StageId) é a chave que resolve o nome sem chutar.
+    ///
+    /// Null nas linhas antigas (gravadas antes desta coluna) e nas mudanças feitas pelo
+    /// painel, onde não temos o funil — nesses casos o rótulo só é reescrito quando o
+    /// StageId é único na conta.
+    /// </summary>
+    public long? PipelineId { get; set; }
+
     public string StageLabel { get; set; } = null!;
 
     /// <summary>

@@ -69,6 +69,9 @@ public class InternalStageMapController(
             dias,
             totalCorrigidos = saida.Sum(x => x.Corrigidos),
             totalSemMapa = saida.Sum(x => x.SemMapa),
+            // Linha sem funil gravado cujo id de etapa tem nome diferente em dois funis:
+            // o rótulo fica como está. É a medida do que só a coluna PipelineId resolve.
+            totalAmbiguos = saida.Sum(x => x.Ambiguos),
             porUnidade = saida.OrderByDescending(x => x.Corrigidos),
         });
     }
@@ -92,6 +95,8 @@ public class InternalStageMapController(
         var rotulos = await db.LeadStageHistories
             .Where(h => h.ChangedAt >= desde).Select(h => h.StageLabel).Distinct().CountAsync(ct);
         var etapasNoMapa = await db.KommoStages.CountAsync(ct);
+        var comFunil = await db.LeadStageHistories
+            .CountAsync(h => h.ChangedAt >= desde && h.PipelineId != null, ct);
 
         return Ok(new
         {
@@ -101,6 +106,8 @@ public class InternalStageMapController(
             percentualPodre = total == 0 ? 0 : Math.Round(100.0 * crus / total, 1),
             rotulosDistintos = rotulos,
             etapasNoMapa,
+            comFunilGravado = comFunil,
+            percentualComFunil = total == 0 ? 0 : Math.Round(100.0 * comFunil / total, 1),
         });
     }
 }

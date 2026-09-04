@@ -99,6 +99,7 @@ public class KommoStageHistoryBackfillService(
                 {
                     LeadId = internalLeadId,
                     StageId = (int)sid,
+                    PipelineId = ev.ValueAfter?.FirstOrDefault()?.LeadStatus?.PipelineId,
                     StageLabel = label,
                     ChangedAt = changedAt,
                     KommoEventId = ev.Id,

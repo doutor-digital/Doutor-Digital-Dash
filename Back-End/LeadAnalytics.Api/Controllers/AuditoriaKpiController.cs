@@ -33,8 +33,9 @@ public class AuditoriaKpiController(
         var inicio = de ?? new DateOnly(hoje.Year, hoje.Month, 1);
         var fim = ate ?? hoje;
 
-        var deDt = inicio.ToDateTime(TimeOnly.MinValue);
-        var ateDt = fim.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        // As colunas são timestamptz: o Npgsql recusa DateTime sem Kind definido.
+        var deDt = DateTime.SpecifyKind(inicio.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        var ateDt = DateTime.SpecifyKind(fim.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
 
         var blocos = await auditoria.TudoAsync(unitId, deDt, ateDt, ct);
         var totalProblemas = blocos.Sum(b => b.Divergentes.Count);

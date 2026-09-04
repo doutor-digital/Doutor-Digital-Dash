@@ -85,8 +85,10 @@ public class InternalStageMapController(
         var desde = DateTime.UtcNow.AddDays(-dias);
         var total = await db.LeadStageHistories.CountAsync(h => h.ChangedAt >= desde, ct);
         var crus = await db.LeadStageHistories
+            // Npgsql traduz Regex.IsMatch para o operador ~ do Postgres; All(char.IsDigit)
+            // não tem tradução e explodia em runtime.
             .CountAsync(h => h.ChangedAt >= desde && h.StageLabel != null
-                && h.StageLabel.Length > 0 && h.StageLabel.All(char.IsDigit), ct);
+                && System.Text.RegularExpressions.Regex.IsMatch(h.StageLabel, "^[0-9]+$"), ct);
         var rotulos = await db.LeadStageHistories
             .Where(h => h.ChangedAt >= desde).Select(h => h.StageLabel).Distinct().CountAsync(ct);
         var etapasNoMapa = await db.KommoStages.CountAsync(ct);

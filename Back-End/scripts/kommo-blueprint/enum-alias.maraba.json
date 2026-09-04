@@ -1,0 +1,16 @@
+{
+  "comercial::tipo-de-resgate#1": {
+    "Mensagem": "Template de Mensagem"
+  },
+  "comercial::tentativas-de-resgate#1": {
+    "Resgaste 1 - 24h": "Resgate 1 - 24h",
+    "Resgaste 2 - 48h": "Resgate 2 - 48h",
+    "Resgaste 3 - 72h": "Resgate 3 - 96h",
+    "Resgaste 4 - 120h": "Resgate 4 - 120h",
+    "Resgaste 5 - 240h": "Resgate 5 - 240h"
+  },
+  "comercial::origem#1": {
+    "WhatsApp anúncio": "Meta-WhatsApp",
+    "Faxada": "Fachada"
+  }
+}

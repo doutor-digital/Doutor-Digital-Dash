@@ -1,0 +1,23 @@
+{
+  "renames": [
+    {"legacy": "02_LEAD_SEM_RESPOSTA_FOLLOWUP",      "name": "EM QUALIFICAÇÃO",        "color": "#87f2c0", "tmp": 900, "sort": 20},
+    {"legacy": "04_AGENDADO_SEM_PAGAMENTO",          "name": "AGENDADO",               "color": "#fffeb2", "tmp": 910, "sort": 30},
+    {"legacy": "07_NAO_FECHOU_TRATAMENTO",           "name": "COMPARECEU",             "color": "#deff81", "tmp": 920, "sort": 40},
+    {"legacy": "09_AGUARDANDO_RETORNO_POS_CONSULTA", "name": "RETORNO PÓS-TRATAMENTO", "color": "#ccc8f9", "tmp": 930, "sort": 60}
+  ],
+  "novas_etapas": [{"name": "EM NEGOCIAÇÃO", "color": "#ff8f92", "sort": 50}],
+  "depara": {
+    "01_ENTRADA_LEAD_SEQUENCIA_24H":      {"to": ["COMERCIAL", "EM QUALIFICAÇÃO"]},
+    "03_LEAD_QUENTE_QUALIFICADO":         {"to": ["COMERCIAL", "EM QUALIFICAÇÃO"]},
+    "05_AGENDADO_COM_PAGAMENTO":          {"to": ["COMERCIAL", "AGENDADO"]},
+    "06_FALTOU_CONSULTA":                 {"to": ["COMERCIAL", "AGENDADO"], "set": {"SPINE_SCHEDULE_STATUS": "Não compareceu"}},
+    "08_EM_TRATAMENTO":                   {"to": ["TRATAMENTO", "EM TRATAMENTO"]},
+    "10_CANCELAMENTO_TRATAMENTO":         {"to": ["TRATAMENTO", 143]},
+    "11_ALTA_SATISFEITO":                 {"to": ["TRATAMENTO", 142]},
+    "12_ALTA_INSATISFEITO":               {"to": ["TRATAMENTO", 142]},
+    "13_NAO_PERTURBAR":                   {"to": ["COMERCIAL", 143], "loss": "Não perturbar"},
+    "14_ENCAMINHADO_MAGALHAES_ADVOCACIA": {"to": ["COMERCIAL", 143], "loss": "Caso enviado para a franquia"},
+    "15_NAO_DEU_CONTINUIDADE":            {"to": ["COMERCIAL", 143], "loss": "Não deu continuidade ao atendimento"},
+    "16_LEAD_MORTO":                      {"to": ["COMERCIAL", 143], "loss": "Lead morto"}
+  }
+}

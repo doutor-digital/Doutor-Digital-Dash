@@ -37,7 +37,7 @@ PROTECTED = {
     "araguainadoutorhernia",
     "institutotraumakommon",
     "doutorherniaacailandia",
-    "doutorherniabalsas",
+    # "doutorherniabalsas",    # LIBERADO 2026-08-18 para a replicação; RECOLOCAR ao fim da Fase 7
     "doutorherniaporto",
     "doutorherniacanaa",
     "hmtecnologiakommon",
@@ -69,7 +69,7 @@ class Applier:
         self.lock: dict = {"pipelines": {}, "groups": {}, "fields": {}, "loss_reasons": {}}
         self.plan: list[str] = []
         self.warnings: list[str] = []
-        # (campo, pipeline, etapa) que só dá para tornar obrigatório pela UI (142/143)
+        # (campo, pipeline, etapa) que o destino recusou e sobra para a UI
         self.manual_required: list[tuple[str, str, str]] = []
 
     def say(self, action: str, what: str) -> None:
@@ -259,6 +259,8 @@ class Applier:
             for p in self.bp["pipelines"]
         }
         patches = []
+        # (field_id, pipeline_id, status_id) -> rótulos, para conferir o que gravou de fato
+        labels: dict[tuple[int, int, int], tuple[str, str, str]] = {}
         for spec in self.bp["fields"]:
             req = spec.get("required_statuses")
             if not req:
@@ -279,14 +281,11 @@ class Applier:
                         f"required_statuses de {spec['name']!r}: etapa {r['status']!r} não encontrada"
                     )
                     continue
-                if sid in (142, 143):
-                    # Verificado na conta de Boa Vista (jul/2026): a API aceita o PATCH,
-                    # responde 200 e devolve required_statuses=[] — vale para ganho (142)
-                    # E para perda (143). Só dá para marcar obrigatório nessas etapas pela
-                    # UI da Kommo (Configurações do funil > etapa > campos obrigatórios).
-                    self.manual_required.append((spec["name"], r["pipeline"], r["status"]))
-                    continue
+                # 142/143 JÁ FORAM pulados aqui por suposição; medido em Balsas (ago/2026) o
+                # PATCH gruda e o read-back confirma. Então tenta sempre e confere depois:
+                # o que não gravar cai em manual_required por medição, não por chute.
                 resolved.append({"pipeline_id": pl["id"], "status_id": sid})
+                labels[(locked["id"], pl["id"], sid)] = (spec["name"], r["pipeline"], r["status"])
             if resolved:
                 self.say("update", f"{spec['name']!r} obrigatório em {len(resolved)} etapa(s)")
                 patch = {"id": locked["id"], "required_statuses": resolved}
@@ -300,6 +299,18 @@ class Applier:
             print(f"    {len(ok)} aplicados, {len(bad)} com erro")
             for item, err in bad:
                 self.warnings.append(f"required_statuses id={item['id']}: {err}")
+            self._verify_required(labels)
+
+    def _verify_required(self, labels: dict[tuple[int, int, int], tuple[str, str, str]]) -> None:
+        """Relê os campos e reporta como manual só o que a API realmente não gravou."""
+        gravado = set()
+        for f in self.cli.get_all("leads/custom_fields", "custom_fields"):
+            for r in f.get("required_statuses") or []:
+                gravado.add((f["id"], r["pipeline_id"], r["status_id"]))
+
+        for chave, (campo, pipeline, status) in labels.items():
+            if chave not in gravado:
+                self.manual_required.append((campo, pipeline, status))
 
     # ----------------------------------------------------- 5. loss reasons
 
@@ -366,6 +377,13 @@ def main() -> int:
     ap.add_argument("--confirm-subdomain", help="repita o subdomínio para confirmar a escrita")
     ap.add_argument("--retire-default-pipeline", help="nome do funil padrão a aposentar no fim")
     ap.add_argument(
+        "--force-protected",
+        action="store_true",
+        help="conta da lista PROTECTED é destino legítimo desta replicação. Exige "
+        "--confirm-subdomain do mesmo jeito; serve para a 2ª passada de uma unidade "
+        "antiga, quando o funil já foi trazido ao padrão e falta só o resto.",
+    )
+    ap.add_argument(
         "--skip-group",
         action="append",
         default=[],
@@ -376,8 +394,11 @@ def main() -> int:
     args = ap.parse_args()
 
     sub = args.subdomain.replace(".kommo.com", "").strip("/ ")
-    if sub in PROTECTED:
+    if sub in PROTECTED and not args.force_protected:
         print(f"RECUSADO: {sub!r} está na lista de contas protegidas.", file=sys.stderr)
+        return 2
+    if sub == "attivacorpoementeitz":
+        print("RECUSADO: Imperatriz é a MATRIZ, nunca destino.", file=sys.stderr)
         return 2
     if args.apply and args.confirm_subdomain != sub:
         print("RECUSADO: --apply exige --confirm-subdomain igual a --subdomain.", file=sys.stderr)

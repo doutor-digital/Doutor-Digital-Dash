@@ -1,5 +1,6 @@
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Models;
+using LeadAnalytics.Api.Service.Stages;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadAnalytics.Api.Service;
@@ -128,9 +129,20 @@ public sealed class KommoStageMapService(
                     semMapa++;
                 continue;
             }
-            if (!string.Equals(h.StageLabel, nome, StringComparison.Ordinal))
+
+            // O StageLabel é o rótulo CANÔNICO (04_AGENDADO_SEM_PAGAMENTO), não o nome que
+            // aparece na Kommo ("AGENDADO - SEM PAGAMENTO"). Gravar o nome cru faria a coluna
+            // parar de casar com LeadStages.* e zeraria os KPIs. Então o mapa dá o nome e o
+            // canonicalizador dá o rótulo.
+            var canonico = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(nome));
+            if (canonico is null)
             {
-                if (!simular) h.StageLabel = nome;
+                semMapa++; // etapa fora do funil canônico — não é rastreada
+                continue;
+            }
+            if (!string.Equals(h.StageLabel, canonico, StringComparison.Ordinal))
+            {
+                if (!simular) h.StageLabel = canonico;
                 corrigidos++;
             }
         }

@@ -1,0 +1,31 @@
+{
+ "_nota": "Balsas 2026-08-18. De-para de fechamento/no-show APROVADO pelo dono (gotcha #10): 06_FALTOU_CONSULTA->AGENDADO, 07_NAO_FECHOU_TRATAMENTO->EM NEGOCIACAO, 12_ALTA_INSATISFEITO->TRATAMENTO/142. Ancoras escolhidas pelo maior volume: 6.570 leads nao se movem.",
+
+ "renames": [
+  { "legacy": "02_LEAD_SEM_RESPOSTA_FOLLOWUP", "name": "EM QUALIFICAÇÃO", "color": "#87f2c0", "tmp": 900, "sort": 20 },
+  { "legacy": "06_FALTOU_CONSULTA",            "name": "AGENDADO",        "color": "#fffeb2", "tmp": 910, "sort": 30 },
+  { "legacy": "07_NAO_FECHOU_TRATAMENTO",      "name": "EM NEGOCIAÇÃO",   "color": "#ff8f92", "tmp": 920, "sort": 50 }
+ ],
+
+ "novas_etapas": [
+  { "name": "COMPARECEU",             "color": "#deff81", "sort": 40 },
+  { "name": "RETORNO PÓS-TRATAMENTO", "color": "#ccc8f9", "sort": 60 }
+ ],
+
+ "depara": {
+  "01_ENTRADA_LEAD_SEQUENCIA_24H":      { "to": [ "COMERCIAL",  "EM QUALIFICAÇÃO" ] },
+  "03_LEAD_QUENTE_QUALIFICADO":         { "to": [ "COMERCIAL",  "EM QUALIFICAÇÃO" ] },
+  "04_AGENDADO_SEM_PAGAMENTO":          { "to": [ "COMERCIAL",  "AGENDADO" ] },
+  "05_AGENDADO_COM_PAGAMENTO":          { "to": [ "COMERCIAL",  "AGENDADO" ] },
+  "08_EM_TRATAMENTO":                   { "to": [ "TRATAMENTO", "EM TRATAMENTO" ] },
+  "09_AGUARDANDO_RETORNO_POS_CONSULTA": { "to": [ "COMERCIAL",  "EM NEGOCIAÇÃO" ] },
+  "10_CANCELAMENTO_TRATAMENTO":         { "to": [ "TRATAMENTO", 143 ], "loss": "Cancelamento de tratamento" },
+  "11_ALTA_SATISFEITO":                 { "to": [ "TRATAMENTO", 142 ] },
+  "12_ALTA_INSATISFEITO":               { "to": [ "TRATAMENTO", 142 ] },
+  "13_NAO_PERTURBAR":                   { "to": [ "COMERCIAL",  143 ], "loss": "Não perturbar" },
+  "14_ENCAMINHADO_MAGALHAES_ADVOCACIA": { "to": [ "COMERCIAL",  143 ], "loss": "Caso enviado para a franquia" },
+  "15_ NAO_DEU_CONTINUIDADE":           { "to": [ "COMERCIAL",  143 ], "loss": "Não deu continuidade ao atendimento" },
+  "16_MORA_FORA":                       { "to": [ "COMERCIAL",  143 ], "loss": "Mora em outra cidade" },
+  "17_LEAD_MORTO":                      { "to": [ "COMERCIAL",  143 ], "loss": "Lead morto" }
+ }
+}

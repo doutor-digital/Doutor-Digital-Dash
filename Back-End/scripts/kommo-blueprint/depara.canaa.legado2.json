@@ -1,0 +1,16 @@
+{
+  "2425090": "comercial::interacao#1",
+  "2434186": "comercial::tipo-de-lead#1",
+  "2434188": "comercial::data-de-criacao-lead#1",
+  "2426692": "comercial::observacoes#1",
+  "2426698": "comercial::tentativas-de-resgate#1",
+  "2426690": "comercial::responsavel-agendamento#1",
+  "2425086": "comercial::pagamento-antecipado#1",
+  "2432592": "TIPO_AGENDAMENTO",
+  "2428524": "comercial::fisioterapeuta#1",
+  "2426696": "tratamento::observacoes-de-sessoes#1",
+  "2426694": "comercial::negociacao-feita#1",
+  "2426688": "comercial::tratamento-fechado#1",
+  "2432594": "TIPO_FECHAMENTO",
+  "2425088": "comercial::tipo-de-resgate#1"
+}

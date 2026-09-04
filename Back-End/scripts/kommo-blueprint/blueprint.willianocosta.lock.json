@@ -1,0 +1,1401 @@
+{
+  "pipelines": {
+    "COMERCIAL": {
+      "id": 14388599,
+      "statuses": {
+        "incoming leads": 111134307,
+        "em qualificação": 111134783,
+        "agendado": 111134787,
+        "não compareceu": 111134791,
+        "compareceu": 111134795,
+        "em negociação": 111134799,
+        "retorno pós-tratamento": 111136315,
+        "consulta concluída – ganho": 142,
+        "consulta cancelada – perdido": 143
+      }
+    },
+    "TRATAMENTO": {
+      "id": 14388675,
+      "statuses": {
+        "incoming leads": 111135063,
+        "em tratamento": 111135067,
+        "alta": 142,
+        "tratamento cancelado": 143
+      }
+    }
+  },
+  "groups": {
+    "comercial": {
+      "id": "leads_22861788434934",
+      "name": "COMERCIAL"
+    },
+    "tratamento": {
+      "id": "leads_6141788434935",
+      "name": "TRATAMENTO"
+    },
+    "asaas": {
+      "id": "leads_82571788434935",
+      "name": "ASAAS"
+    },
+    "3c-ligacoes": {
+      "id": "leads_92571788434936",
+      "name": "☎ 3C — LIGAÇÕES"
+    },
+    "agente-dt": {
+      "id": "leads_43001788434936",
+      "name": "AGENTE DT"
+    }
+  },
+  "fields": {
+    "comercial::humano#1": {
+      "id": 443288,
+      "name": "*HUMANO*",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::responsavel-agendamento#1": {
+      "id": 443290,
+      "name": "☻ Responsável agendamento",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "GIULIA": 360288,
+        "ADRIELE": 360290,
+        "NATYELE": 360292,
+        "DOUTOR DIGITAL": 360294,
+        "GRAZIELLE": 360296,
+        "I.A SOFIA": 360298
+      }
+    },
+    "comercial::consulta#1": {
+      "id": 443292,
+      "name": "## CONSULTA",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::semaforo#1": {
+      "id": 443294,
+      "name": "◉ Semáforo",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "VERDE — fechou e pagou tudo": 360300,
+        "PARCIAL — fechou e pagou parte": 360302,
+        "AZUL — fechou, pagamento não confirmado": 360304,
+        "AMARELO — não fechou: dinheiro, família, vai pensar": 360306,
+        "LARANJA — não fechou: falta exame ou retorno": 360308,
+        "VERMELHO — não é caso para a clínica": 360310
+      }
+    },
+    "comercial::valor-da-consulta#1": {
+      "id": 443598,
+      "name": "¤ Valor da Consulta",
+      "type": "monetary",
+      "group": "comercial"
+    },
+    "comercial::data-da-consulta#1": {
+      "id": 443296,
+      "name": "◷ Data da Consulta",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::consulta-pg-antecipado#1": {
+      "id": 443298,
+      "name": "✓ Consulta pg antecipado",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Não": 360312,
+        "Sim": 360314
+      }
+    },
+    "comercial::consulta-pg-no-dia#1": {
+      "id": 443300,
+      "name": "Consulta pg no dia",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "NÃO": 360316,
+        "SIM": 360318
+      }
+    },
+    "comercial::satisfacao-nps#1": {
+      "id": 443302,
+      "name": "★ Satisfação / NPS",
+      "type": "numeric",
+      "group": "comercial"
+    },
+    "comercial::tratamento#1": {
+      "id": 443304,
+      "name": "## TRATAMENTO",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::fisioterapeuta#1": {
+      "id": 443306,
+      "name": "⚕ Fisioterapeuta",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "DRA. BARBÁRA WIRTZBIKI": 360320
+      }
+    },
+    "comercial::tratamento-indicado#1": {
+      "id": 443308,
+      "name": "⚕ Tratamento indicado",
+      "type": "multiselect",
+      "group": "comercial",
+      "enums": {
+        "01 Mês — PREVENTIVO CERVICAL": 360322,
+        "01 Mês — MANUTENÇÃO CERVICAL": 360324,
+        "01 Mês — MANUTENÇÃO LOMBAR": 360326,
+        "01 Mês — DESCOMPRESSÃO CERVICAL": 360328,
+        "01 Mês — DESCOMPRESSÃO LOMBAR": 360330,
+        "02 Meses — POSTURAL": 360332,
+        "03 Meses — LOMBAR CRÔNICO": 360334,
+        "03 Meses — LOMBAR AGUDO": 360336,
+        "03 Meses — CERVICAL CRÔNICO": 360338,
+        "03 Meses — CERVICAL AGUDO": 360340,
+        "01 Mês — PREVENTIVO LOMBAR": 360342,
+        "Cervical longo - 3 meses": 360344,
+        "Lombar longo - 3 meses": 360346,
+        "Cervical curto - 1 mês": 360348,
+        "Lombar curto - 1 mês": 360350,
+        "Manutenção": 360352,
+        "Postural": 360354
+      }
+    },
+    "comercial::tratamento-fechado#1": {
+      "id": 443310,
+      "name": "⚕ Tratamento fechado",
+      "type": "multiselect",
+      "group": "comercial",
+      "enums": {
+        "01 Mês — PREVENTIVO CERVICAL": 360356,
+        "01 Mês — MANUTENÇÃO CERVICAL": 360358,
+        "01 Mês — MANUTENÇÃO LOMBAR": 360360,
+        "01 Mês — DESCOMPRESSÃO CERVICAL": 360362,
+        "01 Mês — DESCOMPRESSÃO LOMBAR": 360364,
+        "02 Meses — POSTURAL": 360366,
+        "03 Meses — LOMBAR CRÔNICO": 360368,
+        "03 Meses — LOMBAR AGUDO": 360370,
+        "03 Meses — CERVICAL CRÔNICO": 360372,
+        "03 Meses — CERVICAL AGUDO": 360374,
+        "01 Mês — PREVENTIVO LOMBAR": 360376,
+        "Cervical longo - 3 meses": 360378,
+        "Lombar longo - 3 meses": 360380,
+        "Cervical - 1 mês": 360382,
+        "Lombar - 1 mês": 360384,
+        "Manutenção": 360386,
+        "Postural": 360388
+      }
+    },
+    "TIPO_FECHAMENTO": {
+      "id": 443312,
+      "name": "⬢ Tipo de fechamento de tratamento",
+      "type": "select",
+      "group": "comercial",
+      "code": "TIPO_FECHAMENTO",
+      "enums": {
+        "Cadastro": 360390,
+        "Resgate": 360392
+      }
+    },
+    "comercial::contraindicacao-bandeira-vermelha#1": {
+      "id": 443314,
+      "name": "✎ Contraindicação / bandeira vermelha",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::data-de-retorno-com-exames#1": {
+      "id": 443316,
+      "name": "◷ Data de retorno com exames",
+      "type": "date",
+      "group": "comercial"
+    },
+    "comercial::fechou-tratamento#1": {
+      "id": 443318,
+      "name": "✓ Fechou tratamento",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Não": 360394,
+        "Sim": 360396
+      }
+    },
+    "comercial::data-de-fechamento#1": {
+      "id": 443320,
+      "name": "◷ Data de fechamento",
+      "type": "date",
+      "group": "comercial"
+    },
+    "comercial::data-do-tratamento-iniciado#1": {
+      "id": 443322,
+      "name": "◷ Data do tratamento iniciado",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::valor-do-tratamento#1": {
+      "id": 443600,
+      "name": "¤ Valor do tratamento",
+      "type": "monetary",
+      "group": "comercial"
+    },
+    "comercial::desconto-concedido#1": {
+      "id": 443602,
+      "name": "¤ Desconto concedido",
+      "type": "monetary",
+      "group": "comercial"
+    },
+    "comercial::pagamento-antecipado#1": {
+      "id": 443328,
+      "name": "¤ Pagamento antecipado",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Não": 360408,
+        "Sim": 360410
+      }
+    },
+    "comercial::valor-pago-entrada#1": {
+      "id": 443604,
+      "name": "¤ Valor pago / entrada",
+      "type": "monetary",
+      "group": "comercial"
+    },
+    "comercial::negociacao-feita#1": {
+      "id": 443332,
+      "name": "✎ Negociação feita",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::data-da-perda#1": {
+      "id": 443334,
+      "name": "◷ Data da perda",
+      "type": "date",
+      "group": "comercial"
+    },
+    "comercial::motivo-de-nao-fechamento-do-tratamento#1": {
+      "id": 443336,
+      "name": "⊘ Motivo de não fechamento do tratamento",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Plano de saúde": 360412,
+        "Outra patologia": 360414,
+        "Solicitado exames": 360416,
+        "Caso enviado para a franquia": 360418,
+        "Decidir com a familia": 360420,
+        "Mora em outra cidade": 360422,
+        "Bandeira vermelha": 360424,
+        "Vai viajar": 360426,
+        "Achou caro": 360428,
+        "Vai se organizar financeiramente": 360430,
+        "Assinou contrato": 360432,
+        "Financeiramente vulnerável": 360434
+      }
+    },
+    "comercial::campo#1": {
+      "id": 443480,
+      "name": "**!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::campo#2": {
+      "id": 443482,
+      "name": "*!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::ia-sofia#1": {
+      "id": 443342,
+      "name": "*IA SOFIA*",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::data-do-primeiro-contato#1": {
+      "id": 443344,
+      "name": "◷ Data do primeiro contato",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::data-de-criacao-lead#1": {
+      "id": 443346,
+      "name": "◷ Data de criação lead",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::interacao#1": {
+      "id": 443348,
+      "name": "✓ Interação",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Sim": 360436,
+        "Não": 360438
+      }
+    },
+    "comercial::no-de-tentativas-de-contato#1": {
+      "id": 443350,
+      "name": "# Nº de tentativas de contato",
+      "type": "numeric",
+      "group": "comercial"
+    },
+    "comercial::tipo-de-resgate#1": {
+      "id": 443352,
+      "name": "⬢ Tipo de resgate",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Disparo Whatsap": 360440,
+        "Template de Mensagem": 360442,
+        "Disparo Email": 360444,
+        "Disparo SMS": 360446,
+        "Ligação": 360448
+      }
+    },
+    "comercial::tentativas-de-resgate#1": {
+      "id": 443354,
+      "name": "⬢ Tentativas de resgate",
+      "type": "multiselect",
+      "group": "comercial",
+      "enums": {
+        "Resgate 2 - 48h": 360450,
+        "Resgate 3 - 96h": 360452,
+        "Resgate 4 - 120h": 360454,
+        "Resgate 5 - 240h": 360456,
+        "Resgate 1 - 24h": 360458
+      }
+    },
+    "comercial::quem-indicou#1": {
+      "id": 443356,
+      "name": "✎ Quem indicou",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::unidade#1": {
+      "id": 443358,
+      "name": "⌂ Unidade",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::tipo-de-lead#1": {
+      "id": 443360,
+      "name": "⬢ Tipo de lead",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Resgate": 360460,
+        "Cadastro": 360462,
+        "TRANSFERIDO DE OUTRA UNIDADE": 360464
+      }
+    },
+    "comercial::queixa#1": {
+      "id": 443362,
+      "name": "✎ Queixa",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::qualificacao-quente-morno-frio#1": {
+      "id": 443364,
+      "name": "★ Qualificação (Quente/Morno/Frio)",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Quente": 360466,
+        "Morno": 360468,
+        "Frio": 360470
+      }
+    },
+    "comercial::ultimo-anuncio#1": {
+      "id": 443366,
+      "name": "⌂ Último anúncio",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::data-da-qualificacao#1": {
+      "id": 443368,
+      "name": "◷ Data da qualificação",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::sexo#1": {
+      "id": 443370,
+      "name": "⚥ Sexo",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Feminino": 360472,
+        "Masculino": 360474
+      }
+    },
+    "comercial::data-de-nascimento#1": {
+      "id": 443372,
+      "name": "◷ Data de nascimento",
+      "type": "date",
+      "group": "comercial"
+    },
+    "comercial::profissao#1": {
+      "id": 443374,
+      "name": "⚒ Profissão",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::plano-de-saude#1": {
+      "id": 443376,
+      "name": "⬢ Plano de saúde",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::observacoes#1": {
+      "id": 443378,
+      "name": "✎ Observações",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::atendimento-assumido-por-humano#1": {
+      "id": 443380,
+      "name": "✓ Atendimento assumido por humano",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Sim": 360476,
+        "Não": 360478
+      }
+    },
+    "comercial::agendamento#1": {
+      "id": 443382,
+      "name": "## AGENDAMENTO",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::preferencia-de-horario#1": {
+      "id": 443384,
+      "name": "◷ Preferência de horário",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::data-do-handoff-ia-humano#1": {
+      "id": 443386,
+      "name": "◷ Data do handoff IA → humano",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::agendou#1": {
+      "id": 443388,
+      "name": "✓ Agendou",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Sim": 360480,
+        "Não": 360482
+      }
+    },
+    "TIPO_AGENDAMENTO": {
+      "id": 443390,
+      "name": "⬢ Tipo de agendamento",
+      "type": "select",
+      "group": "comercial",
+      "code": "TIPO_AGENDAMENTO",
+      "enums": {
+        "Resgate": 360484,
+        "Cadastro": 360486
+      }
+    },
+    "SPINE_SCHEDULE_STATUS": {
+      "id": 443392,
+      "name": "✓ Situação da consulta",
+      "type": "select",
+      "group": "comercial",
+      "code": "SPINE_SCHEDULE_STATUS",
+      "enums": {
+        "Agendado": 360488,
+        "Confirmado": 360490,
+        "Atendido": 360492,
+        "Não compareceu": 360494,
+        "Remarcado": 360496,
+        "Desmarcado": 360498
+      }
+    },
+    "SPINE_SCHEDULE_CATEGORY": {
+      "id": 443394,
+      "name": "⌂ Categoria da consulta",
+      "type": "select",
+      "group": "comercial",
+      "code": "SPINE_SCHEDULE_CATEGORY",
+      "enums": {
+        "Avaliação": 360500,
+        "Sessão": 360502,
+        "Retorno": 360504,
+        "Retorno com exames": 360506,
+        "Retorno após tratamento": 360508
+      }
+    },
+    "comercial::motivo-do-nao-agendamento#1": {
+      "id": 443396,
+      "name": "⊘ Motivo do não agendamento",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Sem condições financeira": 360510,
+        "Não interagiu": 360512,
+        "Informação para terceiro": 360514,
+        "Outra patologia": 360516,
+        "Clicou por engano": 360518,
+        "Está viajando": 360520,
+        "Sem interesse": 360522,
+        "Não deu continuidade ao atendimento": 360524,
+        "Vai se organizar": 360526,
+        "Assinou contrato": 360528,
+        "Plano de Saúde": 360530,
+        "Outra cidade": 360532
+      }
+    },
+    "comercial::motivo-do-no-show#1": {
+      "id": 443398,
+      "name": "⊘ Motivo do no-show",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Esqueceu": 360534,
+        "Imprevisto pessoal": 360536,
+        "Trabalho": 360538,
+        "Transporte / distância": 360540,
+        "Problema de saúde": 360542,
+        "Desistiu": 360544,
+        "Não informou": 360546,
+        "Outro": 360548
+      }
+    },
+    "comercial::data-do-reagendamento#1": {
+      "id": 443400,
+      "name": "◷ Data do reagendamento",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::no-de-reagendamentos#1": {
+      "id": 443402,
+      "name": "# Nº de reagendamentos",
+      "type": "numeric",
+      "group": "comercial"
+    },
+    "comercial::agendado-pela-sdr-em#1": {
+      "id": 443404,
+      "name": "◷ Agendado pela SDR em",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "comercial::endereco#1": {
+      "id": 443406,
+      "name": "## ENDEREÇO",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::cidade#1": {
+      "id": 443408,
+      "name": "⌂ Cidade",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::bairro#1": {
+      "id": 443410,
+      "name": "⌂ Bairro",
+      "type": "textarea",
+      "group": "comercial"
+    },
+    "comercial::estado#1": {
+      "id": 443412,
+      "name": "⌂ Estado",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::campo#3": {
+      "id": 443484,
+      "name": "##!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::metricas-ia#1": {
+      "id": 443416,
+      "name": "##MÉTRICAS IA",
+      "type": "text",
+      "group": "comercial"
+    },
+    "IA_FIRST_REPLY_AT": {
+      "id": 443418,
+      "name": "◷ Data/hora da 1ª resposta",
+      "type": "date_time",
+      "group": "comercial",
+      "code": "IA_FIRST_REPLY_AT"
+    },
+    "IA_FIRST_REPLY_MIN": {
+      "id": 443420,
+      "name": "# Tempo até 1ª resposta (min)",
+      "type": "numeric",
+      "group": "comercial",
+      "code": "IA_FIRST_REPLY_MIN"
+    },
+    "IA_TIME_TO_SCHEDULE_H": {
+      "id": 443422,
+      "name": "# Tempo até agendamento (h)",
+      "type": "numeric",
+      "group": "comercial",
+      "code": "IA_TIME_TO_SCHEDULE_H"
+    },
+    "IA_MSG_COUNT": {
+      "id": 443424,
+      "name": "# Nº de mensagens trocadas",
+      "type": "numeric",
+      "group": "comercial",
+      "code": "IA_MSG_COUNT"
+    },
+    "IA_CONV_STATUS": {
+      "id": 443426,
+      "name": "⬢ Status da conversa",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_CONV_STATUS",
+      "enums": {
+        "Aguardando lead": 360550,
+        "Respondendo": 360552,
+        "Sem resposta": 360554,
+        "Encerrada": 360556
+      }
+    },
+    "IA_QUALIFIED": {
+      "id": 443428,
+      "name": "✓ Qualificou",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_QUALIFIED",
+      "enums": {
+        "Sim": 360558,
+        "Não": 360560
+      }
+    },
+    "IA_QUALIFY_RESULT": {
+      "id": 443430,
+      "name": "⬢ Resultado da qualificação",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_QUALIFY_RESULT",
+      "enums": {
+        "Qualificado": 360562,
+        "Desqualificado": 360564,
+        "Incompleto": 360566
+      }
+    },
+    "IA_INTENT": {
+      "id": 443432,
+      "name": "⬢ Intenção principal",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_INTENT",
+      "enums": {
+        "Agendar": 360568,
+        "Preço": 360570,
+        "Dúvida": 360572,
+        "Reclamação": 360574,
+        "Outro": 360576
+      }
+    },
+    "IA_SCHEDULED_BY": {
+      "id": 443434,
+      "name": "⬢ Agendamento feito por",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_SCHEDULED_BY",
+      "enums": {
+        "IA": 360578,
+        "Humano": 360580
+      }
+    },
+    "IA_CLOSED_BY": {
+      "id": 443436,
+      "name": "⬢ Fechamento atribuído a",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_CLOSED_BY",
+      "enums": {
+        "IA": 360582,
+        "Humano": 360584
+      }
+    },
+    "IA_AUTONOMOUS": {
+      "id": 443438,
+      "name": "✓ Resolvido sem humano",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_AUTONOMOUS",
+      "enums": {
+        "Sim": 360586,
+        "Não": 360588
+      }
+    },
+    "IA_HANDOFF_REASON": {
+      "id": 443440,
+      "name": "⬢ Motivo do handoff",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_HANDOFF_REASON",
+      "enums": {
+        "Pedido do lead": 360590,
+        "IA não soube": 360592,
+        "Fechamento": 360594,
+        "Fora do horário": 360596,
+        "Escalonamento": 360598
+      }
+    },
+    "IA_SENTIMENT": {
+      "id": 443442,
+      "name": "⬢ Sentimento do lead",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_SENTIMENT",
+      "enums": {
+        "Positivo": 360600,
+        "Neutro": 360602,
+        "Negativo": 360604
+      }
+    },
+    "IA_CONV_SCORE": {
+      "id": 443444,
+      "name": "★ Nota da conversa (1–5)",
+      "type": "numeric",
+      "group": "comercial",
+      "code": "IA_CONV_SCORE"
+    },
+    "IA_FALLBACK": {
+      "id": 443446,
+      "name": "⬢ Fallback / erro",
+      "type": "select",
+      "group": "comercial",
+      "code": "IA_FALLBACK",
+      "enums": {
+        "Nenhum": 360606,
+        "Não entendeu": 360608,
+        "Fora de escopo": 360610,
+        "Erro técnico": 360612
+      }
+    },
+    "comercial::marketing#1": {
+      "id": 443450,
+      "name": "*MARKETING*",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::origem#1": {
+      "id": 443452,
+      "name": "⚑ Origem",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Meta-Instagram": 360614,
+        "Meta-WhatsApp": 360616,
+        "Org-Facebook": 360618,
+        "Org-Instagram": 360620,
+        "Org-WhatsApp": 360622,
+        "Indicação": 360624,
+        "Outdoor": 360626,
+        "Fachada": 360628,
+        "Rádio": 360630,
+        "Carro de som": 360632,
+        "Panfleto": 360634,
+        "Eventos": 360636,
+        "Site oficial - Franquia": 360638,
+        "Google": 360640,
+        "Sem origem": 360642,
+        "Meta-Facebook": 360644
+      }
+    },
+    "comercial::campanha#1": {
+      "id": 443454,
+      "name": "⌂ Campanha",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::plataforma-de-origem#1": {
+      "id": 443456,
+      "name": "⌂ Plataforma de origem",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::anuncio-ad#1": {
+      "id": 443458,
+      "name": "⌂ Anúncio (ad)",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::id-do-anuncio#1": {
+      "id": 443460,
+      "name": "⌂ ID do anúncio",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::titulo-do-anuncio#1": {
+      "id": 443462,
+      "name": "⌂ Título do anúncio",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::imagem-do-anuncio#1": {
+      "id": 443464,
+      "name": "⌂ Imagem do anúncio",
+      "type": "url",
+      "group": "comercial"
+    },
+    "comercial::conjunto-de-anuncio#1": {
+      "id": 443466,
+      "name": "⌂ Conjunto de anúncio",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::ctwa-clid#1": {
+      "id": 443468,
+      "name": "⌂ ctwa_clid",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::url-de-origem-do-clique#1": {
+      "id": 443470,
+      "name": "⌂ URL de origem do clique",
+      "type": "url",
+      "group": "comercial"
+    },
+    "comercial::cliques-no-anuncio#1": {
+      "id": 443472,
+      "name": "⌂ Cliques no anúncio",
+      "type": "numeric",
+      "group": "comercial"
+    },
+    "comercial::opt-out#1": {
+      "id": 443474,
+      "name": "*OPT-OUT*",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::opt-out-whatsapp#1": {
+      "id": 443476,
+      "name": "✓ Opt-out WhatsApp",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "Sim": 360646,
+        "Não": 360648
+      }
+    },
+    "comercial::data-do-opt-out#1": {
+      "id": 443478,
+      "name": "◷ Data do opt-out",
+      "type": "date_time",
+      "group": "comercial"
+    },
+    "tratamento::em-tratamento#1": {
+      "id": 443486,
+      "name": "*EM TRATAMENTO*",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::sessoes-previstas#1": {
+      "id": 443488,
+      "name": "# Sessões previstas",
+      "type": "numeric",
+      "group": "tratamento"
+    },
+    "tratamento::sessoes-realizadas#1": {
+      "id": 443490,
+      "name": "# Sessões realizadas",
+      "type": "numeric",
+      "group": "tratamento"
+    },
+    "tratamento::proxima-sessao#1": {
+      "id": 443492,
+      "name": "◷ Próxima sessão",
+      "type": "date_time",
+      "group": "tratamento"
+    },
+    "tratamento::ultima-sessao-marcada#1": {
+      "id": 443494,
+      "name": "◷ Última sessão marcada",
+      "type": "date_time",
+      "group": "tratamento"
+    },
+    "tratamento::compareceu-a-ultima-sessao-marcada#1": {
+      "id": 443496,
+      "name": "✓ Compareceu à última sessão marcada",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Não": 360650,
+        "Sim": 360652
+      }
+    },
+    "tratamento::no-de-faltas-em-sessao#1": {
+      "id": 443498,
+      "name": "# Nº de faltas em sessão",
+      "type": "numeric",
+      "group": "tratamento"
+    },
+    "tratamento::data-prevista-de-termino#1": {
+      "id": 443500,
+      "name": "◷ Data prevista de término",
+      "type": "date",
+      "group": "tratamento"
+    },
+    "tratamento::observacoes-de-sessoes#1": {
+      "id": 443502,
+      "name": "✎ Observações de sessões",
+      "type": "textarea",
+      "group": "tratamento"
+    },
+    "tratamento::alta#1": {
+      "id": 443504,
+      "name": "*ALTA*",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::alta#2": {
+      "id": 443506,
+      "name": "✓ Alta",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Insatisfeito": 360654,
+        "Tratamento cancelado": 360656,
+        "Ocioso": 360658,
+        "Satisfeito": 360660
+      }
+    },
+    "tratamento::data-de-alta#1": {
+      "id": 443508,
+      "name": "◷ Data de alta",
+      "type": "date",
+      "group": "tratamento"
+    },
+    "tratamento::satisfacao-nps-tratamento#1": {
+      "id": 443510,
+      "name": "★ Satisfação / NPS (Tratamento)",
+      "type": "numeric",
+      "group": "tratamento"
+    },
+    "tratamento::data-da-pesquisa-nps#1": {
+      "id": 443512,
+      "name": "◷ Data da pesquisa NPS",
+      "type": "date",
+      "group": "tratamento"
+    },
+    "tratamento::motivo-da-insatisfacao#1": {
+      "id": 443514,
+      "name": "⊘ Motivo da insatisfação",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Atendimento": 360662,
+        "Estrutura / instalações": 360664,
+        "Horários": 360666,
+        "Preço": 360668,
+        "Dor persistente": 360670,
+        "Pedido Médico": 360672,
+        "Resultado abaixo do esperado": 360674
+      }
+    },
+    "tratamento::deixou-avaliacao-google#1": {
+      "id": 443516,
+      "name": "✓ Deixou avaliação (Google)",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Sim": 360676,
+        "Não": 360678
+      }
+    },
+    "tratamento::autorizou-depoimento-video#1": {
+      "id": 443518,
+      "name": "✓ Autorizou depoimento / vídeo",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Sim": 360680,
+        "Não": 360682
+      }
+    },
+    "tratamento::indicacoes-geradas#1": {
+      "id": 443520,
+      "name": "# Indicações geradas",
+      "type": "numeric",
+      "group": "tratamento"
+    },
+    "tratamento::cancelamento#1": {
+      "id": 443522,
+      "name": "*CANCELAMENTO*",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::data-solicitacao-de-cancelamento#1": {
+      "id": 443524,
+      "name": "◷ Data solicitação de cancelamento",
+      "type": "date_time",
+      "group": "tratamento"
+    },
+    "tratamento::motivo-do-cancelamento-do-tratamento#1": {
+      "id": 443526,
+      "name": "⊘ Motivo do cancelamento do tratamento",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Mudou de cidade": 360684,
+        "Insatisfação com resultado": 360686,
+        "Insatisfação com atendimento": 360688,
+        "Problema de saúde": 360690,
+        "Falta de tempo / horário": 360692,
+        "Plano de saúde": 360694,
+        "Outro": 360696,
+        "Pedido Médico": 360698,
+        "Financeiro": 360700
+      }
+    },
+    "tratamento::cancelamento-revertido#1": {
+      "id": 443528,
+      "name": "✓ Cancelamento revertido",
+      "type": "select",
+      "group": "tratamento",
+      "enums": {
+        "Sim": 360702,
+        "Não": 360704
+      }
+    },
+    "tratamento::data-do-cancelamento#1": {
+      "id": 443530,
+      "name": "◷ Data do cancelamento",
+      "type": "date",
+      "group": "tratamento"
+    },
+    "tratamento::data-de-retorno#1": {
+      "id": 443532,
+      "name": "◷ Data de retorno",
+      "type": "date_time",
+      "group": "tratamento"
+    },
+    "tratamento::transferencia#1": {
+      "id": 443534,
+      "name": "*TRANSFERÊNCIA*",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::clinica-de-transferencia#1": {
+      "id": 443536,
+      "name": "Clinica de transferência",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::data-das-sessoes-realiadas#1": {
+      "id": 443538,
+      "name": "Data das sessões realiadas",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::valor-de-repasse#1": {
+      "id": 443540,
+      "name": "Valor de repasse",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::clinica-rebida#1": {
+      "id": 443542,
+      "name": "Clinica Rebida",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::data-das-sessoes-realiadas#2": {
+      "id": 443544,
+      "name": "Data das Sessões realiadas",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "tratamento::valor-de-recebimento#1": {
+      "id": 443546,
+      "name": "Valor de Recebimento",
+      "type": "text",
+      "group": "tratamento"
+    },
+    "asaas::campos#1": {
+      "id": 443548,
+      "name": "*CAMPOS*",
+      "type": "text",
+      "group": "asaas"
+    },
+    "ASAAS_CUSTOMER_ID": {
+      "id": 443550,
+      "name": "№ Cliente",
+      "type": "text",
+      "group": "asaas",
+      "code": "ASAAS_CUSTOMER_ID"
+    },
+    "ASAAS_PAYMENT_ID": {
+      "id": 443552,
+      "name": "№ Cobrança",
+      "type": "text",
+      "group": "asaas",
+      "code": "ASAAS_PAYMENT_ID"
+    },
+    "ASAAS_SUBSCRIPTION_ID": {
+      "id": 443554,
+      "name": "№ Assinatura",
+      "type": "text",
+      "group": "asaas",
+      "code": "ASAAS_SUBSCRIPTION_ID"
+    },
+    "ASAAS_STATUS": {
+      "id": 443556,
+      "name": "⬢ Status do pagamento",
+      "type": "select",
+      "group": "asaas",
+      "code": "ASAAS_STATUS",
+      "enums": {
+        "Pendente": 360706,
+        "Confirmado": 360708,
+        "Recebido": 360710,
+        "Recebido em dinheiro": 360712,
+        "Vencido": 360714,
+        "Estornado": 360716,
+        "Cancelado": 360718,
+        "Em análise (risco)": 360720,
+        "Chargeback": 360722
+      }
+    },
+    "ASAAS_BILLING_TYPE": {
+      "id": 443558,
+      "name": "⬢ Forma de pagamento",
+      "type": "select",
+      "group": "asaas",
+      "code": "ASAAS_BILLING_TYPE",
+      "enums": {
+        "Boleto": 360724,
+        "Pix": 360726,
+        "Cartão de crédito": 360728,
+        "Cartão de débito": 360730,
+        "Não definido": 360732
+      }
+    },
+    "ASAAS_INSTALLMENTS": {
+      "id": 443560,
+      "name": "# Nº de parcelas",
+      "type": "numeric",
+      "group": "asaas",
+      "code": "ASAAS_INSTALLMENTS"
+    },
+    "ASAAS_DUE_DATE": {
+      "id": 443562,
+      "name": "◷ Vencimento",
+      "type": "date",
+      "group": "asaas",
+      "code": "ASAAS_DUE_DATE"
+    },
+    "ASAAS_PAYMENT_DATE": {
+      "id": 443564,
+      "name": "◷ Data do pagamento",
+      "type": "date",
+      "group": "asaas",
+      "code": "ASAAS_PAYMENT_DATE"
+    },
+    "ASAAS_NEXT_DUE_DATE": {
+      "id": 443566,
+      "name": "◷ Próximo vencimento",
+      "type": "date",
+      "group": "asaas",
+      "code": "ASAAS_NEXT_DUE_DATE"
+    },
+    "ASAAS_INVOICE_URL": {
+      "id": 443568,
+      "name": "↗ Link da fatura",
+      "type": "url",
+      "group": "asaas",
+      "code": "ASAAS_INVOICE_URL"
+    },
+    "ASAAS_BANKSLIP_URL": {
+      "id": 443570,
+      "name": "↗ Boleto / PIX",
+      "type": "url",
+      "group": "asaas",
+      "code": "ASAAS_BANKSLIP_URL"
+    },
+    "ASAAS_DESCRIPTION": {
+      "id": 443572,
+      "name": "✎ Descrição",
+      "type": "text",
+      "group": "asaas",
+      "code": "ASAAS_DESCRIPTION"
+    },
+    "ASAAS_VALUE": {
+      "id": 443606,
+      "name": "¤ Valor da cobrança",
+      "type": "monetary",
+      "group": "asaas",
+      "code": "ASAAS_VALUE"
+    },
+    "ASAAS_NET_VALUE": {
+      "id": 443608,
+      "name": "¤ Valor líquido recebido",
+      "type": "monetary",
+      "group": "asaas",
+      "code": "ASAAS_NET_VALUE"
+    },
+    "agente-dt::info-agente#1": {
+      "id": 443574,
+      "name": "*INFO AGENTE*",
+      "type": "text",
+      "group": "agente-dt"
+    },
+    "agente-dt::resposta-da-ia#1": {
+      "id": 443576,
+      "name": "Resposta da IA",
+      "type": "textarea",
+      "group": "agente-dt"
+    },
+    "agente-dt::pausar-ia#1": {
+      "id": 443578,
+      "name": "Pausar IA",
+      "type": "checkbox",
+      "group": "agente-dt"
+    },
+    "3c-ligacoes::informacoes#1": {
+      "id": 443580,
+      "name": "*INFORMAÇÕES*",
+      "type": "text",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::ultima-ligacao#1": {
+      "id": 443582,
+      "name": "☎ Última ligação",
+      "type": "date_time",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::resultado#1": {
+      "id": 443584,
+      "name": "☎ Resultado",
+      "type": "select",
+      "group": "3c-ligacoes",
+      "enums": {
+        "Atendida": 360734,
+        "Não atendida": 360736,
+        "Caixa postal": 360738,
+        "Ocupado": 360740,
+        "Falha": 360742
+      }
+    },
+    "3c-ligacoes::duracao-da-conversa#1": {
+      "id": 443586,
+      "name": "☎ Duração da conversa",
+      "type": "text",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::motivo-qualificacao#1": {
+      "id": 443588,
+      "name": "☎ Motivo (qualificação)",
+      "type": "text",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::agente#1": {
+      "id": 443590,
+      "name": "☎ Agente",
+      "type": "text",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::campanha-3c#1": {
+      "id": 443592,
+      "name": "☎ Campanha 3C",
+      "type": "text",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::tentativas#1": {
+      "id": 443594,
+      "name": "☎ Tentativas",
+      "type": "numeric",
+      "group": "3c-ligacoes"
+    },
+    "3c-ligacoes::gravacao#1": {
+      "id": 443596,
+      "name": "☎ Gravação",
+      "type": "url",
+      "group": "3c-ligacoes"
+    },
+    "comercial::forma-de-pagamento#1": {
+      "id": 443610,
+      "name": "⬢ Forma de pagamento",
+      "type": "select",
+      "group": "comercial",
+      "enums": {
+        "À vista / PIX": 360744,
+        "Cartão de crédito": 360746,
+        "Cartão de débito": 360748,
+        "Boleto": 360750,
+        "Misto": 360752
+      }
+    },
+    "comercial::no-de-parcelas#1": {
+      "id": 443612,
+      "name": "# Nº de parcelas",
+      "type": "numeric",
+      "group": "comercial"
+    },
+    "comercial::data-do-pagamento#1": {
+      "id": 443614,
+      "name": "◷ Data do pagamento",
+      "type": "date",
+      "group": "comercial"
+    },
+    "comercial::campo#4": {
+      "id": 443616,
+      "name": "**!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::campo#5": {
+      "id": 443618,
+      "name": "**!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::campo#6": {
+      "id": 443620,
+      "name": "*!",
+      "type": "text",
+      "group": "comercial"
+    },
+    "comercial::campo#7": {
+      "id": 443622,
+      "name": "##!",
+      "type": "text",
+      "group": "comercial"
+    }
+  },
+  "loss_reasons": {
+    "Plano de saúde": 38679267,
+    "Outra patologia": 38679271,
+    "Solicitado exames": 38679275,
+    "Caso enviado para a franquia": 38679279,
+    "Decidir com a familia": 38679283,
+    "Mora em outra cidade": 38679287,
+    "Bandeira vermelha": 38679291,
+    "Vai viajar": 38679295,
+    "Achou caro": 38679299,
+    "Vai se organizar financeiramente": 38679303,
+    "Assinou contrato": 38679307,
+    "Financeiramente vulnerável": 38679311,
+    "Outra cidade": 38679315,
+    "Sem condições financeiras": 38679319,
+    "Não interagiu": 38679323,
+    "Informação para terceiro": 38679327,
+    "Clicou por engano": 38679331,
+    "Está viajando": 38679335,
+    "Sem interesse": 38679339,
+    "Não deu continuidade ao atendimento": 38679343,
+    "Vai se organizar": 38679347,
+    "Não perturbar": 38679351,
+    "Lead morto": 38679355
+  },
+  "target": {
+    "subdomain": "willianocostaadv",
+    "account_id": 36919795
+  }
+}

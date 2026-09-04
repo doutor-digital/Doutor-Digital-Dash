@@ -19,8 +19,15 @@ public sealed class KommoStageMapService(
     ILogger<KommoStageMapService> logger)
 {
     public sealed record ResultadoSync(int UnitId, int Etapas, int Funis, string? Erro = null);
+    /// <param name="SemMapa">Rótulo continua cru: o mapa não resolveu o id.</param>
+    /// <param name="Ambiguos">Id existe no mapa, mas em mais de um funil com nomes diferentes.</param>
+    /// <param name="AmbiguosComIdCru">
+    /// O subconjunto que importa: ambíguo E ainda mostrando o número na tela. É o que a
+    /// coluna PipelineId recupera. O resto do SemMapa aponta para etapa que não existe
+    /// mais na Kommo (apagada nas replicações) — esse nome não volta de lugar nenhum.
+    /// </param>
     public sealed record ResultadoBackfill(
-        int UnitId, int Examinados, int Corrigidos, int SemMapa, int Ambiguos);
+        int UnitId, int Examinados, int Corrigidos, int SemMapa, int Ambiguos, int AmbiguosComIdCru);
 
     /// <summary>Lê os funis da conta e regrava o mapa da unidade.</summary>
     public async Task<ResultadoSync> SincronizarAsync(int unitId, CancellationToken ct)
@@ -91,7 +98,7 @@ public sealed class KommoStageMapService(
         var etapas = await db.KommoStages.AsNoTracking()
             .Where(s => s.UnitId == unitId)
             .ToListAsync(ct);
-        if (etapas.Count == 0) return new ResultadoBackfill(unitId, 0, 0, 0, 0);
+        if (etapas.Count == 0) return new ResultadoBackfill(unitId, 0, 0, 0, 0, 0);
 
         // Chave exata: (funil, etapa). É a única que não confunde os ids universais
         // 142/143 (Ganho/Perdido), que existem em todos os funis da conta.
@@ -112,21 +119,30 @@ public sealed class KommoStageMapService(
             .Where(h => h.ChangedAt >= desde && db.Leads.Any(l => l.Id == h.LeadId && l.UnitId == unitId))
             .ToListAsync(ct);
 
-        int corrigidos = 0, semMapa = 0, ambiguos = 0;
+        var idsDoMapa = etapas.Select(s => s.StatusId).ToHashSet();
+
+        int corrigidos = 0, semMapa = 0, ambiguos = 0, ambiguosCrus = 0;
         foreach (var h in linhas)
         {
             string? nome = null;
+            var ambiguo = false;
             if (h.PipelineId is long fid && porFunilEtapa.TryGetValue((fid, h.StageId), out var exato))
                 nome = exato;
             else if (porEtapaUnica.TryGetValue(h.StageId, out var unico))
                 nome = unico;
-            else if (etapas.Any(s => s.StatusId == h.StageId))
-                ambiguos++; // existe no mapa, mas em mais de um funil com nomes diferentes
+            else if (idsDoMapa.Contains(h.StageId))
+            {
+                ambiguo = true; // existe no mapa, mas em mais de um funil com nomes diferentes
+                ambiguos++;
+            }
 
             if (string.IsNullOrWhiteSpace(nome))
             {
                 if (h.StageLabel is null || System.Text.RegularExpressions.Regex.IsMatch(h.StageLabel, "^[0-9]+$"))
+                {
                     semMapa++;
+                    if (ambiguo) ambiguosCrus++;
+                }
                 continue;
             }
 
@@ -149,8 +165,8 @@ public sealed class KommoStageMapService(
 
         if (!simular && corrigidos > 0) await db.SaveChangesAsync(ct);
         logger.LogInformation(
-            "🏷️ Rótulos do histórico | unidade={Unit} examinados={Ex} corrigidos={Corr} sem mapa={Sem} ambíguos={Amb}{Sim}",
-            unitId, linhas.Count, corrigidos, semMapa, ambiguos, simular ? " (simulação)" : "");
-        return new ResultadoBackfill(unitId, linhas.Count, corrigidos, semMapa, ambiguos);
+            "🏷️ Rótulos do histórico | unidade={Unit} examinados={Ex} corrigidos={Corr} sem mapa={Sem} ambíguos crus={Amb}{Sim}",
+            unitId, linhas.Count, corrigidos, semMapa, ambiguosCrus, simular ? " (simulação)" : "");
+        return new ResultadoBackfill(unitId, linhas.Count, corrigidos, semMapa, ambiguos, ambiguosCrus);
     }
 }

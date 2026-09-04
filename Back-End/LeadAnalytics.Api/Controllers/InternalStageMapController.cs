@@ -72,6 +72,10 @@ public class InternalStageMapController(
             // Linha sem funil gravado cujo id de etapa tem nome diferente em dois funis:
             // o rótulo fica como está. É a medida do que só a coluna PipelineId resolve.
             totalAmbiguos = saida.Sum(x => x.Ambiguos),
+            // Destes, os que ainda mostram o número na tela — o que o passo 2 recupera.
+            totalAmbiguosComIdCru = saida.Sum(x => x.AmbiguosComIdCru),
+            // O resto do SemMapa aponta pra etapa apagada na Kommo: nome irrecuperável.
+            totalIrrecuperaveis = saida.Sum(x => x.SemMapa - x.AmbiguosComIdCru),
             porUnidade = saida.OrderByDescending(x => x.Corrigidos),
         });
     }

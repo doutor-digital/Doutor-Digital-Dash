@@ -228,6 +228,7 @@ builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
 builder.Services.AddScoped<KpiConfigService>();
+builder.Services.AddScoped<AuditoriaKpiService>();
 builder.Services.AddScoped<SavedFilterService>();
 builder.Services.AddScoped<DuplicateContactService>();
 

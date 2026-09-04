@@ -359,11 +359,20 @@ using (var scope = app.Services.CreateScope())
         // é engolida abaixo → app sobe com schema incompleto → 500 nas queries novas.
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
         db.Database.Migrate();
+        var pendentes = db.Database.GetPendingMigrations().ToList();
+        SchemaHealth.Registrar(db.Database.GetAppliedMigrations(), pendentes, null);
         startupLogger.LogInformation("Migrations aplicadas com sucesso no startup.");
     }
     catch (Exception ex)
     {
-        startupLogger.LogError(ex, "Falha ao aplicar migrations no startup.");
+        // Subir com schema incompleto é deliberado (o app serve o que já existe),
+        // mas o estado precisa ficar perguntável: sem isso o /health diz "ok" e a
+        // falha só reaparece como 500 numa query nova, horas depois.
+        var pendentes = new List<string>();
+        try { pendentes = db.Database.GetPendingMigrations().ToList(); } catch { /* banco fora: fica só o erro */ }
+        SchemaHealth.Registrar([], pendentes, ex.Message);
+        startupLogger.LogError(ex, "Falha ao aplicar migrations no startup. Pendentes: {Pendentes}",
+            pendentes.Count == 0 ? "(não foi possível ler)" : string.Join(", ", pendentes));
     }
 }
 
@@ -451,8 +460,15 @@ app.UseMiddleware<AuditLogMiddleware>();
 // Healthcheck do container. O rolling update do Swarm só mata o container antigo
 // depois que o novo responder 200 aqui — é o que sustenta o deploy sem downtime.
 // Anônimo de propósito: o AuditLogMiddleware já ignora /health.
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
-   .AllowAnonymous();
+// O schema entra aqui, mas sem derrubar o 200: um deploy com migration pendente
+// ainda serve o que já existe, e travar o health impediria o swarm de convergir
+// justamente na hora de corrigir. O detalhe fica em /internal/schema.
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok",
+    schema = SchemaHealth.Ok ? "ok" : "pendente",
+    migrationsPendentes = SchemaHealth.Pendentes.Count,
+})).AllowAnonymous();
 
 app.MapControllers();
 

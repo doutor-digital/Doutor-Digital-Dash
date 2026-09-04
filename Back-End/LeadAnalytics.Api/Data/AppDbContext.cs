@@ -24,6 +24,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<LeadAssignment> LeadAssignments { get; set; }
     public DbSet<LeadStageHistory> LeadStageHistories { get; set; }
     public DbSet<FranquiaLeadLink> FranquiaLeadLinks { get; set; }
+    public DbSet<KommoStage> KommoStages { get; set; }
     public DbSet<LeadConversation> LeadConversations { get; set; }
     public DbSet<LeadInteraction> LeadInteractions { get; set; }
     public DbSet<Payment> Payments { get; set; }
@@ -252,6 +253,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne(e => e.Attendant)
                   .WithMany(a => a.Assignments)
                   .HasForeignKey(e => e.AttendantId);
+        });
+
+        modelBuilder.Entity<KommoStage>(e =>
+        {
+            e.ToTable("kommo_stages");
+            e.HasKey(x => x.Id);
+            // Uma linha por (unidade, funil, etapa): ressincronizar atualiza o nome.
+            e.HasIndex(x => new { x.UnitId, x.PipelineId, x.StatusId }).IsUnique();
+            // A leitura quente é "qual o nome desta etapa nesta unidade".
+            e.HasIndex(x => new { x.UnitId, x.StatusId });
+            e.Property(x => x.PipelineName).HasMaxLength(120);
+            e.Property(x => x.StatusName).HasMaxLength(120);
         });
 
         modelBuilder.Entity<FranquiaLeadLink>(e =>

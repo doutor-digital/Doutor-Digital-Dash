@@ -229,6 +229,7 @@ builder.Services.AddScoped<LeadEventService>();
 builder.Services.AddScoped<LeadTimelineService>();
 builder.Services.AddScoped<KpiConfigService>();
 builder.Services.AddScoped<AuditoriaKpiService>();
+builder.Services.AddScoped<KommoStageMapService>();
 builder.Services.AddScoped<SavedFilterService>();
 builder.Services.AddScoped<DuplicateContactService>();
 

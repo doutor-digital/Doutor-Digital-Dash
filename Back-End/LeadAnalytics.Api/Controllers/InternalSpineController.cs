@@ -184,8 +184,25 @@ public class InternalSpineController(
                 // vazia em todas as unidades, então procurar aqui dava sempre zero.
                 try
                 {
-                    var achados = await _kommo.SearchLeadsAsync(
-                        unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
+                    // Uma busca por paciente. Em unidade com 100+ tratamentos isso vira
+                    // rajada e a Kommo passa a responder 401 ("usuário ou senha inválidos")
+                    // com token BOM — foi o que zerou a receita de 9 das 10 unidades,
+                    // deixando só a menor (Araguaína, 37 tratamentos) passar. O respiro
+                    // mantém o ritmo abaixo do limite, e a segunda tentativa cobre o 401
+                    // que ainda escapar.
+                    await Task.Delay(160, ct);
+                    KommoLeadsPageResponse? achados;
+                    try
+                    {
+                        achados = await _kommo.SearchLeadsAsync(
+                            unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
+                    }
+                    catch (Exception primeira) when (primeira.Message.Contains("401"))
+                    {
+                        await Task.Delay(3000, ct);
+                        achados = await _kommo.SearchLeadsAsync(
+                            unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
+                    }
                     var lead = achados?.Embedded?.Leads?.FirstOrDefault();
                     if (lead is not null)
                     {

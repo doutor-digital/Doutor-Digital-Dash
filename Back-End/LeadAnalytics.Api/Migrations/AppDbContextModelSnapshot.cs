@@ -1099,6 +1099,49 @@ namespace LeadAnalytics.Api.Migrations
                     b.ToTable("invitations", (string)null);
                 });
 
+            modelBuilder.Entity("LeadAnalytics.Api.Models.KommoStage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("PipelineId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PipelineName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Sort")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("StatusId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StatusName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UnitId", "StatusId");
+
+                    b.HasIndex("UnitId", "PipelineId", "StatusId")
+                        .IsUnique();
+
+                    b.ToTable("kommo_stages", (string)null);
+                });
+
             modelBuilder.Entity("LeadAnalytics.Api.Models.KpiConfiguration", b =>
                 {
                     b.Property<int>("Id")

@@ -21,6 +21,7 @@ public class SpineController(
     SpineAgendaService agenda,
     SpinePacienteService pacientes,
     SpineRedeService rede,
+    SpineRedeAdesaoService redeAdesao,
     SpineTokenStore tokens,
     SpineApiClient client,
     FranquiaTratamentosService tratamentos,
@@ -35,6 +36,7 @@ public class SpineController(
     private readonly SpineAgendaService _agenda = agenda;
     private readonly SpinePacienteService _pacientes = pacientes;
     private readonly SpineRedeService _rede = rede;
+    private readonly SpineRedeAdesaoService _redeAdesao = redeAdesao;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly FranquiaTratamentosService _tratamentos = tratamentos;
@@ -164,6 +166,35 @@ public class SpineController(
 
         var dto = await _rede.ComparativoAsync(escopo, inicio, fim, ct);
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Adesão ao tratamento da rede (sessões realizadas, faltas e desmarcações por unidade), SÓ com
+    /// agregados e sem identificação de paciente — LGPD. Unidade com poucos pacientes sai oculta.
+    /// Padrão: últimos 30 dias.
+    /// </summary>
+    [HttpGet("rede/adesao")]
+    public async Task<IActionResult> RedeAdesao(
+        [FromQuery] DateOnly? de,
+        [FromQuery] DateOnly? ate,
+        CancellationToken ct = default)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } error) return error;
+
+        var fim = ate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var inicio = de ?? fim.AddDays(-30);
+        if (fim < inicio)
+            return BadRequest(new ProblemDetails { Title = "Período inválido: 'ate' anterior a 'de'.", Status = 400 });
+        if (fim.DayNumber - inicio.DayNumber > SpineApiClient.MaxDiasJanela)
+            return BadRequest(new ProblemDetails
+            {
+                Title = $"A API do Doutor Hérnia aceita no máximo {SpineApiClient.MaxDiasJanela} dias por consulta.",
+                Status = 400,
+            });
+
+        // Mesmo escopo do comparativo: só o super admin vê a rede inteira.
+        var escopo = _currentUser.IsSuperAdmin ? null : tenantId;
+        return Ok(await _redeAdesao.ComparativoAsync(escopo, inicio, fim, ct));
     }
 
     // ─── Onboarding self-service do token (Central de Integrações) ───────────

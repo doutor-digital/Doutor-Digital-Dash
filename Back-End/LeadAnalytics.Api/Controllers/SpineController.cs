@@ -21,6 +21,7 @@ public class SpineController(
     SpineAgendaService agenda,
     SpinePacienteService pacientes,
     SpineRedeService rede,
+    SpineRedeAdesaoService redeAdesao,
     SpineTokenStore tokens,
     SpineApiClient client,
     FranquiaTratamentosService tratamentos,
@@ -35,6 +36,7 @@ public class SpineController(
     private readonly SpineAgendaService _agenda = agenda;
     private readonly SpinePacienteService _pacientes = pacientes;
     private readonly SpineRedeService _rede = rede;
+    private readonly SpineRedeAdesaoService _redeAdesao = redeAdesao;
     private readonly SpineTokenStore _tokens = tokens;
     private readonly SpineApiClient _client = client;
     private readonly FranquiaTratamentosService _tratamentos = tratamentos;
@@ -164,6 +166,29 @@ public class SpineController(
 
         var dto = await _rede.ComparativoAsync(escopo, inicio, fim, ct);
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Adesão ao tratamento da rede (sessões realizadas, faltas, desmarcações e horários sem baixa por
+    /// unidade), SÓ com agregados e sem identificação de paciente — LGPD. Unidade com poucos pacientes sai
+    /// oculta. A janela é FIXA (30, 60 ou 90 dias terminando ontem): janela livre permitiria subtrair duas
+    /// respostas vizinhas e isolar um dia de uma unidade.
+    /// </summary>
+    [HttpGet("rede/adesao")]
+    public async Task<IActionResult> RedeAdesao([FromQuery] int dias = 30, CancellationToken ct = default)
+    {
+        if (_tenantGuard.RequireTenant(out var tenantId) is { } error) return error;
+
+        if (!SpineRedeAdesaoService.JanelasPermitidas.Contains(dias))
+            return BadRequest(new ProblemDetails
+            {
+                Title = $"Janela inválida: use {string.Join(", ", SpineRedeAdesaoService.JanelasPermitidas)} dias.",
+                Status = 400,
+            });
+
+        // Mesmo escopo do comparativo: só o super admin vê a rede inteira.
+        var escopo = _currentUser.IsSuperAdmin ? null : tenantId;
+        return Ok(await _redeAdesao.ComparativoAsync(escopo, dias, ct));
     }
 
     // ─── Onboarding self-service do token (Central de Integrações) ───────────

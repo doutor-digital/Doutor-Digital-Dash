@@ -300,6 +300,7 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineAvaliacoesServic
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineAgendaService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpinePacienteService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineRedeService>();
+builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineRedeAdesaoService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.SpineHistoricoService>();
 // Situação dos tratamentos: módulo bloqueado na API oficial → raspa do CRM web.
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Spine.FranquiaWebStore>();

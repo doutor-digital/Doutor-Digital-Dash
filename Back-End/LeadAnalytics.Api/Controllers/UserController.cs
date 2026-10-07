@@ -52,6 +52,7 @@ public class UserController(UserService userService) : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
     [HttpPost("me/photo")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]
@@ -91,6 +92,7 @@ public class UserController(UserService userService) : ControllerBase
 
     // ─── Administração de usuários ────────────────────────────────
 
+    [Authorize(Policy = AuthPolicies.SuperAdmin)] // era anônima: qualquer um listava/criava usuários
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -98,6 +100,7 @@ public class UserController(UserService userService) : ControllerBase
         return Ok(users);
     }
 
+    [Authorize(Policy = AuthPolicies.SuperAdmin)] // era anônima: qualquer um listava/criava usuários
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -109,6 +112,7 @@ public class UserController(UserService userService) : ControllerBase
         return Ok(user);
     }
 
+    [Authorize(Policy = AuthPolicies.SuperAdmin)] // era anônima: qualquer um listava/criava usuários
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
     {
@@ -123,6 +127,7 @@ public class UserController(UserService userService) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
+    [Authorize(Policy = AuthPolicies.SuperAdmin)] // era anônima: qualquer um listava/criava usuários
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto dto)
     {
@@ -137,6 +142,7 @@ public class UserController(UserService userService) : ControllerBase
         return Ok(updated);
     }
 
+    [Authorize(Policy = AuthPolicies.SuperAdmin)] // era anônima: qualquer um listava/criava usuários
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

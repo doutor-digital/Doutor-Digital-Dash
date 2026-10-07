@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
-[Authorize]
+// Apaga contatos para sempre (e, com includeAllTenants, em outros tenants): só super_admin.
+[Authorize(Policy = AuthPolicies.SuperAdmin)]
 [Route("contacts/admin")]
 public class AdminDuplicatesController(
     DuplicateContactService duplicateService,

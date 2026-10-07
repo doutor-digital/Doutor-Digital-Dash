@@ -26,6 +26,7 @@ public class AuthController(
     /// e clique em <b>Authorize</b> (Bearer) para liberar as rotas protegidas. A resposta também
     /// traz a unidade selecionada e as unidades disponíveis para o usuário.
     /// </remarks>
+    [AllowAnonymous] // antes do login: quem chama ainda não tem token
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -50,6 +51,7 @@ public class AuthController(
         return Ok(response);
     }
 
+    [AllowAnonymous] // antes do login: quem chama ainda não tem token
     [HttpPost("google")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -67,6 +69,7 @@ public class AuthController(
         return Ok(response);
     }
 
+    [AllowAnonymous] // antes do login: quem chama ainda não tem token
     [HttpPost("forgot-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -84,6 +87,7 @@ public class AuthController(
         });
     }
 
+    [AllowAnonymous] // antes do login: quem chama ainda não tem token
     [HttpPost("verify-reset-code")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -103,6 +107,7 @@ public class AuthController(
         return Ok(new { message = "Código válido." });
     }
 
+    [AllowAnonymous] // antes do login: quem chama ainda não tem token
     [HttpPost("reset-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

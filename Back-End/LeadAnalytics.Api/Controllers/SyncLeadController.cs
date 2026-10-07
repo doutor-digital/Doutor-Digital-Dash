@@ -1,10 +1,12 @@
 ﻿using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("assignments")]
 public class SyncLeadController(SyncN8N syncN8N) : ControllerBase
 {

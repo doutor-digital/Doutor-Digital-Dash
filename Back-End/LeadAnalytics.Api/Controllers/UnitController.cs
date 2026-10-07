@@ -100,6 +100,8 @@ public class UnitController(
     }
 
     /// <summary>Remove uma unidade (apenas se não houver leads vinculados).</summary>
+    // Apaga a unidade com TODOS os leads, consultas, pagamentos e tratamentos dela.
+    [Authorize(Policy = AuthPolicies.SuperAdmin)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

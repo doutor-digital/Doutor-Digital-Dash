@@ -1,5 +1,6 @@
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// os rótulos velhos. O id nunca é tocado.
 /// </summary>
 [ApiController]
+// Pública de propósito: quem chama é o n8n, o cron do servidor ou o agente, com o header
+// X-Admin-Key e sem login. A chave é conferida dentro de cada ação (InternalApiKeyGuard).
+[AllowAnonymous]
 [Route("internal/stage-map")]
 public class InternalStageMapController(
     AppDbContext db,

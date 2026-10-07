@@ -1,9 +1,11 @@
 ﻿using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("assignments")]
 public class AssignmentController(
     AttendantService attendantService,

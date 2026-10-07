@@ -1,5 +1,6 @@
 using LeadAnalytics.Api.Data;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// completo?" sem precisar caçar a linha certa no log do contêiner.
 /// </summary>
 [ApiController]
+// Pública de propósito: quem chama é o n8n, o cron do servidor ou o agente, com o header
+// X-Admin-Key e sem login. A chave é conferida dentro de cada ação (InternalApiKeyGuard).
+[AllowAnonymous]
 [Route("internal/schema")]
 public class InternalSchemaController(AppDbContext db, InternalApiKeyGuard guard) : ControllerBase
 {

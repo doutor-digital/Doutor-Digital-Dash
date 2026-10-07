@@ -1,13 +1,18 @@
 
 using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+// Relatório mensal da clínica: exige login e só o tenant dono (ver EnsureTenantMatches).
+[Authorize]
 [Route("api/relatorios")]
-public class RelatorioController(IRelatorioService relatorioService) : ControllerBase
+public class RelatorioController(
+    IRelatorioService relatorioService,
+    TenantUnitGuard tenantGuard) : ControllerBase
 {
     /// <summary>
     /// Gera o relatório mensal de leads em PDF para uma clínica.
@@ -28,6 +33,8 @@ public class RelatorioController(IRelatorioService relatorioService) : Controlle
     {
         if (clinicId <= 0)
             return BadRequest("clinicId inválido.");
+
+        if (tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         if (mes < 1 || mes > 12)
             return BadRequest("Mês deve estar entre 1 e 12.");
@@ -60,6 +67,8 @@ public class RelatorioController(IRelatorioService relatorioService) : Controlle
     {
         if (clinicId <= 0)
             return BadRequest("clinicId inválido.");
+
+        if (tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         if (mes < 1 || mes > 12)
             return BadRequest("Mês deve estar entre 1 e 12.");

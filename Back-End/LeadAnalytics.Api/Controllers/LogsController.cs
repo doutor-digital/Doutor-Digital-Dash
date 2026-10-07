@@ -1,11 +1,16 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+// O painel /logs tem login próprio (LogsAuthService): o token dele viaja no header
+// Authorization e não é JWT — sem isto a autenticação JWT recusaria a chamada. Cada ação
+// continua protegida pelo [LogsTokenAuthorize] (ou pelo token na query, no stream).
+[AllowAnonymous]
 [Route("logs")]
 public class LogsController(
     InMemoryLogStore store,

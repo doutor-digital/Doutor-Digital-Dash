@@ -2,6 +2,7 @@ using LeadAnalytics.Api.DTOs.Ads;
 using LeadAnalytics.Api.Service;
 using LeadAnalytics.Api.Service.Ads;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
@@ -12,6 +13,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// pronto; a API resolve a conta e grava. Protegido por X-Admin-Key.
 /// </summary>
 [ApiController]
+// Pública de propósito: quem chama é o n8n, o cron do servidor ou o agente, com o header
+// X-Admin-Key e sem login. A chave é conferida dentro de cada ação (InternalApiKeyGuard).
+[AllowAnonymous]
 [Route("internal/ads")]
 public class InternalAdsController(
     AdsSpendSyncService adsSync,

@@ -10,11 +10,13 @@ namespace LeadAnalytics.Api.Models;
 /// quarenta e quatro requisições, e a Kommo limita. Fazer isso a cada carregamento de
 /// dashboard derruba a tela; fazer uma vez por dia resolve.
 ///
-/// A POPULAÇÃO É DA FRANQUIA, O VALOR É DA KOMMO
-/// ---------------------------------------------
-/// É a regra do negócio: conta-se o que a clínica lançou no sistema dela (por isso a
-/// linha existe por tratamento, não por lead), mas o dinheiro sai do campo preenchido
-/// na Kommo. Guardar os dois lados permite auditar a divergência sem refazer o cruzamento.
+/// A POPULAÇÃO É DA FRANQUIA; O VALOR, FRANQUIA PRIMEIRO E KOMMO SE FALTAR
+/// --------------------------------------------------------------------------
+/// Conta-se o que a clínica lançou no sistema dela (por isso a linha existe por tratamento,
+/// não por lead). O dinheiro, desde 07/10/2026, é o preço lançado na franquia; onde ela não
+/// lançou, o ¤ Valor do tratamento do cartão — decidido por paciente, porque o valor do cartão
+/// é um só e fica copiado em cada tratamento do lead (KpiConfigService.SomarReceita). Guardar
+/// os dois lados permite auditar a divergência sem refazer o cruzamento.
 /// </summary>
 public class FranquiaLeadLink
 {

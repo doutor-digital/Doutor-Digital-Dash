@@ -215,10 +215,10 @@ public sealed class AuditoriaKpiService(AppDbContext db)
     }
 
     /// <summary>
-    /// RECEITA — o teste que importa: o valor que a SDR digitou na Kommo bate
-    /// com o preço que a clínica lançou na franquia?
-    /// A regra do card é "população da franquia, valor da Kommo"; aqui os dois
-    /// aparecem lado a lado e cada divergência é nominal.
+    /// RECEITA — a regra do card desde 07/10/2026: franquia primeiro, Kommo se faltar, por
+    /// paciente (KpiConfigService.SomarReceita). O número é o do card; a conferência é só o que a
+    /// clínica lançou. Divergência nominal: tratamento sem valor nos DOIS lados (o card não conta)
+    /// e valor diferente entre franquia e cartão (vale a franquia — o cartão está desatualizado).
     /// </summary>
     public async Task<Bloco> ReceitaAsync(int unitId, DateTime de, DateTime ate, CancellationToken ct)
     {
@@ -230,13 +230,14 @@ public sealed class AuditoriaKpiService(AppDbContext db)
             .Select(v => new { v.Paciente, v.PrecoFranquia, v.ValorKommo, v.LeadId })
             .ToListAsync(ct);
 
+        var card = KpiConfigService.SomarReceita(vinculos.Select(v => (v.LeadId, v.PrecoFranquia, v.ValorKommo)));
         var totalFranquia = vinculos.Sum(v => v.PrecoFranquia ?? 0m);
-        var totalKommo = vinculos.Sum(v => v.ValorKommo ?? 0m);
 
         var quebra = new List<Fatia>
         {
-            new("Valor lançado na franquia", vinculos.Count, totalFranquia),
-            new("Valor preenchido na Kommo", vinculos.Count(v => (v.ValorKommo ?? 0m) > 0m), totalKommo),
+            new("Valor lançado na franquia", vinculos.Count(v => (v.PrecoFranquia ?? 0m) != 0m), totalFranquia),
+            new("Valor preenchido na Kommo", vinculos.Count(v => (v.ValorKommo ?? 0m) > 0m), vinculos.Sum(v => v.ValorKommo ?? 0m)),
+            new("No card (franquia primeiro, Kommo se faltar)", card.ComValor, card.Total),
         };
 
         var problemas = new List<Divergencia>();
@@ -244,19 +245,20 @@ public sealed class AuditoriaKpiService(AppDbContext db)
         {
             var kommo = v.ValorKommo ?? 0m;
             var franquia = v.PrecoFranquia ?? 0m;
-            if (kommo <= 0m)
+            if (franquia == 0m && kommo <= 0m)
                 problemas.Add(new Divergencia((int)(v.LeadId ?? 0), NomeCurto(v.Paciente),
-                    $"tratamento lançado na clínica ({franquia:C0}) e o valor não foi preenchido na Kommo"));
-            else if (franquia > 0m && Math.Abs(kommo - franquia) > 1m)
+                    "tratamento lançado sem valor na franquia e sem valor no cartão — fica fora da receita"));
+            else if (franquia != 0m && kommo > 0m && Math.Abs(kommo - franquia) > 1m)
                 problemas.Add(new Divergencia((int)(v.LeadId ?? 0), NomeCurto(v.Paciente),
-                    $"valores diferentes: franquia {franquia:C0} × Kommo {kommo:C0}"));
+                    $"valores diferentes: franquia {franquia:C0} × cartão {kommo:C0} (vale a franquia)"));
         }
 
-        var dif = totalKommo - totalFranquia;
-        return new Bloco("receita", "franquia × Kommo", (int)Math.Round(totalKommo), (int)Math.Round(totalFranquia),
+        return new Bloco("receita", "franquia primeiro, Kommo se faltar", (int)Math.Round(card.Total), (int)Math.Round(totalFranquia),
             problemas.Count == 0
-                ? "receita da Kommo bate com o lançado na clínica"
-                : $"{problemas.Count} tratamento(s) com valor divergente — diferença de {dif:C0}",
+                ? "todo tratamento do período tem valor, e franquia e cartão concordam"
+                : card.SemValor > 0
+                    ? $"{card.SemValor} tratamento(s) sem valor nos dois lados — a receita está incompleta"
+                    : $"{problemas.Count} tratamento(s) com valor diferente entre franquia e cartão",
             quebra, problemas);
     }
 

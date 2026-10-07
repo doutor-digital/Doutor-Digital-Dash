@@ -16,6 +16,9 @@ namespace LeadAnalytics.Api.Service;
 public class KommoSyncService
 {
     private const int PageSize = 250;
+
+    /// <summary>Pausa entre buscas lead a lead: 200 ms = no máximo 5 chamadas/s por conta.</summary>
+    internal const int IntervaloEntreBuscasMs = 200;
     private const string PhoneCode = "PHONE";
     private const string EmailCode = "EMAIL";
 
@@ -123,8 +126,9 @@ public class KommoSyncService
                 {
                     _logger.LogWarning(ex, "Falha ao re-buscar lead {LeadId} (unit {Unit})", lead.Id, unit.Id);
                 }
-                // Respeita o rate-limit da Kommo (7 RPS = ~143ms entre requests)
-                try { await Task.Delay(150, ct); }
+                // Ritmo: no máximo 5 chamadas/s por conta (limite da Kommo é 7/s). Folga para o
+                // painel e o cruzamento, que usam o mesmo token ao mesmo tempo.
+                try { await Task.Delay(IntervaloEntreBuscasMs, ct); }
                 catch (OperationCanceledException) { break; }
             }
             _logger.LogInformation(

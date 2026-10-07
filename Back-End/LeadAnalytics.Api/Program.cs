@@ -223,7 +223,6 @@ builder.Services.AddScoped<KpiReconcileService>();
 builder.Services.AddScoped<CloudiaKommoPatchService>();
 builder.Services.AddSingleton<ICloudiaKommoPatchJobQueue, InMemoryCloudiaKommoPatchJobQueue>();
 builder.Services.AddHostedService<CloudiaKommoPatchJobWorker>();
-builder.Services.AddHttpClient("kommo");
 builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddScoped<LeadEventService>();
@@ -281,10 +280,9 @@ builder.Services.AddScoped<ConsultasBackfillService>();
 builder.Services.AddScoped<KommoConversationsImporter>();
 builder.Services.AddScoped<AgentIngestionService>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Asaas.AsaasIngestionService>();
-builder.Services.AddHttpClient<KommoApiClient>(c =>
-{
-    c.Timeout = TimeSpan.FromSeconds(30);
-});
+// KommoApiClient + cliente nomeado "kommo", os dois SEM cookie: o session_id que a Kommo
+// devolve (domain=.kommo.com) ia junto na chamada da conta seguinte e virava 401. Ver KommoHttp.
+builder.Services.AddKommoHttpClients();
 builder.Services.AddSingleton<WebhookExecutionLogger>();
 
 // ── Doutor Hérnia / API Spine (sistema clínico — somente leitura) ────────────

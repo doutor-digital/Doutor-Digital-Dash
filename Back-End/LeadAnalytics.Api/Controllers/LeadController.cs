@@ -598,22 +598,18 @@ public class WebhooksController(
                     {
                         var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
                             string.IsNullOrWhiteSpace(cfg.ConfigJson) ? "{}" : cfg.ConfigJson);
-                        var (value, _, note) = await _kpiService.ComputeAsync(
-                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
+                        // MedirAsync, não ComputeAsync: o valor vem NULO quando não há número
+                        // (franquia sem autorização ou fora, cruzamento que não rodou, período
+                        // longo demais), e nulo nunca vira 0 no card. O filtro Origem vale para
+                        // os números da Kommo, como o de usuário.
+                        var (medida, _, note) = await _kpiService.MedirAsync(
+                            clinicId, unitId, cfg.SourceType, config, dateFrom, dateTo, responsibleUser, cfg.KpiKey,
+                            HttpContext.RequestAborted, origem: source);
+                        var value = medida ?? 0;
 
-                        // Unidade sem autorização da franquia: NÃO publica override. Publicar
-                        // 0 faria o card mostrar "0 consultas", que o usuário lê como resultado
-                        // ruim em vez de acesso ausente. O card custom continua sendo montado
-                        // abaixo — quem decide o que desenhar é o front, pela lista de chaves.
-                        if (note == KpiNotes.SemAutorizacaoFranquia)
-                            result.KpisSemAutorizacao.Add(cfg.KpiKey);
-                        else if (note != KpiNotes.SemValorFranquia)
-                            result.KpiOverrides[cfg.KpiKey] = value;
-                        if (cfg.KpiKey == "receita" && note is not null
-                            && note != KpiNotes.SemValorFranquia && note != KpiNotes.SemAutorizacaoFranquia)
-                            result.KpiNotas[cfg.KpiKey] = note;
-                        // SemValorFranquia: não publica número nenhum. O card cai no
-                        // "—" com o motivo, em vez de exibir um zero que mente.
+                        // Sem número: cadeado (sem autorização) ou "—" com o motivo. O card custom
+                        // continua sendo montado abaixo — quem decide o que desenhar é o front.
+                        PublicacaoDeKpi.Publicar(result, cfg.KpiKey, medida, note);
 
                         // KPIs criados do zero viram cards próprios no dashboard.
                         if (cfg.IsCustom)
@@ -634,7 +630,8 @@ public class WebhooksController(
                             if (displayType == "source_chart")
                             {
                                 dto.Breakdown = await _kpiService.ComputeBreakdownAsync(
-                                    clinicId, unitId, config, dateFrom, dateTo, 12, responsibleUser, HttpContext.RequestAborted);
+                                    clinicId, unitId, config, dateFrom, dateTo, 12, responsibleUser, HttpContext.RequestAborted,
+                                    origem: source);
                                 dto.Value = dto.Breakdown.Sum(b => b.Value);
                             }
 
@@ -677,19 +674,11 @@ public class WebhooksController(
                         // unitId null → o serviço soma as unidades do tenant que responderam.
                         // As datas são as MESMAS do filtro da tela, então o período escolhido
                         // chega na API da franquia também no agregado.
-                        var (value, _, note) = await _kpiService.ComputeAsync(
+                        var (medida, _, note) = await _kpiService.MedirAsync(
                             escopoKpi, null, cfg.SourceType, config, dateFrom, dateTo,
                             responsibleUser, cfg.KpiKey, HttpContext.RequestAborted);
 
-                        if (note == KpiNotes.SemAutorizacaoFranquia)
-                            result.KpisSemAutorizacao.Add(cfg.KpiKey);
-                        else if (note != KpiNotes.SemValorFranquia)
-                            result.KpiOverrides[cfg.KpiKey] = value;
-                        if (cfg.KpiKey == "receita" && note is not null
-                            && note != KpiNotes.SemValorFranquia && note != KpiNotes.SemAutorizacaoFranquia)
-                            result.KpiNotas[cfg.KpiKey] = note;
-                        // SemValorFranquia: não publica número nenhum. O card cai no
-                        // "—" com o motivo, em vez de exibir um zero que mente.
+                        PublicacaoDeKpi.Publicar(result, cfg.KpiKey, medida, note);
                     }
                     catch (Exception ex)
                     {

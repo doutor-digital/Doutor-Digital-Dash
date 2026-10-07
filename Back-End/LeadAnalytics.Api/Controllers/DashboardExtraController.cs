@@ -41,7 +41,8 @@ public class DashboardExtraController(
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId);
         if (dateFrom.HasValue) q = q.Where(l => l.CreatedAt >= dateFrom);
         if (dateTo.HasValue) q = q.Where(l => l.CreatedAt <= dateTo);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // ⚑ Origem do cartão, não a coluna Source ("Kommo" em todo lead). Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, tenantId, unitId, source, ct);
 
         // Traz só os timestamps (barato) e agrupa em memória — pra 5-100k leads é OK.
         var times = await q.Select(l => l.CreatedAt).ToListAsync(ct);
@@ -80,7 +81,8 @@ public class DashboardExtraController(
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId);
         if (dateFrom.HasValue) q = q.Where(l => l.CreatedAt >= dateFrom);
         if (dateTo.HasValue) q = q.Where(l => l.CreatedAt <= dateTo);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // ⚑ Origem do cartão, não a coluna Source ("Kommo" em todo lead). Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, tenantId, unitId, source, ct);
 
         var items = await q
             .Where(l => l.Campaign != null && l.Campaign != "DESCONHECIDO" && l.Campaign != "")
@@ -115,7 +117,8 @@ public class DashboardExtraController(
         var q = _db.Leads.AsNoTracking()
             .Where(l => l.CreatedAt >= dateFrom && l.CreatedAt <= dateTo);
         if (tenantId.HasValue) q = q.Where(l => l.TenantId == tenantId);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // ⚑ Origem do cartão, não a coluna Source ("Kommo" em todo lead). Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, tenantId, null, source, ct);
 
         var raw = await q
             .Select(l => new { l.UnitId, Date = l.CreatedAt.Date })

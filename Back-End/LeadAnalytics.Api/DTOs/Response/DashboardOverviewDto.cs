@@ -93,6 +93,15 @@ public class DashboardOverviewDto
     public List<string> KpisSemAutorizacao { get; set; } = new();
 
     /// <summary>
+    /// KPIs que ficaram SEM número neste período, com o motivo em português para o card
+    /// escrever embaixo do "—" (ex.: "O cruzamento ainda não rodou para este período",
+    /// "Período maior que 400 dias…", "A franquia não respondeu agora…"). Quem está aqui
+    /// não está em <c>kpi_overrides</c>: zero e "não sei" são coisas diferentes.
+    /// </summary>
+    [JsonPropertyName("kpis_sem_numero")]
+    public Dictionary<string, string> KpisSemNumero { get; set; } = new();
+
+    /// <summary>
     /// Leads que entraram no fim de semana (sábado/domingo pelo relógio comercial),
     /// com a quebra por origem. Fica separado do resto porque é fila de retomada:
     /// ninguém atendeu na hora.

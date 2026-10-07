@@ -90,7 +90,7 @@ public class CoberturaDoCruzamentoTests
         var r = await Receita(db, "2026-09-01", "2026-09-02");
 
         Assert.Equal(0d, r.Value);
-        Assert.Equal("cruzamento ainda não rodou para este período", r.Note);
+        Assert.Equal(KpiNotes.CruzamentoNaoRodou, r.Note);
     }
 
     /// Período ANTERIOR ao que o cruzamento já olhou também é desconhecido — o cron roda
@@ -103,7 +103,7 @@ public class CoberturaDoCruzamentoTests
 
         var r = await Receita(db, "2026-01-01", "2026-02-01");
 
-        Assert.Equal("cruzamento ainda não rodou para este período", r.Note);
+        Assert.Equal(KpiNotes.CruzamentoNaoRodou, r.Note);
     }
 
     /// Período que termina depois do que já foi olhado também é desconhecido: o fim da
@@ -116,7 +116,7 @@ public class CoberturaDoCruzamentoTests
 
         var r = await Receita(db, "2026-08-25", "2026-09-30");
 
-        Assert.Equal("cruzamento ainda não rodou para este período", r.Note);
+        Assert.Equal(KpiNotes.CruzamentoNaoRodou, r.Note);
     }
 
     /// Com vínculo no período, o número sai normalmente — a marca não atrapalha o caminho

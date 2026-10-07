@@ -77,6 +77,70 @@ public static class KpiNotes
     /// unidade que lançou 18 tratamentos — o mesmo erro de sempre, com outra cara.
     /// </summary>
     public const string SemValorFranquia = "sem_valor_franquia";
+
+    /// <summary>
+    /// Receita de um período que o cruzamento franquia × Kommo NUNCA olhou (antes de a
+    /// unidade entrar no cruzamento, ou hoje antes das 05:40). Zero vínculo aqui não quer
+    /// dizer "não vendeu": quer dizer "não sabemos". O card mostra "—", nunca R$ 0.
+    /// </summary>
+    public const string CruzamentoNaoRodou = "cruzamento_nao_rodou";
+
+    /// <summary>
+    /// Período maior do que o teto que o painel aceita ler da agenda da franquia de uma vez
+    /// (<see cref="Spine.SpineAvaliacoesService.MaxDiasAgendaKpi"/>). A agenda só responde
+    /// 100 dias por consulta; o painel fatia até esse teto e, acima dele, não pede — para
+    /// não despejar dezenas de chamadas na franquia por uma tela.
+    /// </summary>
+    public const string PeriodoLongoDemaisAgenda = "periodo_longo_demais_agenda";
+
+    /// <summary>
+    /// O texto que o card mostra embaixo do "—" quando o KPI ficou sem número. A nota
+    /// técnica (código estável ou mensagem de exceção) nunca vai crua para a tela.
+    /// </summary>
+    public static string MotivoSemNumero(string? nota) => nota switch
+    {
+        SemValorFranquia =>
+            "Nenhum tratamento do período tem valor — nem na franquia, nem no card da Kommo.",
+        CruzamentoNaoRodou =>
+            "O cruzamento ainda não rodou para este período (roda todo dia às 05:40).",
+        PeriodoLongoDemaisAgenda =>
+            $"Período maior que {Spine.SpineAvaliacoesService.MaxDiasAgendaKpi} dias: a agenda da franquia não é lida de uma vez. Escolha um período menor.",
+        SemAutorizacaoFranquia => "Sem autorização da franquia nesta unidade.",
+        _ => "A franquia não respondeu agora. Tente de novo em alguns minutos.",
+    };
+}
+
+/// <summary>
+/// Como a medida de um KPI entra na resposta do dashboard (<c>dashboard-overview</c>).
+/// Uma regra só para a unidade e para "Todas as unidades" — antes eram dois blocos copiados
+/// no controller, e os dois publicavam 0 quando a medida não existia.
+/// </summary>
+public static class PublicacaoDeKpi
+{
+    /// <summary>
+    /// Valor presente → vira número (<c>kpi_overrides</c>). Valor NULO → nunca vira número:
+    /// ou entra em <c>kpis_sem_autorizacao</c> (cadeado), ou em <c>kpis_sem_numero</c> com o
+    /// motivo que o card escreve embaixo do "—". Sem isto o front caía no número antigo da
+    /// Kommo (Agendados) ou mostrava R$ 0 (Receita).
+    /// </summary>
+    public static void Publicar(
+        DTOs.Response.DashboardOverviewDto resultado, string chave, double? valor, string? nota)
+    {
+        if (valor is null)
+        {
+            if (nota == KpiNotes.SemAutorizacaoFranquia)
+                resultado.KpisSemAutorizacao.Add(chave);
+            else
+                resultado.KpisSemNumero[chave] = KpiNotes.MotivoSemNumero(nota);
+            return;
+        }
+
+        resultado.KpiOverrides[chave] = valor.Value;
+
+        // Hoje só a Receita tem nota embaixo do número ("24 tratamentos · 3 sem valor").
+        if (chave == "receita" && !string.IsNullOrWhiteSpace(nota))
+            resultado.KpiNotas[chave] = nota;
+    }
 }
 
 /// <summary>Um KPI do dashboard que pode ser mapeado nas Configurações Técnicas.</summary>

@@ -488,6 +488,15 @@ public class KpiConfigService(
     /// a soma desses preços; se não tem em nenhum, vale o valor do cartão, uma vez. Tratamento sem
     /// lead casado só tem o lado da franquia. Preço diferente de zero conta (estorno negativo também).
     /// </summary>
+    /// <summary>
+    /// Nota curta que o card de Receita mostra embaixo do número: quantos tratamentos o
+    /// período tem e quantos ficaram sem valor nos dois lados (franquia e card da Kommo).
+    /// É o número que a unidade precisa zerar lançando o preço na franquia.
+    /// </summary>
+    internal static string NotaDaReceita(ReceitaSomada r) =>
+        $"{r.Tratamentos} {(r.Tratamentos == 1 ? "tratamento" : "tratamentos")} · " +
+        (r.SemValor > 0 ? $"{r.SemValor} sem valor" : "todos com valor");
+
     internal static ReceitaSomada SomarReceita(IEnumerable<(long? LeadId, decimal? PrecoFranquia, decimal? ValorKommo)> linhas)
     {
         var lista = linhas.ToList();
@@ -567,11 +576,8 @@ public class KpiConfigService(
                 if (r.Total == 0m)
                     return new FranquiaMedida(null, KpiNotes.SemValorFranquia);
 
-                // O card confessa o buraco: "N tratamentos, X sem valor".
-                return new FranquiaMedida(
-                    (double)r.Total,
-                    $"fonte: franquia (Kommo onde a clínica não lançou) · {r.Tratamentos} tratamentos" +
-                    (r.SemValor > 0 ? $", {r.SemValor} sem valor" : ""));
+                // O card confessa o buraco: "24 tratamentos · 3 sem valor" (aparece embaixo do número).
+                return new FranquiaMedida((double)r.Total, NotaDaReceita(r));
             }
 
             if (metric == "tratamentos")

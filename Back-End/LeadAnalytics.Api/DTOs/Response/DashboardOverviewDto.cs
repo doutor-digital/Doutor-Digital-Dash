@@ -69,6 +69,13 @@ public class DashboardOverviewDto
     public Dictionary<string, double> KpiOverrides { get; set; } = new();
 
     /// <summary>
+    /// Nota curta por KPI para o card mostrar embaixo do número. Hoje só a Receita:
+    /// "24 tratamentos · 3 sem valor" (unidade) ou "soma de N de M unidades" (rede).
+    /// </summary>
+    [JsonPropertyName("kpi_notes")]
+    public Dictionary<string, string> KpiNotas { get; set; } = new();
+
+    /// <summary>
     /// KPIs criados pelo analista do zero (nome + cor + fonte próprios), já com o valor
     /// calculado para o período. O front renderiza um card por item, abaixo dos fixos.
     /// Só preenchido quando uma unidade específica é selecionada.

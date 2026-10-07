@@ -609,6 +609,9 @@ public class WebhooksController(
                             result.KpisSemAutorizacao.Add(cfg.KpiKey);
                         else if (note != KpiNotes.SemValorFranquia)
                             result.KpiOverrides[cfg.KpiKey] = value;
+                        if (cfg.KpiKey == "receita" && note is not null
+                            && note != KpiNotes.SemValorFranquia && note != KpiNotes.SemAutorizacaoFranquia)
+                            result.KpiNotas[cfg.KpiKey] = note;
                         // SemValorFranquia: não publica número nenhum. O card cai no
                         // "—" com o motivo, em vez de exibir um zero que mente.
 
@@ -682,6 +685,9 @@ public class WebhooksController(
                             result.KpisSemAutorizacao.Add(cfg.KpiKey);
                         else if (note != KpiNotes.SemValorFranquia)
                             result.KpiOverrides[cfg.KpiKey] = value;
+                        if (cfg.KpiKey == "receita" && note is not null
+                            && note != KpiNotes.SemValorFranquia && note != KpiNotes.SemAutorizacaoFranquia)
+                            result.KpiNotas[cfg.KpiKey] = note;
                         // SemValorFranquia: não publica número nenhum. O card cai no
                         // "—" com o motivo, em vez de exibir um zero que mente.
                     }

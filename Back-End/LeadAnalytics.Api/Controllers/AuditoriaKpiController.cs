@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
@@ -11,6 +12,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// lead — e pra dar à gestora a lista exata do que a SDR precisa corrigir.
 /// </summary>
 [ApiController]
+// Pública de propósito: quem chama é o n8n, o cron do servidor ou o agente, com o header
+// X-Admin-Key e sem login. A chave é conferida dentro de cada ação (InternalApiKeyGuard).
+[AllowAnonymous]
 [Route("internal/audit")]
 public class AuditoriaKpiController(
     AuditoriaKpiService auditoria,

@@ -2,18 +2,23 @@ using LeadAnalytics.Api.DTOs.Filter;
 using LeadAnalytics.Api.DTOs.Response;
 using LeadAnalytics.Api.Service;
 using LeadAnalytics.Api.Service.Filtering;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+// Contatos são dados de paciente: exigem login e só o tenant dono (ver EnsureTenantMatches).
+[Authorize]
 [Route("contacts")]
 public class ContactsController(
     ContactService contactService,
     ContactImportService importService,
+    TenantUnitGuard tenantGuard,
     ILogger<ContactsController> logger) : ControllerBase
 {
     private readonly ContactService _contactService = contactService;
+    private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly ContactImportService _importService = importService;
     private readonly ILogger<ContactsController> _logger = logger;
 
@@ -42,6 +47,7 @@ public class ContactsController(
     {
         if (clinicId <= 0)
             return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         var filters = new ContactFiltersDto
         {
@@ -73,6 +79,7 @@ public class ContactsController(
     {
         if (clinicId <= 0)
             return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         var detail = await _contactService.GetByIdAsync(clinicId, id, HttpContext.RequestAborted);
         if (detail is null)
@@ -99,6 +106,7 @@ public class ContactsController(
     {
         if (dto is null || dto.ClinicId <= 0)
             return BadRequest(new { error = "clinic_id inválido" });
+        if (_tenantGuard.EnsureTenantMatches(dto.ClinicId) is { } negado) return negado;
 
         try
         {
@@ -137,6 +145,7 @@ public class ContactsController(
         [FromBody] ContactUpdateDto dto)
     {
         if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
         if (dto is null) return BadRequest(new { error = "payload obrigatório" });
 
         try
@@ -167,6 +176,7 @@ public class ContactsController(
         [FromQuery] int clinicId)
     {
         if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         try
         {
@@ -193,6 +203,7 @@ public class ContactsController(
         [FromBody] ContactActionDto dto)
     {
         if (clinicId <= 0) return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
         if (dto is null || string.IsNullOrWhiteSpace(dto.Action))
             return BadRequest(new { error = "ação obrigatória (compareceu | faltou | aguardando)" });
 
@@ -225,6 +236,7 @@ public class ContactsController(
     {
         if (clinicId <= 0)
             return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
         if (req is null)
             return BadRequest(new { error = "payload obrigatório" });
         if (req.PageSize > 200)
@@ -269,6 +281,7 @@ public class ContactsController(
     {
         if (clinicId <= 0)
             return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         var result = await _contactService.GetFilterOptionsAsync(
             clinicId, key, search, limit, HttpContext.RequestAborted);
@@ -303,6 +316,7 @@ public class ContactsController(
 
         if (clinicId <= 0)
             return BadRequest(new { error = "clinicId inválido" });
+        if (_tenantGuard.EnsureTenantMatches(clinicId) is { } negado) return negado;
 
         var allowed = new[] { "skip", "update", "fail" };
         if (!allowed.Contains(onDuplicate))

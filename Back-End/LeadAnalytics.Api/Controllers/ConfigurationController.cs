@@ -1,9 +1,13 @@
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+// Pública de propósito: grava a X-Admin-Key. Entra quem é super_admin (JWT) OU quem
+// manda a chave atual no header — a conferência está em IsAdminAuthorizedAsync.
+[AllowAnonymous]
 [Route("api/config")]
 public class ConfigurationController(
     ConfigurationService configService,

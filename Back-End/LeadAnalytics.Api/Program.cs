@@ -140,7 +140,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownProxies.Clear();
 });
 
-builder.Services.AddAuthorization();
+// Fechado por padrão: rota sem [AllowAnonymous] exige login. Ver AuthPolicies.
+builder.Services.AddAuthorization(AuthPolicies.Configure);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
@@ -446,7 +447,7 @@ app.MapScalarApiReference("/docs", options =>
         .WithTheme(ScalarTheme.Purple)
         .WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json")
         .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl);
-});
+}).AllowAnonymous();
 
 app.UseStaticFiles();
 

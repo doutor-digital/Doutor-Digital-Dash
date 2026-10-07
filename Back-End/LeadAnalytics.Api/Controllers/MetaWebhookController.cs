@@ -3,11 +3,15 @@ using LeadAnalytics.Api.DTOs;
 using LeadAnalytics.Api.DTOs.Kommo;
 using LeadAnalytics.Api.DTOs.Meta;
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
 
 [ApiController]
+// Pública de propósito: webhooks da Meta (verificação GET + eventos), do n8n (meta/n8n)
+// e da Kommo (kommo). Quem chama não tem login no painel.
+[AllowAnonymous]
 [Route("api/webhooks")]
 public class MetaWebhookController(
     MetaWebhookService metaWebhookService,

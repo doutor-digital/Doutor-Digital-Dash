@@ -1,4 +1,5 @@
 using LeadAnalytics.Api.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadAnalytics.Api.Controllers;
@@ -12,6 +13,9 @@ namespace LeadAnalytics.Api.Controllers;
 /// Protegido pelo header X-Admin-Key.
 /// </summary>
 [ApiController]
+// Pública de propósito: quem chama é o n8n, o cron do servidor ou o agente, com o header
+// X-Admin-Key e sem login. A chave é conferida dentro de cada ação (InternalApiKeyGuard).
+[AllowAnonymous]
 [Route("internal/sync")]
 public class InternalSyncController(
     ScheduledSyncService sync,

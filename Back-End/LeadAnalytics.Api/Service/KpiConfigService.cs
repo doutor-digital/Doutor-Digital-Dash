@@ -183,11 +183,36 @@ public class KpiConfigService(
     /// <summary>
     /// Calcula o valor de um KPI dado o tipo de fonte e os parâmetros. Retorna o número
     /// e o tamanho da amostra (total de leads do período no escopo unidade/tenant).
+    /// KPI sem número (ver <see cref="MedirAsync"/>) sai como 0 aqui — serve à prévia das
+    /// Configurações Técnicas. O dashboard usa <see cref="MedirAsync"/>, que não esconde o "—".
     /// </summary>
     public async Task<(double Value, int Sample, string? Note)> ComputeAsync(
         int clinicId, int? unitId, string sourceType, JsonElement config,
         DateTime from, DateTime to, string? responsibleUser = null, string? kpiKey = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string? origem = null)
+    {
+        var (valor, amostra, nota) = await MedirAsync(
+            clinicId, unitId, sourceType, config, from, to, responsibleUser, kpiKey, ct, origem);
+        return (valor ?? 0, amostra, nota);
+    }
+
+    /// <summary>
+    /// Igual a <see cref="ComputeAsync"/>, mas o valor é NULO quando o KPI não tem número —
+    /// franquia sem autorização, fora do ar, cruzamento que nunca olhou o período, período
+    /// longo demais para a agenda. A nota diz o porquê (<see cref="KpiNotes.MotivoSemNumero"/>).
+    ///
+    /// Existe porque o 0 que saía no lugar do "não sei" era publicado como número: a pílula
+    /// "Ano" zerava Agendados/Consultas/No-show e a receita de um período nunca cruzado
+    /// aparecia como R$ 0 — o painel dizendo "não vendeu" para quem vendeu.
+    ///
+    /// <paramref name="origem"/> filtra pelo ⚑ Origem do cartão (o mesmo filtro da tela).
+    /// Vale só para os números da Kommo; os da franquia são da unidade inteira, como já
+    /// acontece com o filtro de usuário.
+    /// </summary>
+    public async Task<(double? Value, int Sample, string? Note)> MedirAsync(
+        int clinicId, int? unitId, string sourceType, JsonElement config,
+        DateTime from, DateTime to, string? responsibleUser = null, string? kpiKey = null,
+        CancellationToken ct = default, string? origem = null)
     {
         from = AsUtc(from); to = AsUtc(to);
         // Janela pela DATA REAL de criação do lead (mesma regra do DashboardOverview):
@@ -203,6 +228,7 @@ public class KpiConfigService(
         if (unitId.HasValue)
             baseQuery = baseQuery.Where(l => l.UnitId == unitId.Value);
         baseQuery = await ResponsibleUserFilter.ApplyAsync(baseQuery, responsibleUser, ct);
+        baseQuery = await FiltroDeOrigem.AplicarAsync(_db, baseQuery, clinicId, unitId, origem, ct);
 
         // Leads marcados como "não contar" pelo admin (kpi_exclusions) saem de QUALQUER
         // fonte deste KPI — antes só o caminho do funil/breakdown filtrava, e o override
@@ -261,7 +287,7 @@ public class KpiConfigService(
                 if (unitId.HasValue)
                 {
                     var m = await MedirFranquiaAsync(unitId.Value, metric, de, ate, ct);
-                    return (m.Valor ?? 0, sample, m.Nota);
+                    return (m.Valor, sample, m.Nota);
                 }
 
                 // "Todas as unidades" (unitId nulo). Antes isto devolvia 0 com a nota
@@ -298,7 +324,16 @@ public class KpiConfigService(
                 // quantas responderam. Zero mentiria — diria que a clínica não agendou
                 // nada, quando na verdade é a nossa vista que está tapada.
                 var responderam = medidas.Where(x => x.Valor.HasValue).ToList();
-                if (responderam.Count == 0) return (0, sample, KpiNotes.SemAutorizacaoFranquia);
+                if (responderam.Count == 0)
+                {
+                    // Nenhuma respondeu: o motivo é o de quem TEM acesso (período longo demais,
+                    // cruzamento que não rodou, franquia fora). "Sem autorização" só quando é
+                    // isso mesmo em todas — senão o cadeado esconderia a causa verdadeira.
+                    var motivo = medidas.Select(x => x.Nota)
+                        .FirstOrDefault(n => n != KpiNotes.SemAutorizacaoFranquia)
+                        ?? KpiNotes.SemAutorizacaoFranquia;
+                    return (null, sample, motivo);
+                }
 
                 return (
                     responderam.Sum(x => x.Valor!.Value),
@@ -320,6 +355,7 @@ public class KpiConfigService(
                 var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+                scope = await FiltroDeOrigem.AplicarAsync(_db, scope, clinicId, unitId, origem, ct);
                 if (excluded.Count > 0) scope = scope.Where(l => !excluded.Contains(l.Id));
 
                 // Janela usa a data CORRIGIDA quando o admin ajustou a transição
@@ -387,6 +423,7 @@ public class KpiConfigService(
                             .Where(l => l.TenantId == clinicId && entraram.Contains(l.Id));
                         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
                         q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);
+                        q = await FiltroDeOrigem.AplicarAsync(_db, q, clinicId, unitId, origem, ct);
                     }
                     else
                     {
@@ -438,6 +475,7 @@ public class KpiConfigService(
                 var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
                 if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
                 scope = await ResponsibleUserFilter.ApplyAsync(scope, responsibleUser, ct);
+                scope = await FiltroDeOrigem.AplicarAsync(_db, scope, clinicId, unitId, origem, ct);
                 if (excluded.Count > 0) scope = scope.Where(l => !excluded.Contains(l.Id));
 
                 var count = await _db.RecoveryAttempts.AsNoTracking()
@@ -517,6 +555,23 @@ public class KpiConfigService(
     }
 
     /// <summary>
+    /// Lê a marca "AAAA-MM-DD|AAAA-MM-DD" que o cruzamento grava ao terminar. Marca ausente
+    /// ou torta devolve (null, null): "não sabemos o que foi olhado".
+    /// </summary>
+    internal static (DateOnly? Inicio, DateOnly? Fim) LerCobertura(string? marca)
+    {
+        if (string.IsNullOrWhiteSpace(marca)) return (null, null);
+        var partes = marca.Split('|');
+        return partes.Length == 2
+               && DateOnly.TryParseExact(partes[0], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                                         System.Globalization.DateTimeStyles.None, out var inicio)
+               && DateOnly.TryParseExact(partes[1], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                                         System.Globalization.DateTimeStyles.None, out var fim)
+            ? (inicio, fim)
+            : (null, null);
+    }
+
+    /// <summary>
     /// Resolve uma métrica da franquia para uma unidade. Assume a métrica já validada
     /// contra <see cref="KpiSourceTypes.MetricasFranquia"/> pelo chamador.
     /// </summary>
@@ -538,33 +593,36 @@ public class KpiConfigService(
                     .Select(v => new { v.LeadId, v.PrecoFranquia, v.ValorKommo })
                     .ToListAsync(ct);
 
+                // A marca de cobertura, gravada pelo cruzamento: de que dia a que dia ele já olhou.
+                var cobertura = await _db.AppConfigurations.AsNoTracking()
+                    .Where(c => c.Key == $"cruzamento:cobertura:{unitId}")
+                    .Select(c => c.Value)
+                    .FirstOrDefaultAsync(ct);
+                var (inicioCob, fimCob) = LerCobertura(cobertura);
+
                 if (vinculos.Count == 0)
                 {
                     // Zero linhas tem DOIS significados, e confundi-los é o defeito clássico
                     // deste painel: "nenhum tratamento no período" vale R$ 0 de verdade;
                     // "o cruzamento nunca olhou este período" não vale número nenhum.
-                    // A marca de cobertura, gravada pelo cruzamento, separa os dois.
-                    var cobertura = await _db.AppConfigurations.AsNoTracking()
-                        .Where(c => c.Key == $"cruzamento:cobertura:{unitId}")
-                        .Select(c => c.Value)
-                        .FirstOrDefaultAsync(ct);
-
-                    var olhou = false;
-                    if (!string.IsNullOrWhiteSpace(cobertura))
-                    {
-                        var partes = cobertura.Split('|');
-                        olhou = partes.Length == 2
-                                && DateOnly.TryParse(partes[0], out var pCob)
-                                && DateOnly.TryParse(partes[1], out var uCob)
+                    var olhou = inicioCob is DateOnly pCob && fimCob is DateOnly uCob
                                 && de >= pCob && ate <= uCob;
-                    }
 
+                    // Valor NULO, não 0: até 07/10 a nota era texto livre, o controller não a
+                    // reconhecia e publicava o 0 — o card mostrava R$ 0 num período nunca cruzado.
                     return olhou
                         ? new FranquiaMedida(0, "nenhum tratamento lançado no período")
-                        : new FranquiaMedida(null, "cruzamento ainda não rodou para este período");
+                        : new FranquiaMedida(null, KpiNotes.CruzamentoNaoRodou);
                 }
 
                 var r = SomarReceita(vinculos.Select(v => (v.LeadId, v.PrecoFranquia, v.ValorKommo)));
+
+                // Período que começa ANTES do que o cruzamento olhou (a pílula "Ano" pega
+                // out/2025, o cruzamento começa em jan/2026): o número existe, mas é só do
+                // pedaço cruzado — a nota diz de quando, para ninguém ler como o ano inteiro.
+                var corte = inicioCob is DateOnly ini && de < ini
+                    ? $" · cruzamento só a partir de {ini:dd/MM/yyyy}"
+                    : "";
 
                 // O denominador do ticket é quantos tratamentos TÊM valor — dividir pelo
                 // total incluiria os que ficaram sem valor nos dois lados e derrubaria a média.
@@ -577,7 +635,7 @@ public class KpiConfigService(
                     return new FranquiaMedida(null, KpiNotes.SemValorFranquia);
 
                 // O card confessa o buraco: "24 tratamentos · 3 sem valor" (aparece embaixo do número).
-                return new FranquiaMedida((double)r.Total, NotaDaReceita(r));
+                return new FranquiaMedida((double)r.Total, NotaDaReceita(r) + corte);
             }
 
             if (metric == "tratamentos")
@@ -604,6 +662,12 @@ public class KpiConfigService(
                 // (A receita é resolvida no ramo de cima, pelo cruzamento: franquia primeiro, Kommo se faltar.)
                 return new FranquiaMedida(t.Total, $"fonte: franquia · {fonteNome} (lançados no período)");
             }
+
+            // Daqui para baixo tudo é agenda (agendados, consultas, no-show). A agenda é lida em
+            // fatias de 100 dias até o teto; acima dele não se pede nada — "—" com o motivo,
+            // em vez do 0 que a exceção virava.
+            if (Spine.SpineAvaliacoesService.DiasNoPeriodo(de, ate) > Spine.SpineAvaliacoesService.MaxDiasAgendaKpi)
+                return new FranquiaMedida(null, KpiNotes.PeriodoLongoDemaisAgenda);
 
             // NO-SHOW OLHA A AGENDA INTEIRA, NÃO SÓ A AVALIAÇÃO.
             //
@@ -1486,8 +1550,11 @@ public class KpiConfigService(
                 cons.Fonte = "franquia";
                 try
                 {
-                    var av = await _spineAvaliacoes.GetAsync(
-                        uidC, DateOnly.FromDateTime(from), DateOnly.FromDateTime(to), ct);
+                    // A MESMA janela do número grande (JanelaDaFranquia): o desfecho descreve
+                    // os mesmos horários, e a leitura reaproveita o cache em vez de pedir a
+                    // agenda de novo à franquia com um dia de diferença.
+                    var (deAg, ateAg) = JanelaDaFranquia(from, to);
+                    var av = await _spineAvaliacoes.GetAsync(uidC, deAg, ateAg, ct);
                     if (av is not null)
                     {
                         cons.FranquiaTotal = av.Total;
@@ -1614,7 +1681,8 @@ public class KpiConfigService(
     /// </summary>
     public async Task<List<DTOs.Response.KpiBreakdownItemDto>> ComputeBreakdownAsync(
         int clinicId, int? unitId, JsonElement config, DateTime from, DateTime to,
-        int topN = 12, string? responsibleUser = null, CancellationToken ct = default)
+        int topN = 12, string? responsibleUser = null, CancellationToken ct = default,
+        string? origem = null)
     {
         const int MaxScan = 8000;
         from = AsUtc(from); to = AsUtc(to);
@@ -1677,6 +1745,7 @@ public class KpiConfigService(
         }
 
         q = await ResponsibleUserFilter.ApplyAsync(q, responsibleUser, ct);
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, clinicId, unitId, origem, ct);
 
         var jsons = await q.OrderByDescending(l => l.CreatedAt)
             .Take(MaxScan).Select(l => l.CustomFieldsJson!).ToListAsync(ct);

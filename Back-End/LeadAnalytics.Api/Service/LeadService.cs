@@ -1623,7 +1623,9 @@ public class LeadService(
 
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // Origem = ⚑ Origem do cartão (a mesma regra da lista do filtro), não a coluna Source,
+        // que vale "Kommo" em todo lead. Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, clinicId, unitId, source, ct);
 
         return await q
             .OrderByDescending(l => l.AppointmentScheduledAt ?? l.CreatedAt)
@@ -1671,7 +1673,9 @@ public class LeadService(
 
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // Origem = ⚑ Origem do cartão (a mesma regra da lista do filtro), não a coluna Source,
+        // que vale "Kommo" em todo lead. Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, clinicId, unitId, source, ct);
 
         return await q
             .OrderByDescending(l => l.AttendanceStatusAt ?? l.UpdatedAt)
@@ -1738,7 +1742,9 @@ public class LeadService(
         var scopeQ = _db.Leads.AsNoTracking().Where(l => l.TenantId == clinicId).ExcludeDeleted();
         if (unitId.HasValue) scopeQ = scopeQ.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) scopeQ = scopeQ.Where(l => l.AttendantId == attendantId.Value);
-        if (!string.IsNullOrWhiteSpace(source)) scopeQ = scopeQ.Where(l => l.Source == source);
+        // Origem = ⚑ Origem do cartão (a mesma regra da lista do filtro), não a coluna Source,
+        // que vale "Kommo" em todo lead — filtrar por ela zerava os gráficos. Ver FiltroDeOrigem.
+        scopeQ = await FiltroDeOrigem.AplicarAsync(_db, scopeQ, clinicId, unitId, source, ct);
 
         // Filtro por SDR responsável (custom field "Usuário responsável"). Aplicado por
         // último para que todos os KPIs/agregações abaixo já considerem só os leads dele.
@@ -2626,7 +2632,9 @@ public class LeadService(
 
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
         if (attendantId.HasValue) q = q.Where(l => l.AttendantId == attendantId.Value);
-        if (!string.IsNullOrWhiteSpace(source)) q = q.Where(l => l.Source == source);
+        // Origem = ⚑ Origem do cartão (a mesma regra da lista do filtro), não a coluna Source,
+        // que vale "Kommo" em todo lead. Ver FiltroDeOrigem.
+        q = await FiltroDeOrigem.AplicarAsync(_db, q, clinicId, unitId, source, ct);
 
         var rows = await q.Select(l => l.CreatedAt).ToListAsync(ct);
 

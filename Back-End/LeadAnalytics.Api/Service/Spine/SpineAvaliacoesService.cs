@@ -40,6 +40,38 @@ public class SpineAvaliacoesService(
         (SpineApiClient.ScheduleStatus.Agendado,      "Agendado",       "pendente"),
     ];
 
+    /// <summary>
+    /// Maior período (em dias, contando o primeiro e o último) que o painel lê da agenda
+    /// de uma vez. A franquia só responde 100 dias por consulta, então o período é fatiado
+    /// (<see cref="BlocosDaAgenda"/>); 400 dias = no máximo 4 fatias por categoria, o que
+    /// cobre a pílula "Ano" (366 dias). Acima disso o painel NÃO pede: um período de 3 anos
+    /// viraria 11 fatias × 5 categorias × páginas por unidade, e a franquia já pediu (06/10)
+    /// que o consumo da API caia, não suba.
+    /// </summary>
+    public const int MaxDiasAgendaKpi = 400;
+
+    /// <summary>
+    /// Quebra o período em fatias que a agenda da franquia aceita: cada uma com no máximo
+    /// <see cref="SpineApiClient.MaxDiasJanela"/> dias de diferença entre o início e o fim
+    /// (100 dias contando os dois), encostadas e sem sobreposição — o dia em que uma acaba
+    /// não se repete na seguinte, então nenhum horário é contado duas vezes.
+    /// </summary>
+    internal static IEnumerable<(DateOnly De, DateOnly Ate)> BlocosDaAgenda(DateOnly de, DateOnly ate)
+    {
+        if (ate < de) (de, ate) = (ate, de);
+        var cursor = de;
+        while (cursor <= ate)
+        {
+            var fim = cursor.AddDays(SpineApiClient.MaxDiasJanela);
+            if (fim > ate) fim = ate;
+            yield return (cursor, fim);
+            cursor = fim.AddDays(1);
+        }
+    }
+
+    /// <summary>Quantos dias o período tem, contando o primeiro e o último.</summary>
+    public static int DiasNoPeriodo(DateOnly de, DateOnly ate) => Math.Abs(ate.DayNumber - de.DayNumber) + 1;
+
     /// <summary>Card de Avaliações (idCategory=1). Atalho para o caso mais comum.</summary>
     public Task<SpineAvaliacoesDto?> GetAsync(
         int unitId, DateOnly de, DateOnly ate, CancellationToken ct = default) =>
@@ -54,6 +86,12 @@ public class SpineAvaliacoesService(
     public async Task<SpineAvaliacoesDto?> GetPorCategoriasAsync(
         int unitId, DateOnly de, DateOnly ate, int[] idCategorias, CancellationToken ct = default)
     {
+        // Teto ANTES do cache e do token: período longo demais nunca vira chamada à franquia.
+        // Quem chama decide o que mostrar (o KPI mostra "—" com o motivo).
+        if (DiasNoPeriodo(de, ate) > MaxDiasAgendaKpi)
+            throw new ArgumentException(
+                $"O painel lê no máximo {MaxDiasAgendaKpi} dias da agenda da franquia por vez.", nameof(ate));
+
         var chaveCat = string.Join("-", idCategorias.OrderBy(x => x));
         var cacheKey = $"spine:cat:{unitId}:{chaveCat}:{de:yyyyMMdd}:{ate:yyyyMMdd}";
         if (_cache.TryGetValue<SpineAvaliacoesDto>(cacheKey, out var hit) && hit is not null)
@@ -62,13 +100,21 @@ public class SpineAvaliacoesService(
         var token = await _tokens.GetTokenAsync(unitId, ct);
         if (token is null) return null;
 
+        // A agenda só aceita 100 dias por consulta. Antes, um período maior (pílula "Ano")
+        // estourava aqui, a exceção virava "franquia indisponível" e o card publicava 0 —
+        // Agendados, Consultas e No-show zerados no ano inteiro. Agora o período é fatiado
+        // em blocos encostados e somado; o dedup por idSchedule continua de guarda (horário
+        // sem data volta em toda fatia e só pode contar uma vez).
         var vistos = new HashSet<long>();
         var rows = new List<SpineSchedule>();
         foreach (var idCat in idCategorias)
         {
-            var parte = await _client.SearchSchedulesAsync(token, de, ate, idCat, ct);
-            foreach (var r in parte)
-                if (vistos.Add(r.IdSchedule)) rows.Add(r);
+            foreach (var (blocoDe, blocoAte) in BlocosDaAgenda(de, ate))
+            {
+                var parte = await _client.SearchSchedulesAsync(token, blocoDe, blocoAte, idCat, ct);
+                foreach (var r in parte)
+                    if (vistos.Add(r.IdSchedule)) rows.Add(r);
+            }
         }
 
         var dto = Montar(de, ate, rows);

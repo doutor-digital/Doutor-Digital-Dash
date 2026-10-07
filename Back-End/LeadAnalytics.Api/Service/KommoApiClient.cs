@@ -510,41 +510,80 @@ public class KommoApiClient
             "message_cashier",          // mensagem do balcão (raro)
         };
 
+    /// <summary>Quantas vezes, no máximo, um GET é feito quando a Kommo responde 429.</summary>
+    internal const int MaxTentativas = 4;
+
+    /// <summary>Teto da espera entre tentativas, mesmo que o Retry-After peça mais.</summary>
+    internal static readonly TimeSpan EsperaMaxima = TimeSpan.FromSeconds(10);
+
     private async Task<T?> GetAsync<T>(string url, string token, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-
-        if (resp.StatusCode == System.Net.HttpStatusCode.NoContent) return default;
-
-        if (!resp.IsSuccessStatusCode)
+        for (var tentativa = 1; ; tentativa++)
         {
-            var body = await resp.Content.ReadAsStringAsync(ct);
-            // Impressão digital do token no 401: todos os tokens gravados respondem 200
-            // quando testados isolados, então o 401 vem de OUTRA credencial chegando aqui.
-            // Sem saber qual, o diagnóstico é adivinhação. Nunca loga o token — só
-            // tamanho e as pontas, que bastam para casar com a linha do banco.
-            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                _logger.LogWarning(
-                    "Kommo API 401 em {Url} — token len={Len} {Ini}…{Fim}: {Body}",
-                    url, token?.Length ?? 0,
-                    token is { Length: > 6 } ? token[..6] : "(vazio)",
-                    token is { Length: > 6 } ? token[^6..] : "",
-                    body);
-            }
-            else
-            {
-                _logger.LogWarning("Kommo API {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
-            }
-            throw new HttpRequestException($"Kommo API retornou {(int)resp.StatusCode}: {body}");
-        }
+            // Mensagem nova a cada volta: HttpRequestMessage não pode ser reenviada.
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOpts, ct);
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NoContent) return default;
+
+            // 429 = passou do limite de requisições da conta (7/s). É passageiro: espera o que a
+            // Kommo pedir (Retry-After) ou 1 s, 2 s, 4 s, e tenta de novo. O 401 NÃO entra aqui:
+            // sem cookie (ver KommoHttp) ele é token inválido de verdade, e repetir não conserta.
+            if (resp.StatusCode == System.Net.HttpStatusCode.TooManyRequests && tentativa < MaxTentativas)
+            {
+                var espera = EsperaAntesDeTentarDeNovo(resp, tentativa);
+                _logger.LogWarning(
+                    "Kommo API 429 em {Url} — tentativa {Tentativa}/{Max}, esperando {Ms} ms",
+                    url, tentativa, MaxTentativas, (int)espera.TotalMilliseconds);
+                await Task.Delay(espera, ct);
+                continue;
+            }
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                // Impressão digital do token no 401 (nunca o token — só tamanho e as pontas, que
+                // bastam para casar com a linha do banco). Até 07/10/2026 o 401 com token bom era
+                // o cookie session_id de OUTRA conta indo junto; o handler agora não guarda cookie
+                // (KommoHttp). Se voltar a aparecer, compare a digital com units.KommoAccessToken.
+                if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning(
+                        "Kommo API 401 em {Url} — token len={Len} {Ini}…{Fim}: {Body}",
+                        url, token?.Length ?? 0,
+                        token is { Length: > 6 } ? token[..6] : "(vazio)",
+                        token is { Length: > 6 } ? token[^6..] : "",
+                        body);
+                }
+                else
+                {
+                    _logger.LogWarning("Kommo API {Status} em {Url}: {Body}", (int)resp.StatusCode, url, body);
+                }
+                throw new HttpRequestException(
+                    $"Kommo API retornou {(int)resp.StatusCode}: {body}", null, resp.StatusCode);
+            }
+
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            return await JsonSerializer.DeserializeAsync<T>(stream, JsonOpts, ct);
+        }
+    }
+
+    /// <summary>
+    /// Quanto esperar antes de repetir um GET que levou 429: o Retry-After da Kommo quando vier
+    /// (em segundos ou data), senão 1 s, 2 s, 4 s… Sempre entre zero e <see cref="EsperaMaxima"/>.
+    /// </summary>
+    internal static TimeSpan EsperaAntesDeTentarDeNovo(HttpResponseMessage resp, int tentativa)
+    {
+        var retryAfter = resp.Headers.RetryAfter;
+        TimeSpan? pedido = retryAfter?.Delta
+            ?? (retryAfter?.Date is DateTimeOffset quando ? quando - DateTimeOffset.UtcNow : null);
+
+        var espera = pedido ?? TimeSpan.FromSeconds(Math.Pow(2, Math.Max(0, tentativa - 1)));
+        if (espera < TimeSpan.Zero) return TimeSpan.Zero;
+        return espera > EsperaMaxima ? EsperaMaxima : espera;
     }
 }
 

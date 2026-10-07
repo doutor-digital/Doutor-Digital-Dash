@@ -112,7 +112,7 @@ public class CloudiaKommoPatchService(
         // Busca enums das selects necessárias (1x — cache por field_id)
         var enums = await BuildEnumMapsAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, stoppingToken);
 
-        var http = _httpFactory.CreateClient("kommo");
+        var http = _httpFactory.CreateClient(KommoHttp.ClienteNomeado);
         http.BaseAddress = new Uri($"https://{unit.KommoSubdomain}.kommo.com");
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", unit.KommoAccessToken);
 
@@ -291,7 +291,7 @@ public class CloudiaKommoPatchService(
     private async Task<Dictionary<long, Dictionary<string, long>>> BuildEnumMapsAsync(
         string subdomain, string token, CancellationToken ct)
     {
-        var http = _httpFactory.CreateClient("kommo");
+        var http = _httpFactory.CreateClient(KommoHttp.ClienteNomeado);
         http.BaseAddress = new Uri($"https://{subdomain}.kommo.com");
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 

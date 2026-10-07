@@ -59,4 +59,19 @@ public class ReceitaFranquiaPrimeiroTests
     [Fact]
     public void Estorno_negativo_da_franquia_conta_como_valor()
         => Assert.Equal(-3680m, Soma((1, -3680m, 3680m)).Total);
+
+    [Fact]
+    public void Nota_do_card_diz_quantos_tratamentos_e_quantos_sem_valor()
+    {
+        // 3 pacientes: um com preço na franquia, um só com valor no cartão, um sem valor nos dois lados
+        var r = Soma((1, 3680m, null), (2, 0m, 4200m), (3, 0m, null));
+        Assert.Equal("3 tratamentos · 1 sem valor", KpiConfigService.NotaDaReceita(r));
+    }
+
+    [Fact]
+    public void Nota_do_card_quando_tudo_tem_valor()
+    {
+        Assert.Equal("2 tratamentos · todos com valor", KpiConfigService.NotaDaReceita(Soma((1, 3680m, null), (2, 0m, 4200m))));
+        Assert.Equal("1 tratamento · todos com valor", KpiConfigService.NotaDaReceita(Soma((1, 3680m, null))));
+    }
 }

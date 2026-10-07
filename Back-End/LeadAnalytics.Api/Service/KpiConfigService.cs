@@ -464,6 +464,16 @@ public class KpiConfigService(
     private readonly record struct FranquiaMedida(double? Valor, string Nota);
 
     /// <summary>
+    /// Valor de UM tratamento na receita: o preço que a clínica lançou na franquia; se veio
+    /// R$ 0 (a recepção não lançou), o ¤ Valor do tratamento que a SDR digitou no cartão.
+    /// Regra única da rede desde 07/10/2026 (decisão do João).
+    /// </summary>
+    internal static decimal ValorDoTratamento(decimal? precoFranquia, decimal? valorKommo)
+        => precoFranquia is > 0m ? precoFranquia.Value
+         : valorKommo is > 0m ? valorKommo.Value
+         : 0m;
+
+    /// <summary>
     /// Resolve uma métrica da franquia para uma unidade. Assume a métrica já validada
     /// contra <see cref="KpiSourceTypes.MetricasFranquia"/> pelo chamador.
     /// </summary>
@@ -479,11 +489,18 @@ public class KpiConfigService(
                 // clínica lançou no período. Sem o vínculo, a Kommo somava quem entrou em
                 // EM TRATAMENTO por qualquer motivo: em Araguaína, 30 leads e R$ 107.360
                 // contra os 22 tratamentos reais e R$ 77.280.
-                var vinculos = await _db.FranquiaLeadLinks.AsNoTracking()
+                //
+                // 07/10/2026 (João): FRANQUIA PRIMEIRO, KOMMO SE FALTAR, igual em todas as
+                // unidades. Vale o preço que a recepção lançou no tratamento da franquia; se
+                // ele veio R$ 0, vale o ¤ Valor do tratamento do cartão. Antes valia só a
+                // Kommo e a Imperatriz mostrava R$ 0 com 12 tratamentos em setembro.
+                var vinculos = (await _db.FranquiaLeadLinks.AsNoTracking()
                     .Where(v => v.UnitId == unitId
                                 && v.DiaLancamento >= de && v.DiaLancamento <= ate)
-                    .Select(v => v.ValorKommo)
-                    .ToListAsync(ct);
+                    .Select(v => new { v.PrecoFranquia, v.ValorKommo })
+                    .ToListAsync(ct))
+                    .Select(v => ValorDoTratamento(v.PrecoFranquia, v.ValorKommo))
+                    .ToList();
 
                 if (vinculos.Count == 0)
                 {
@@ -513,14 +530,17 @@ public class KpiConfigService(
 
                 // O denominador do ticket é quantos tratamentos TÊM valor — dividir pelo
                 // total incluiria os que a Kommo deixou em branco e derrubaria a média.
+                var comValor = vinculos.Count(v => v > 0m);
                 if (metric == "receita_qtd")
-                    return new FranquiaMedida(
-                        vinculos.Count(v => v is > 0m),
-                        "tratamentos da franquia com valor na Kommo");
+                    return new FranquiaMedida(comValor, "tratamentos da franquia com valor (franquia ou Kommo)");
 
+                // O card confessa o buraco: "N tratamentos, X sem valor" — número que diz a
+                // própria cobertura é número em que se pode confiar.
+                var semValor = vinculos.Count - comValor;
                 return new FranquiaMedida(
-                    (double)vinculos.Sum(v => v ?? 0m),
-                    $"fonte: Kommo · valor dos {vinculos.Count} tratamentos da franquia");
+                    (double)vinculos.Sum(),
+                    $"fonte: franquia (Kommo onde a clínica não lançou) · {vinculos.Count} tratamentos" +
+                    (semValor > 0 ? $", {semValor} sem valor" : ""));
             }
 
             if (metric == "tratamentos")

@@ -271,6 +271,9 @@ builder.Services.AddScoped<LeadAnalytics.Api.Service.MoverParaTratamentoService>
 builder.Services.AddScoped<LeadAnalytics.Api.Service.PendenciasDeTratamentoService>();
 builder.Services.AddScoped<KommoAdapter>();
 builder.Services.AddScoped<LeadAnalytics.Api.Service.Stages.KommoStageProcessor>();
+// Conta da Kommo dividida entre unidades (Petrópolis + Caxias): decide a unidade de cada
+// cartão pelo campo de divisão. Sem a linha kommo:divisao:{sub} em AppConfigurations, nada muda.
+builder.Services.AddScoped<DivisaoDaContaService>();
 builder.Services.AddScoped<KommoIngestionService>();
 builder.Services.AddScoped<KommoSyncService>();
 builder.Services.AddScoped<KommoStageHistoryBackfillService>();

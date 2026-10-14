@@ -239,6 +239,10 @@ public class KommoSyncService
                 Phone = phone,
                 Email = email,
                 CustomFieldsJson = SerializeCustomFields(lead.CustomFieldsValues, enumLabelByFieldEnum),
+                // Lista lida de verdade (não o null do bug da paginação): campo ausente aqui
+                // é campo vazio no Kommo. A divisão da conta usa isso para mandar o cartão
+                // cujo campo de unidade foi apagado para "sem unidade definida".
+                CamposCompletos = lead.CustomFieldsValues is not null,
                 TagsJson = SerializeTags(lead.Embedded?.Tags),
                 // Data REAL da criação na Kommo (unix → UTC). Sobrescreve o
                 // CreatedAt do nosso banco que estava virando 'data do 1º sync'.

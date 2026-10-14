@@ -16,8 +16,10 @@ namespace LeadAnalytics.Api.Service;
 public partial class KommoDedupService(
     AppDbContext db,
     KommoApiClient kommo,
-    ILogger<KommoDedupService> logger)
+    ILogger<KommoDedupService> logger,
+    DivisaoDaContaService divisao)
 {
+    private readonly DivisaoDaContaService _divisao = divisao;
     private readonly AppDbContext _db = db;
     private readonly KommoApiClient _kommo = kommo;
     private readonly ILogger<KommoDedupService> _logger = logger;
@@ -35,6 +37,15 @@ public partial class KommoDedupService(
             throw new InvalidOperationException("Unidade não encontrada.");
         if (string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
             throw new InvalidOperationException("Unidade sem KommoSubdomain/KommoAccessToken configurados.");
+
+        // Conta dividida entre unidades (Petrópolis + Caxias): o dedup lê a conta INTEIRA e
+        // compara por telefone/nome. O mesmo paciente com um cartão em cada unidade é legítimo,
+        // e a tag DUPLICADO cairia num cartão real. Aqui ele não roda.
+        if (await _divisao.DaUnidadeAsync(unit, ct) is { } dividida)
+            throw new InvalidOperationException(
+                $"A conta Kommo '{dividida.Subdominio}' é dividida entre unidades pelo campo " +
+                $"{dividida.NomeDoCampo}. O dedup da conta inteira marcaria paciente de uma unidade " +
+                "como duplicado da outra — não roda nesta conta.");
 
         var sub = unit.KommoSubdomain!;
         var token = unit.KommoAccessToken!;

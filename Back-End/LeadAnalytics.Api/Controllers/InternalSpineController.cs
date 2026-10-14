@@ -33,8 +33,10 @@ public class InternalSpineController(
     PendenciasDeTratamentoService pendencias,
     ConsultaSituacaoSyncService consultaSync,
     InternalApiKeyGuard guard,
+    DivisaoDaContaService divisaoDaConta,
     ILogger<InternalSpineController> logger) : ControllerBase
 {
+    private readonly DivisaoDaContaService _divisaoDaConta = divisaoDaConta;
     private readonly AppDbContext _db = db;
     private readonly SpineAvaliacoesService _avaliacoes = avaliacoes;
     private readonly SpineHistoricoService _historico = historico;
@@ -172,6 +174,21 @@ public class InternalSpineController(
         var linhas = new List<LinhaReconciliacao>();
         string? erroKommo = null;
 
+        // Conta da Kommo dividida entre unidades (Petrópolis + Caxias): a busca por telefone
+        // varre a conta inteira, então só vale o cartão marcado com ESTA unidade. Divisão mal
+        // configurada = não vincula nada (a franquia segue aparecendo; o valor da Kommo, não).
+        DivisaoDaConta? divisao = null;
+        var divisaoInvalida = false;
+        if (unidade is not null)
+        {
+            try { divisao = await _divisaoDaConta.DaUnidadeAsync(unidade, ct); }
+            catch (InvalidOperationException ex)
+            {
+                divisaoInvalida = true;
+                erroKommo = ex.Message;
+            }
+        }
+
         foreach (var t in trats)
         {
             var ficha = await _api.GetClientAsync(token, t.IdClient, ct);
@@ -180,7 +197,7 @@ public class InternalSpineController(
 
             string? leadNome = null, valorKommo = null;
             long? leadId = null;
-            if (ult8.Length >= 8 && unidade is not null
+            if (ult8.Length >= 8 && unidade is not null && !divisaoInvalida
                 && !string.IsNullOrWhiteSpace(unidade.KommoSubdomain)
                 && !string.IsNullOrWhiteSpace(unidade.KommoAccessToken))
             {
@@ -207,7 +224,8 @@ public class InternalSpineController(
                         achados = await _kommo.SearchLeadsAsync(
                             unidade.KommoSubdomain, unidade.KommoAccessToken, ult8, ct);
                     }
-                    var lead = achados?.Embedded?.Leads?.FirstOrDefault();
+                    var lead = DivisaoDaContaService.EscolherCartaoDaUnidade(
+                        achados?.Embedded?.Leads, divisao, unidade);
                     if (lead is not null)
                     {
                         leadId = lead.Id;

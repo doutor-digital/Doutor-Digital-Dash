@@ -17,22 +17,54 @@ namespace LeadAnalytics.Api.Service;
 public class ScheduledSyncService(
     AppDbContext db,
     KommoSyncService kommoSync,
-    AdsSpendSyncService adsSync)
+    AdsSpendSyncService adsSync,
+    DivisaoDaContaService divisao,
+    ILogger<ScheduledSyncService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly KommoSyncService _kommoSync = kommoSync;
     private readonly AdsSpendSyncService _adsSync = adsSync;
+    private readonly DivisaoDaContaService _divisao = divisao;
+    private readonly ILogger<ScheduledSyncService> _logger = logger;
 
     // ---- Kommo ----
 
     /// <summary>Unidades ativas com token + subdomínio Kommo configurados.</summary>
+    /// <remarks>
+    /// Conta dividida entre unidades (ex.: Petrópolis + Caxias no mesmo Kommo) entra UMA
+    /// vez, pela unidade dona: o sync dela lê a conta inteira e reparte cartão a cartão.
+    /// Sincronizar também pelas irmãs leria a mesma conta de novo, em paralelo com a
+    /// repartição da dona — trabalho dobrado e corrida na troca de unidade.
+    /// </remarks>
     public async Task<List<KommoSyncUnitDto>> ListActiveKommoUnitsAsync(CancellationToken ct)
-        => await _db.Units.AsNoTracking()
+    {
+        var candidatas = await _db.Units.AsNoTracking()
             .Where(u => u.IsActive
                         && u.KommoAccessToken != null && u.KommoAccessToken != ""
                         && u.KommoSubdomain != null && u.KommoSubdomain != "")
-            .Select(u => new KommoSyncUnitDto { UnitId = u.Id, Name = u.Name })
+            .Select(u => new { u.Id, u.Name, u.KommoSubdomain })
             .ToListAsync(ct);
+
+        var lista = new List<KommoSyncUnitDto>(candidatas.Count);
+        foreach (var u in candidatas)
+        {
+            DivisaoDaConta? divisao;
+            try
+            {
+                divisao = await _divisao.ObterAsync(u.KommoSubdomain!, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Falha fechada: divisão mal configurada não sincroniza (senão gravaria a
+                // conta inteira numa unidade só). O erro já foi logado pelo serviço.
+                _logger.LogWarning("Sync Kommo: unidade {Unit} fora da lista — {Erro}", u.Id, ex.Message);
+                continue;
+            }
+            if (divisao is not null && divisao.Dona.Id != u.Id) continue;
+            lista.Add(new KommoSyncUnitDto { UnitId = u.Id, Name = u.Name });
+        }
+        return lista;
+    }
 
     /// <summary>
     /// Sincroniza uma única unidade. <paramref name="maxLeads"/> controla a

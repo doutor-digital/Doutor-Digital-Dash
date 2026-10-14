@@ -39,17 +39,20 @@ public class KommoConversationsImporter
     private readonly AppDbContext _db;
     private readonly IMemoryCache _cache;
     private readonly ILogger<KommoConversationsImporter> _logger;
+    private readonly DivisaoDaContaService _divisao;
 
     public KommoConversationsImporter(
         KommoApiClient api,
         AppDbContext db,
         IMemoryCache cache,
-        ILogger<KommoConversationsImporter> logger)
+        ILogger<KommoConversationsImporter> logger,
+        DivisaoDaContaService divisao)
     {
         _api = api;
         _db = db;
         _cache = cache;
         _logger = logger;
+        _divisao = divisao;
     }
 
     public async Task<IReadOnlyList<MessageEventDto>> ImportAsync(
@@ -182,6 +185,15 @@ public class KommoConversationsImporter
         {
             _logger.LogWarning(ex, "[kommo-importer] falha em Notes (unit={Unit}) — segue sem", unit.Id);
         }
+
+        // Conta dividida (ex.: Petrópolis + Caxias no mesmo Kommo): os talks e notes vêm da
+        // conta inteira. Fica só o que é de cartão DESTA unidade — senão cada uma mostraria
+        // as conversas da outra. Conversa sem cartão nosso (contato solto) fica de fora.
+        DivisaoDaConta? divisao = null;
+        try { divisao = await _divisao.DaUnidadeAsync(unit, ct); }
+        catch (InvalidOperationException) { events.Clear(); }
+        if (divisao is not null)
+            events.RemoveAll(e => !campaignByExternalId.ContainsKey(e.LeadId));
 
         _cache.Set(cacheKey, (IReadOnlyList<MessageEventDto>)events, CacheTtl);
         return events;

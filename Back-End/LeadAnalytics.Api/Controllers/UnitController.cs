@@ -296,10 +296,11 @@ public class UnitController(
         {
             divisao = await _divisaoDaConta.DaUnidadeAsync(unit, ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            // Falha fechada também na tela: o aviso diz que a entrada de dados parou.
-            return Ok(new { dividida = true, configuracaoInvalida = true, erro = ex.Message });
+            // Falha fechada também na tela: o aviso diz que a entrada de dados parou. O
+            // detalhe (slugs, conta) fica no log do servidor — a tela é vista pela unidade.
+            return Ok(new { dividida = true, configuracaoInvalida = true });
         }
         if (divisao is null || !divisao.Contem(unit.Id))
             return Ok(new { dividida = false });

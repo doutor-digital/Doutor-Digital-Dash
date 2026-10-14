@@ -297,6 +297,82 @@ public class DivisaoDaContaTests
     }
 
     [Fact]
+    public async Task Lote_com_o_campo_so_no_segundo_evento_nao_cria_duas_linhas()
+    {
+        // Achado da revisão: "add sem o campo" + "update com Caxias" no mesmo webhook. Decidir
+        // evento a evento mandava o add para "sem unidade" e o update para Caxias — duas
+        // linhas vivas do mesmo cartão.
+        await using var db = await BancoComDivisao();
+        var ing = Ingestao(db);
+        var petropolis = await db.Units.FirstAsync(u => u.Id == 40);
+
+        await ing.IngestAsync([DoWebhook(11, null, "add"), DoWebhook(11, "Caxias")], petropolis);
+
+        // Cartão que já existia em Petrópolis: update sem o campo + update com Caxias.
+        await ing.IngestAsync([DoSync(12, EnumPetropolis, "Petrópolis")], petropolis);
+        await ing.IngestAsync([DoWebhook(12, null), DoWebhook(12, "Caxias")], petropolis);
+
+        db.ChangeTracker.Clear();
+        foreach (var id in new[] { 11, 12 })
+        {
+            var linhas = await db.Leads.Where(l => l.ExternalId == id).ToListAsync();
+            Assert.Single(linhas);
+            Assert.Equal(8044, linhas[0].TenantId);
+        }
+    }
+
+    [Fact]
+    public async Task Copia_excluida_no_destino_nao_engole_a_linha_viva()
+    {
+        // Achado da revisão: a cópia "deleted" no destino era escolhida como principal e a
+        // viva virava deleted — o cartão sumia das três unidades.
+        await using var db = await BancoComDivisao();
+        db.Leads.AddRange(
+            new Lead { ExternalId = 13, TenantId = 8044, UnitId = 41, Name = "x", Phone = "", Status = "deleted",
+                       CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow.AddDays(-1) },
+            new Lead { ExternalId = 13, TenantId = 8043, UnitId = 40, Name = "x", Phone = "",
+                       CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+        var vivaId = (await db.Leads.SingleAsync(l => l.ExternalId == 13 && l.TenantId == 8043)).Id;
+
+        await Ingestao(db).IngestAsync([DoWebhook(13, "Caxias")], await db.Units.FirstAsync(u => u.Id == 40));
+
+        db.ChangeTracker.Clear();
+        var linhas = await db.Leads.Where(l => l.ExternalId == 13).ToListAsync();
+        var unica = Assert.Single(linhas);
+        Assert.Equal(vivaId, unica.Id);              // a viva foi movida, com o histórico dela
+        Assert.Equal(8044, unica.TenantId);
+        Assert.NotEqual("deleted", unica.Status);
+    }
+
+    [Fact]
+    public async Task Conversa_da_IA_fica_no_tenant_do_agente_quando_o_cartao_muda()
+    {
+        await using var db = await BancoComDivisao();
+        var ing = Ingestao(db);
+        var petropolis = await db.Units.FirstAsync(u => u.Id == 40);
+        await ing.IngestAsync([DoSync(14, EnumPetropolis, "Petrópolis")], petropolis);
+        var lead = await db.Leads.SingleAsync(l => l.ExternalId == 14);
+        db.AgentConversations.Add(new AgentConversation { TenantId = 8043, UnitId = 40, LeadId = lead.Id, ExternalId = "conv-14" });
+        await db.SaveChangesAsync();
+
+        await ing.IngestAsync([DoWebhook(14, "Caxias")], petropolis);
+
+        db.ChangeTracker.Clear();
+        Assert.Equal(8044, (await db.Leads.SingleAsync(l => l.ExternalId == 14)).TenantId);
+        Assert.Equal(8043, (await db.AgentConversations.SingleAsync()).TenantId);
+    }
+
+    [Theory]
+    [InlineData("doutorhernialvp")]
+    [InlineData("DoutorHerniaLVP.kommo.com")]
+    [InlineData("https://doutorhernialvp.kommo.com/")]
+    public void Subdominio_gravado_como_host_cai_na_mesma_divisao(string gravado)
+    {
+        Assert.Equal("kommo:divisao:doutorhernialvp", DivisaoDaContaService.ChaveDe(gravado));
+    }
+
+    [Fact]
     public async Task Conta_de_uma_unidade_so_continua_igual()
     {
         await using var db = await BancoComDivisao();

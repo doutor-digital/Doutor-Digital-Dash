@@ -101,7 +101,21 @@ public class DivisaoDaContaService(
     public const string PrefixoDaChave = "kommo:divisao:";
     private static readonly TimeSpan Validade = TimeSpan.FromMinutes(2);
 
-    public static string ChaveDe(string subdominio) => PrefixoDaChave + subdominio.Trim().ToLowerInvariant();
+    public static string ChaveDe(string subdominio) => PrefixoDaChave + Subdominio(subdominio);
+
+    /// <summary>
+    /// "doutorhernialvp", "doutorhernialvp.kommo.com" e "https://doutorhernialvp.kommo.com/"
+    /// são a mesma conta. Sem isto, uma unidade com o host gravado no lugar do subdomínio
+    /// escaparia da divisão calada.
+    /// </summary>
+    public static string Subdominio(string? valor)
+    {
+        var s = (valor ?? string.Empty).Trim().ToLowerInvariant();
+        var esquema = s.IndexOf("://", StringComparison.Ordinal);
+        if (esquema >= 0) s = s[(esquema + 3)..];
+        var ponto = s.IndexOfAny(['.', '/']);
+        return ponto > 0 ? s[..ponto] : s;
+    }
 
     /// <summary>A divisão da conta desta unidade, ou null se a conta é de uma unidade só.</summary>
     public Task<DivisaoDaConta?> DaUnidadeAsync(Unit unit, CancellationToken ct = default)
@@ -126,7 +140,7 @@ public class DivisaoDaContaService(
 
         DivisaoDaConta? divisao = null;
         if (!string.IsNullOrWhiteSpace(linha))
-            divisao = await MontarAsync(subdominio.Trim().ToLowerInvariant(), linha!, ct);
+            divisao = await MontarAsync(Subdominio(subdominio), linha!, ct);
 
         _cache.Set(chave, divisao, Validade);
         return divisao;
@@ -202,7 +216,7 @@ public class DivisaoDaContaService(
             throw Invalida(subdominio, "duas unidades com o mesmo ClinicId");
         var outraConta = opcoes.Select(o => o.Unidade).Append(semUnidade)
             .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u.KommoSubdomain)
-                && !string.Equals(u.KommoSubdomain!.Trim(), subdominio, StringComparison.OrdinalIgnoreCase));
+                && Subdominio(u.KommoSubdomain) != subdominio);
         if (outraConta is not null)
             throw Invalida(subdominio, $"a unidade '{outraConta.Slug}' é de outra conta Kommo ({outraConta.KommoSubdomain})");
 
@@ -360,6 +374,13 @@ public class DivisaoDaContaService(
     /// já move a linha do lead (e as filhas com tenant) antes da ingestão. Eventos que não
     /// são de lead ficam com a <paramref name="recebedora"/> (a ingestão só os registra).
     /// </summary>
+    /// <remarks>
+    /// DUAS PASSADAS, de propósito. A 1ª só decide: percorre os eventos na ordem e guarda,
+    /// por lead, o destino FINAL do lote. A 2ª acomoda a linha uma vez nesse destino e manda
+    /// TODOS os eventos daquele lead para lá. Decidir evento a evento e mover no meio criava
+    /// duas linhas vivas num lote como "add sem o campo" + "update com Caxias": o add ia para
+    /// "sem unidade", a linha já tinha ido para Caxias, e a ingestão do add criava outra.
+    /// </remarks>
     public async Task<List<(Unit Unidade, List<LeadEvent> Eventos)>> RepartirAsync(
         DivisaoDaConta d, Unit recebedora, IReadOnlyList<LeadEvent> eventos, CancellationToken ct = default)
     {
@@ -379,69 +400,97 @@ public class DivisaoDaContaService(
                 .ToListAsync(ct);
         var porId = existentes.GroupBy(l => l.ExternalId).ToDictionary(g => g.Key, g => g.ToList());
 
-        var decididoNoLote = new Dictionary<int, Unit>();
+        // ── 1ª passada: o destino final de cada lead no lote ──
+        var destinoFinal = new Dictionary<int, Unit>();
+        var motivoFinal = new Dictionary<int, string>();
+        foreach (var ev in eventos)
+        {
+            if (!EhLead(ev, out var extId)) continue;
+
+            porId.TryGetValue(extId, out var linhas);
+            var principal = Principal(linhas);
+            var ondeEsta = principal is null ? null : d.UnidadeDoTenant(principal.TenantId);
+            destinoFinal.TryGetValue(extId, out var anterior);
+
+            var rota = Decidir(d, ev.CustomFieldsJson, ev.CamposCompletos, ondeEsta, anterior,
+                string.Equals(ev.Action, "delete", StringComparison.OrdinalIgnoreCase));
+            if (rota.Destino is null) continue;   // exclusão de cartão que nunca entrou: nada a fazer
+            destinoFinal[extId] = rota.Destino;
+            motivoFinal[extId] = rota.Motivo;
+        }
+
+        // ── 2ª passada: acomoda cada lead UMA vez e reparte os eventos ──
+        var moveu = false;
+        foreach (var (extId, destino) in destinoFinal)
+            if (porId.TryGetValue(extId, out var linhas) && linhas.Count > 0)
+                moveu |= await AcomodarAsync(d, extId, linhas, destino, motivoFinal[extId], ct);
+        if (moveu) await _db.SaveChangesAsync(ct);
+
         var partes = new Dictionary<int, (Unit Unidade, List<LeadEvent> Eventos)>();
         void Por(Unit u, LeadEvent ev)
         {
             if (!partes.TryGetValue(u.Id, out var p)) partes[u.Id] = p = (u, new List<LeadEvent>());
             p.Eventos.Add(ev);
         }
-
-        var moveu = false;
         foreach (var ev in eventos)
         {
-            if (!string.Equals(ev.EntityType, "lead", StringComparison.OrdinalIgnoreCase)
-                || !int.TryParse(ev.ExternalId, out var extId) || extId <= 0)
-            {
-                Por(recebedora, ev);
-                continue;
-            }
-
-            porId.TryGetValue(extId, out var linhas);
-            var principal = linhas?
-                .Where(l => l.Status != LeadQueryExtensions.StatusDeleted)
-                .OrderByDescending(l => l.UpdatedAt).FirstOrDefault()
-                ?? linhas?.OrderByDescending(l => l.UpdatedAt).FirstOrDefault();
-            var ondeEsta = principal is null ? null : d.UnidadeDoTenant(principal.TenantId);
-            decididoNoLote.TryGetValue(extId, out var anterior);
-
-            var rota = Decidir(d, ev.CustomFieldsJson, ev.CamposCompletos, ondeEsta, anterior,
-                string.Equals(ev.Action, "delete", StringComparison.OrdinalIgnoreCase));
-
-            if (rota.Destino is null)
-            {
-                _logger.LogInformation("↪️ Divisão {Sub}: lead {Id} ignorado ({Motivo})", d.Subdominio, extId, rota.Motivo);
-                continue;
-            }
-
-            if (linhas is { Count: > 0 })
-                moveu |= await AcomodarAsync(d, extId, linhas, rota.Destino, rota.Motivo, ct);
-
-            decididoNoLote[extId] = rota.Destino;
-            Por(rota.Destino, ev);
+            if (!EhLead(ev, out var extId)) { Por(recebedora, ev); continue; }
+            if (destinoFinal.TryGetValue(extId, out var destino)) Por(destino, ev);
+            else _logger.LogInformation("↪️ Divisão {Sub}: evento {Acao} do lead {Id} ignorado (exclusão de cartão que não está no painel)",
+                d.Subdominio, ev.Action, extId);
         }
-
-        if (moveu) await _db.SaveChangesAsync(ct);
         return partes.Values.ToList();
     }
 
+    private static bool EhLead(LeadEvent ev, out int extId)
+    {
+        extId = 0;
+        return string.Equals(ev.EntityType, "lead", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(ev.ExternalId, out extId) && extId > 0;
+    }
+
+    /// <summary>A linha que representa o cartão: a viva mais recente; sem viva, a mais recente.</summary>
+    private static Lead? Principal(List<Lead>? linhas) =>
+        linhas?.Where(l => l.Status != LeadQueryExtensions.StatusDeleted)
+               .OrderByDescending(l => l.UpdatedAt).FirstOrDefault()
+        ?? linhas?.OrderByDescending(l => l.UpdatedAt).FirstOrDefault();
+
     /// <summary>
-    /// Deixa UMA linha viva do lead, no tenant do destino. Se ela já está lá, as cópias em
-    /// outras unidades da conta (só existem se algo gravou antes da divisão) viram
-    /// "deleted" — somadas, contariam o mesmo cartão duas vezes.
+    /// Deixa UMA linha viva do lead, no tenant do destino.
+    /// <list type="bullet">
+    /// <item>Já tem linha VIVA no destino: ela fica; cópias vivas em outras unidades da conta
+    /// viram "deleted" (somadas, contariam o mesmo cartão duas vezes).</item>
+    /// <item>A viva está em outra unidade: ela é movida. Se no destino houver uma cópia
+    /// MORTA (deleted) do mesmo cartão, ela é removida antes — senão o índice único
+    /// (ExternalId, TenantId) barra a mudança, e reviver a morta deixaria o histórico na viva.</item>
+    /// <item>Nenhuma viva (cartão excluído no Kommo): move a mais recente, como estiver.</item>
+    /// </list>
     /// </summary>
     private async Task<bool> AcomodarAsync(
         DivisaoDaConta d, int extId, List<Lead> linhas, Unit destino, string motivo, CancellationToken ct)
     {
         var mudou = false;
-        var noDestino = linhas.FirstOrDefault(l => l.TenantId == destino.ClinicId);
-        var principal = noDestino
-            ?? linhas.Where(l => l.Status != LeadQueryExtensions.StatusDeleted)
-                     .OrderByDescending(l => l.UpdatedAt).FirstOrDefault()
+        var vivas = linhas.Where(l => l.Status != LeadQueryExtensions.StatusDeleted).ToList();
+        var vivaNoDestino = vivas.FirstOrDefault(l => l.TenantId == destino.ClinicId);
+        var principal = vivaNoDestino
+            ?? vivas.OrderByDescending(l => l.UpdatedAt).FirstOrDefault()
+            ?? linhas.FirstOrDefault(l => l.TenantId == destino.ClinicId)
             ?? linhas.OrderByDescending(l => l.UpdatedAt).First();
 
         if (principal.TenantId != destino.ClinicId)
         {
+            var mortaNoDestino = linhas.FirstOrDefault(l => l.TenantId == destino.ClinicId);
+            if (mortaNoDestino is not null)
+            {
+                _logger.LogWarning(
+                    "⚠️ Divisão {Sub}: lead {Id} tinha cópia excluída em {Destino} — removida para a linha viva entrar",
+                    d.Subdominio, extId, destino.Slug);
+                _db.Leads.Remove(mortaNoDestino);
+                linhas.Remove(mortaNoDestino);
+                // O DELETE tem de chegar ao banco ANTES do UPDATE que reusa a chave única.
+                await _db.SaveChangesAsync(ct);
+            }
+
             var de = d.UnidadeDoTenant(principal.TenantId);
             _logger.LogInformation(
                 "🔀 Divisão {Sub}: lead {Id} muda de unidade {De} → {Para} ({Motivo})",
@@ -454,14 +503,14 @@ public class DivisaoDaContaService(
                                                && l.Status != LeadQueryExtensions.StatusDeleted))
         {
             _logger.LogWarning(
-                "⚠️ Divisão {Sub}: lead {Id} tinha cópia no tenant {Tenant} — marcada como deleted (fica a de {Destino})",
+                "⚠️ Divisão {Sub}: lead {Id} tinha cópia viva no tenant {Tenant} — marcada como deleted (fica a de {Destino})",
                 d.Subdominio, extId, sobra.TenantId, destino.Slug);
             sobra.Status = LeadQueryExtensions.StatusDeleted;
             sobra.UpdatedAt = DateTime.UtcNow;
             mudou = true;
         }
 
-        if (principal.TenantId == destino.ClinicId && principal.UnitId != destino.Id)
+        if (principal.UnitId != destino.Id)
         {
             principal.UnitId = destino.Id;
             mudou = true;
@@ -473,6 +522,10 @@ public class DivisaoDaContaService(
     /// Troca o tenant do lead e de tudo que é dele e carrega o tenant. Sem as filhas, a
     /// consulta/pagamento/tentativa de resgate ficariam contando na unidade antiga.
     /// O responsável (Attendant) é por unidade e é refeito pela ingestão logo em seguida.
+    ///
+    /// NÃO move <c>agent_conversations</c>: a conversa da IA é gravada pelo webhook do
+    /// agente no tenant da unidade do AGENTE e é procurada lá. Movida, a próxima mensagem
+    /// abriria outra conversa — e voltar o cartão violaria o índice único da conversa.
     /// </summary>
     private async Task MoverAsync(Lead lead, Unit destino, CancellationToken ct)
     {
@@ -490,6 +543,5 @@ public class DivisaoDaContaService(
         foreach (var x in await _db.LeadPaymentReceipts.Where(x => x.LeadId == lead.Id).ToListAsync(ct)) x.TenantId = t;
         foreach (var x in await _db.LeadAttributions.Where(x => x.LeadId == lead.Id).ToListAsync(ct)) x.TenantId = t;
         foreach (var x in await _db.KpiExclusions.Where(x => x.LeadId == lead.Id).ToListAsync(ct)) { x.TenantId = t; x.UnitId = u; }
-        foreach (var x in await _db.AgentConversations.Where(x => x.LeadId == lead.Id).ToListAsync(ct)) { x.TenantId = t; x.UnitId = u; }
     }
 }

@@ -51,14 +51,37 @@ public class KommoIngestionService(
         if (divisao is null)
             return await IngestNaUnidadeAsync(events, unit, ct, stageMapOverride, recordStageHistory);
 
-        // O mapa de etapas é da CONTA (mesmos funis para todas as unidades dela), então o
-        // que a unidade que recebeu resolveu vale para as irmãs.
-        var partes = await _divisao.RepartirAsync(divisao, unit, events, ct);
+        // Uma conta dividida por vez: sem a trava, o webhook (campos parciais) e o sync
+        // (campos completos) podiam criar o MESMO cartão novo em duas unidades ao mesmo
+        // tempo — o índice único (ExternalId, TenantId) não pega, porque os tenants são
+        // diferentes. Lotes pequenos para o webhook nunca esperar um sync inteiro (a Kommo
+        // quer resposta em 2 s). A trava é do processo: a API roda com 1 réplica; com mais
+        // réplicas, trocar por advisory lock do Postgres.
+        var trava = TravasDaConta.GetOrAdd(divisao.Subdominio, _ => new SemaphoreSlim(1, 1));
         var total = 0;
-        foreach (var (destino, eventos) in partes)
-            total += await IngestNaUnidadeAsync(eventos, destino, ct, stageMapOverride, recordStageHistory);
+        foreach (var lote in events.Chunk(LoteDaContaDividida))
+        {
+            await trava.WaitAsync(ct);
+            try
+            {
+                // Config da CONTA vale para as irmãs: funis, mapa de etapas e campos do
+                // Perfil do Lead são os mesmos ids. Sem isso, Caxias e "sem unidade" leriam
+                // o mesmo cartão com outra régua.
+                var partes = await _divisao.RepartirAsync(divisao, unit, lote, ct);
+                foreach (var (destino, eventos) in partes)
+                    total += await IngestNaUnidadeAsync(eventos, destino, ct, stageMapOverride, recordStageHistory,
+                        configDa: divisao.Dona);
+            }
+            finally
+            {
+                trava.Release();
+            }
+        }
         return total;
     }
+
+    private const int LoteDaContaDividida = 25;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> TravasDaConta = new();
 
     /// <param name="recordStageHistory">
     /// Só o webhook AO VIVO (lead:status) sabe o instante real da transição — aí grava
@@ -68,24 +91,30 @@ public class KommoIngestionService(
     /// backfill via API de eventos (<see cref="KommoStageHistoryBackfillService"/>). Era a
     /// causa do "211 agendados no dia": o sync/heal carimbava updated_at como data de entrada.
     /// </param>
+    /// <param name="configDa">
+    /// De quem ler o mapa explícito de etapas e o Perfil do Lead. Padrão: a própria unidade.
+    /// Conta dividida passa a dona — os ids de campo e de etapa são da conta, não da unidade.
+    /// </param>
     private async Task<int> IngestNaUnidadeAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct,
         IReadOnlyDictionary<string, string>? stageMapOverride,
-        bool recordStageHistory)
+        bool recordStageHistory,
+        Unit? configDa = null)
     {
+        var cfg = configDa ?? unit;
         // Mapa efetivo de etapas: começa pelo mapa derivado dos NOMES das etapas da Kommo
         // (override passado pelo sync — resolve agendados mesmo sem KommoStageMapJson) e
         // sobrepõe o mapa explícito da unidade, que tem prioridade (config do admin vence).
         var stageMap = stageMapOverride is null
             ? new Dictionary<string, string>()
             : new Dictionary<string, string>(stageMapOverride);
-        foreach (var kv in ParseStageMap(unit.KommoStageMapJson))
+        foreach (var kv in ParseStageMap(cfg.KommoStageMapJson))
             stageMap[kv.Key] = kv.Value;
 
         // Mapeamento dos custom fields do Perfil do Lead (escolhido em Configurações).
         // Usado pra popular Lead.AppointmentScheduledAt e Lead.ConsultationValue direto
         // do CustomFieldsJson, sem precisar de edição manual no painel do lead.
-        var profileFields = unit.Id > 0
-            ? await _kpiConfig.GetLeadProfileConfigAsync(unit.Id, ct)
+        var profileFields = cfg.Id > 0
+            ? await _kpiConfig.GetLeadProfileConfigAsync(cfg.Id, ct)
             : new KpiConfigService.LeadProfileFields();
         var changed = 0;
 

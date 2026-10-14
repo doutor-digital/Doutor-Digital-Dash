@@ -27,12 +27,38 @@ public class KommoIngestionService(
     AppDbContext db,
     KommoStageProcessor stageProcessor,
     KpiConfigService kpiConfig,
+    DivisaoDaContaService divisao,
     ILogger<KommoIngestionService> logger)
 {
     private readonly AppDbContext _db = db;
     private readonly KommoStageProcessor _stageProcessor = stageProcessor;
     private readonly KpiConfigService _kpiConfig = kpiConfig;
+    private readonly DivisaoDaContaService _divisao = divisao;
     private readonly ILogger<KommoIngestionService> _logger = logger;
+
+    /// <summary>
+    /// Porta de entrada do webhook e do sync. Conta de uma unidade só: grava tudo na
+    /// <paramref name="unit"/>, como sempre. Conta dividida entre unidades (ex.: Petrópolis
+    /// e Caxias no mesmo Kommo): cada cartão vai para a unidade do campo de divisão — ver
+    /// <see cref="DivisaoDaContaService"/>. Como os dois caminhos passam por aqui, não há
+    /// rota de entrada que esqueça a divisão.
+    /// </summary>
+    public async Task<int> IngestAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? stageMapOverride = null,
+        bool recordStageHistory = false)
+    {
+        var divisao = await _divisao.DaUnidadeAsync(unit, ct);
+        if (divisao is null)
+            return await IngestNaUnidadeAsync(events, unit, ct, stageMapOverride, recordStageHistory);
+
+        // O mapa de etapas é da CONTA (mesmos funis para todas as unidades dela), então o
+        // que a unidade que recebeu resolveu vale para as irmãs.
+        var partes = await _divisao.RepartirAsync(divisao, unit, events, ct);
+        var total = 0;
+        foreach (var (destino, eventos) in partes)
+            total += await IngestNaUnidadeAsync(eventos, destino, ct, stageMapOverride, recordStageHistory);
+        return total;
+    }
 
     /// <param name="recordStageHistory">
     /// Só o webhook AO VIVO (lead:status) sabe o instante real da transição — aí grava
@@ -42,9 +68,9 @@ public class KommoIngestionService(
     /// backfill via API de eventos (<see cref="KommoStageHistoryBackfillService"/>). Era a
     /// causa do "211 agendados no dia": o sync/heal carimbava updated_at como data de entrada.
     /// </param>
-    public async Task<int> IngestAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct = default,
-        IReadOnlyDictionary<string, string>? stageMapOverride = null,
-        bool recordStageHistory = false)
+    private async Task<int> IngestNaUnidadeAsync(IReadOnlyList<LeadEvent> events, Unit unit, CancellationToken ct,
+        IReadOnlyDictionary<string, string>? stageMapOverride,
+        bool recordStageHistory)
     {
         // Mapa efetivo de etapas: começa pelo mapa derivado dos NOMES das etapas da Kommo
         // (override passado pelo sync — resolve agendados mesmo sem KommoStageMapJson) e

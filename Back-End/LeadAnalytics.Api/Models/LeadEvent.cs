@@ -30,6 +30,14 @@ public class LeadEvent
     /// <summary>JSON com os custom fields do lead (array de {field_id, field_name, field_code, type, value}).</summary>
     public string? CustomFieldsJson { get; set; }
 
+    /// <summary>
+    /// True quando <see cref="CustomFieldsJson"/> traz TODOS os campos preenchidos do lead
+    /// (sync REST com a lista lida de verdade). Aí um campo ausente quer dizer "vazio no
+    /// Kommo". O webhook manda parte dos campos — ausente lá não quer dizer nada — e fica
+    /// false. Usado pela divisão da conta (<see cref="Service.DivisaoDaContaService"/>).
+    /// </summary>
+    public bool CamposCompletos { get; set; }
+
     /// <summary>JSON com as tags do lead (array de strings).</summary>
     public string? TagsJson { get; set; }
 

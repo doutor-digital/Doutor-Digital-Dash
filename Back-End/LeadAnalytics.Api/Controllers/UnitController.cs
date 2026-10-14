@@ -25,8 +25,12 @@ public class UnitController(
     KommoSyncService kommoSync,
     KommoApiClient kommoApi,
     IServiceScopeFactory scopeFactory,
-    ILogger<UnitController> logger) : ControllerBase
+    ILogger<UnitController> logger,
+    DivisaoDaContaService divisaoDaConta,
+    TenantUnitGuard tenantGuard) : ControllerBase
 {
+    private readonly DivisaoDaContaService _divisaoDaConta = divisaoDaConta;
+    private readonly TenantUnitGuard _tenantGuard = tenantGuard;
     private readonly UnitService _unitService = unitService;
     private readonly IConfiguration _configuration = configuration;
     private readonly IWebHostEnvironment _env = env;
@@ -266,6 +270,62 @@ public class UnitController(
                 where = ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim(),
             });
         }
+    }
+
+    /// <summary>
+    /// A conta Kommo desta unidade é dividida com outra(s)? (caso real: Petrópolis e Caxias
+    /// no mesmo Kommo, separados pelo campo ⌂ Unidade de atendimento.)
+    /// </summary>
+    /// <remarks>
+    /// Alimenta o aviso no topo do dashboard. A regra é que nenhum número de uma unidade
+    /// some cartão da outra, e que os cartões com o campo VAZIO não entrem em nenhuma das
+    /// duas — mas também não sumam: eles ficam na unidade "sem unidade definida", e este
+    /// endpoint diz quantos são para o aviso mostrar. Conta de uma unidade só devolve
+    /// <c>dividida:false</c> (o front não desenha nada).
+    /// </remarks>
+    [HttpGet("{id:int}/divisao-da-conta")]
+    public async Task<IActionResult> GetDivisaoDaConta(int id, CancellationToken ct)
+    {
+        if (await _tenantGuard.EnsureUnitBelongsToTenantAsync(id, ct) is { } negado) return negado;
+
+        var unit = await _db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (unit is null) return NotFound();
+
+        DivisaoDaConta? divisao;
+        try
+        {
+            divisao = await _divisaoDaConta.DaUnidadeAsync(unit, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Falha fechada também na tela: o aviso diz que a entrada de dados parou.
+            return Ok(new { dividida = true, configuracaoInvalida = true, erro = ex.Message });
+        }
+        if (divisao is null || !divisao.Contem(unit.Id))
+            return Ok(new { dividida = false });
+
+        var semUnidade = divisao.SemUnidade;
+        var cartoesSemUnidade = await _db.Leads.AsNoTracking().ExcludeDeleted()
+            .CountAsync(l => l.TenantId == semUnidade.ClinicId, ct);
+        var cartoesDestaUnidade = await _db.Leads.AsNoTracking().ExcludeDeleted()
+            .CountAsync(l => l.TenantId == unit.ClinicId, ct);
+
+        return Ok(new
+        {
+            dividida = true,
+            configuracaoInvalida = false,
+            campo = divisao.NomeDoCampo,
+            papel = unit.Id == semUnidade.Id ? "sem-unidade" : "unidade",
+            cartoesDestaUnidade,
+            unidades = divisao.Opcoes.Select(o => new
+            {
+                unitId = o.Unidade.Id, clinicId = o.Unidade.ClinicId, nome = o.Unidade.Name, opcao = o.Valor,
+            }),
+            semUnidade = new
+            {
+                unitId = semUnidade.Id, clinicId = semUnidade.ClinicId, nome = semUnidade.Name, cartoes = cartoesSemUnidade,
+            },
+        });
     }
 
     /// <summary>

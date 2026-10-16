@@ -728,6 +728,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             "UpdatedAt", "LastLoginAt", "RefreshToken", "RefreshTokenExpiresAt",
             "FailedLoginAttempts", "LockedUntil", "ResetPasswordCodeHash",
             "ResetPasswordCodeExpiresAt", "ResetPasswordAttempts", "ResetPasswordRequestedAt",
+            // Funil da etapa atual do lead: o primeiro webhook/sync depois da coluna nova
+            // preenche em TODO lead — viraria uma linha de trilha por lead, só de ruído.
+            // A mudança de etapa (CurrentStage) continua na trilha.
+            "CurrentPipelineId",
         };
 
     private bool _writingAudit;

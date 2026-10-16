@@ -48,7 +48,15 @@ public static class KpiSourceTypes
     /// escrita errada no seed de virar silenciosamente o número de outro card.
     /// </summary>
     public static readonly string[] MetricasFranquia =
-        { "agendados", "consultas", "no_show", "tratamentos", "receita", "receita_qtd" };
+        { "agendados", "consultas", "no_show", "tratamentos", "receita", "receita_qtd", AgendadosComDesfecho };
+
+    /// <summary>
+    /// Os horários de avaliação do período que JÁ têm desfecho (atendido, falta, desmarcado,
+    /// remarcado) — "agendados" menos os que ainda estão Agendado/Confirmado. É o denominador
+    /// certo do comparecimento: horário de amanhã não é acerto nem falha. Não é um card;
+    /// o dashboard publica junto do "agendados" quando ele vem da franquia.
+    /// </summary>
+    public const string AgendadosComDesfecho = "agendados_com_desfecho";
 
     public static readonly string[] All =
         { CreatedInPeriod, KommoStage, CustomFieldCount, CustomFieldSum, StageFieldFilter, RecoveryAttempt, Franquia };

@@ -29,6 +29,9 @@ public static class CanonicalStages
     public const string Perdido              = "PERDIDO";               // COMERCIAL · Perdido (status 143)
     public const string Alta                 = "ALTA";                  // TRATAMENTO · Alta (status 142)
     public const string TratamentoCancelado  = "TRATAMENTO_CANCELADO";  // TRATAMENTO · Cancelado (status 143)
+    // COMERCIAL · Em espera: o lead pediu para falar depois. Sem isto a etapa ficava gravada
+    // como o número cru (111237819 na Açailândia) e aparecia como "Etapa #111237819".
+    public const string EmEspera             = "EM_ESPERA";
 
     /// <summary>Normaliza (trim + UPPER) para comparação estável.</summary>
     public static string Normalize(string? raw) =>
@@ -38,7 +41,7 @@ public static class CanonicalStages
     {
         EntradaLead, AgendadoSemPagamento, AgendadoComPagamento,
         NaoCompareceu, CompareceuConsulta, TratamentoFechado, NaoDeuContinuidade,
-        Qualificacao, Compareceu, Negociacao, Perdido, Alta, TratamentoCancelado,
+        Qualificacao, Compareceu, Negociacao, Perdido, Alta, TratamentoCancelado, EmEspera,
     };
 
     public static bool IsKnown(string? stage) =>
@@ -72,6 +75,7 @@ public static class CanonicalStages
         if (core.Contains("PERDIDO"))                           return Perdido;
         if (core.Contains("QUALIFICA"))                         return Qualificacao;
         if (core.Contains("NEGOCIA"))                           return Negociacao;
+        if (SemAcentoNemSeparador(core).Contains("EM ESPERA"))  return EmEspera;
         if (core.Contains("ALTA"))                              return Alta;
         if (core.Contains("GANHO") || core.Contains("CONCLU"))  return TratamentoFechado;
 
@@ -150,6 +154,7 @@ public static class CanonicalStages
         Perdido              => LeadStages.Perdido,
         Alta                 => LeadStages.Alta,
         TratamentoCancelado  => LeadStages.TratamentoCancelado,
+        EmEspera             => LeadStages.EmEspera,
         _ => null,
     };
 }

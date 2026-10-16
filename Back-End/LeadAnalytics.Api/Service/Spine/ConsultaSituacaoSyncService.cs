@@ -72,7 +72,11 @@ public class ConsultaSituacaoSyncService(
         SpineApiClient.ScheduleCategory.Sessao => "sessão",
         SpineApiClient.ScheduleCategory.Retorno => "retorno",
         SpineApiClient.ScheduleCategory.RetornoComExames => "retorno com exames",
-        SpineApiClient.ScheduleCategory.RetornoAposTratamento => "retorno após tratamento",
+        // A categoria 7 é REAVALIAÇÃO na franquia, mas a opção do campo "⌂ Categoria da
+        // consulta" no blueprint da Kommo se chama "retorno após tratamento" — e o casamento
+        // aqui é pelo TEXTO da opção. Trocar o texto sem renomear a opção nas contas faria a
+        // categoria parar de ser escrita. Fica até a opção ser renomeada na Kommo.
+        SpineApiClient.ScheduleCategory.Reavaliacao => "retorno após tratamento",
         _ => null,
     };
 
@@ -101,7 +105,7 @@ public class ConsultaSituacaoSyncService(
         SpineApiClient.ScheduleCategory.Sessao => 1840187,
         SpineApiClient.ScheduleCategory.Retorno => 1840189,
         SpineApiClient.ScheduleCategory.RetornoComExames => 1840191,
-        SpineApiClient.ScheduleCategory.RetornoAposTratamento => 1840193,
+        SpineApiClient.ScheduleCategory.Reavaliacao => 1840193,
         _ => null,
     };
 
@@ -313,7 +317,7 @@ public class ConsultaSituacaoSyncService(
             [
                 SpineApiClient.ScheduleCategory.Avaliacao, SpineApiClient.ScheduleCategory.Sessao,
                 SpineApiClient.ScheduleCategory.Retorno, SpineApiClient.ScheduleCategory.RetornoComExames,
-                SpineApiClient.ScheduleCategory.RetornoAposTratamento,
+                SpineApiClient.ScheduleCategory.Reavaliacao,
             ]);
 
         return new MapaDeCampos(situacaoCampo.Id, situacoes, categoriaCampo?.Id, categorias);

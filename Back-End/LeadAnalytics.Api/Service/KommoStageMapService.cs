@@ -169,4 +169,121 @@ public sealed class KommoStageMapService(
             unitId, linhas.Count, corrigidos, semMapa, ambiguosCrus, simular ? " (simulação)" : "");
         return new ResultadoBackfill(unitId, linhas.Count, corrigidos, semMapa, ambiguos, ambiguosCrus);
     }
+
+    /// <param name="SemFunil">
+    /// Etapa ambígua (142/143) sem funil conhecido — nem na coluna do lead, nem no histórico.
+    /// Fica como está: quem resolve é o sync da unidade, que lê o funil direto da Kommo.
+    /// </param>
+    /// <param name="Mudancas">"de → para" com a quantidade, para conferir antes de gravar.</param>
+    /// <param name="Amostra">Até 20 ids da Kommo (cartões) que seriam corrigidos.</param>
+    /// <param name="FunisPreenchidos">
+    /// Leads com a coluna de funil vazia que ganham o funil (pelo histórico, ou porque o
+    /// número da etapa só existe em um funil) — mesmo quando a etapa já estava certa. Sem
+    /// isso, um lead parado nunca recebe o funil e fica fora de KPI com etapa presa a funil.
+    /// </param>
+    public sealed record ResultadoEtapaAtual(
+        int UnitId, int Examinados, int Corrigidos, int SemFunil,
+        IReadOnlyList<MudancaDeEtapa> Mudancas, IReadOnlyList<int> Amostra,
+        int FunisPreenchidos = 0, string? Erro = null);
+
+    public sealed record MudancaDeEtapa(string De, string Para, int Quantidade);
+
+    /// <summary>
+    /// Conserta a ETAPA ATUAL (<see cref="Lead.CurrentStage"/>) dos leads gravados com a
+    /// etapa canônica errada — o caso dos perdidos do COMERCIAL gravados como "tratamento
+    /// cancelado" porque o webhook traduzia o 143 sem olhar o funil.
+    ///
+    /// De onde vem o funil de cada lead: da coluna <see cref="Lead.CurrentPipelineId"/>; se
+    /// ela estiver vazia (lead gravado antes dela), da linha mais recente do histórico com a
+    /// MESMA etapa e funil gravado. Sem nenhum dos dois, o lead não é tocado e entra em
+    /// <c>SemFunil</c>. O histórico nunca é alterado aqui (isso é o
+    /// <see cref="CorrigirRotulosAsync"/>), e o id da etapa também não.
+    ///
+    /// Só mexe no defeito que a auditoria achou: etapa de número AMBÍGUO na conta (142/143)
+    /// ou etapa gravada como o número cru (ex.: EM ESPERA = "111237819"). Etapa de número
+    /// único com rótulo diferente do mapa fica como está — pode ser ajuste manual do painel.
+    ///
+    /// <paramref name="simular"/> = true (padrão no endpoint) só conta e mostra; não grava.
+    /// </summary>
+    public async Task<ResultadoEtapaAtual> CorrigirEtapaAtualAsync(int unitId, bool simular, CancellationToken ct)
+    {
+        var etapas = await db.KommoStages.AsNoTracking()
+            .Where(s => s.UnitId == unitId)
+            .Select(s => new EtapaDaConta(s.PipelineId, s.StatusId, s.StatusName))
+            .ToListAsync(ct);
+        if (etapas.Count == 0)
+            return new ResultadoEtapaAtual(unitId, 0, 0, 0, [], [],
+                Erro: "unidade sem mapa de etapas — rode antes POST /internal/stage-map/sync?unitId=" + unitId);
+
+        var leads = await db.Leads
+            .Where(l => l.UnitId == unitId && l.CurrentStageId != null && l.Status != LeadQueryExtensions.StatusDeleted)
+            .ToListAsync(ct);
+
+        // Funil pelo histórico: a linha mais recente de cada lead em cada etapa, com funil.
+        var leadIds = leads.Select(l => l.Id).ToList();
+        var funilPeloHistorico = (await db.LeadStageHistories.AsNoTracking()
+                .Where(h => leadIds.Contains(h.LeadId) && h.PipelineId != null)
+                .Select(h => new { h.LeadId, h.StageId, h.PipelineId, Quando = h.CorrectedChangedAt ?? h.ChangedAt })
+                .ToListAsync(ct))
+            .GroupBy(h => (h.LeadId, h.StageId))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(h => h.Quando).First().PipelineId!.Value);
+
+        // Em quantos funis cada número de etapa existe. 142/143 existem em todos; o resto,
+        // em um só — e aí o número basta para saber o funil.
+        var funisDoNumero = etapas.GroupBy(e => e.Etapa)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.Funil).Distinct().ToList());
+
+        int corrigidos = 0, semFunil = 0, funisPreenchidos = 0;
+        var mudancas = new Dictionary<(string De, string Para), int>();
+        var amostra = new List<int>();
+
+        foreach (var lead in leads)
+        {
+            var etapa = lead.CurrentStageId!.Value;
+            var funisPossiveis = funisDoNumero.GetValueOrDefault(etapa) ?? [];
+            long? funil = lead.CurrentPipelineId
+                ?? (funilPeloHistorico.TryGetValue((lead.Id, etapa), out var f) ? (long?)f : null)
+                ?? (funisPossiveis.Count == 1 ? (long?)funisPossiveis[0] : null);
+
+            if (lead.CurrentPipelineId is null && funil is not null)
+            {
+                funisPreenchidos++;
+                if (!simular) lead.CurrentPipelineId = funil;
+            }
+
+            var nome = MapaCanonicoDeEtapas.Nome(etapas, funil, etapa);
+            if (nome is null)
+            {
+                // Só conta como "sem funil" quando o número é ambíguo na conta. Etapa que
+                // não existe mais no mapa não tem nome de onde voltar.
+                if (funil is null && funisPossiveis.Count > 1) semFunil++;
+                continue;
+            }
+
+            var ambigua = funisPossiveis.Count > 1;
+            var numeroCru = string.Equals(lead.CurrentStage, etapa.ToString(), StringComparison.Ordinal);
+            if (!ambigua && !numeroCru) continue; // fora do defeito — pode ser ajuste manual
+
+            var esperado = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(nome));
+            if (esperado is null) continue; // etapa fora do funil canônico — fica como está
+            if (string.Equals(lead.CurrentStage, esperado, StringComparison.Ordinal)) continue;
+
+            var chave = (lead.CurrentStage, esperado);
+            mudancas[chave] = mudancas.GetValueOrDefault(chave) + 1;
+            if (amostra.Count < 20) amostra.Add(lead.ExternalId);
+            corrigidos++;
+
+            if (!simular) lead.CurrentStage = esperado;
+        }
+
+        if (!simular && (corrigidos > 0 || funisPreenchidos > 0)) await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "🩹 Etapa atual | unidade={Unit} examinados={Ex} corrigidos={Corr} sem funil={Sem} funis preenchidos={Fun}{Sim}",
+            unitId, leads.Count, corrigidos, semFunil, funisPreenchidos, simular ? " (simulação)" : "");
+
+        return new ResultadoEtapaAtual(unitId, leads.Count, corrigidos, semFunil,
+            mudancas.Select(kv => new MudancaDeEtapa(kv.Key.De, kv.Key.Para, kv.Value))
+                .OrderByDescending(m => m.Quantidade).ToList(),
+            amostra, funisPreenchidos);
+    }
 }

@@ -170,23 +170,15 @@ public class KommoSyncService
         try
         {
             var pipes = await _api.GetPipelinesAsync(unit.KommoSubdomain, accessToken, ct);
-            foreach (var p in pipes?.Embedded?.Pipelines ?? new())
-                foreach (var st in p.Embedded?.Statuses ?? new())
-                {
-                    var canonical = CanonicalStages.Resolve(st.Name);
-                    if (canonical == null) continue;
-
-                    // Chave qualificada pelo funil: 142/143 (ganho/perdido) repetem o MESMO
-                    // id em todos os pipelines com nomes diferentes. Indexar só por status_id
-                    // fazia o último funil lido sobrescrever os outros — em Boa Vista, os
-                    // 3.980 perdidos do COMERCIAL viravam "tratamento cancelado" porque o
-                    // 143 do funil TRATAMENTO chama "TRATAMENTO CANCELADO".
-                    stageNameMap[$"{p.Id}:{st.Id}"] = canonical;
-
-                    // Chave sem funil mantida para compatibilidade (mapa antigo/manual):
-                    // só a primeira vence, para o resultado não depender da ordem de leitura.
-                    stageNameMap.TryAdd(st.Id.ToString(), canonical);
-                }
+            // Chave qualificada pelo funil: 142/143 (ganho/perdido) repetem o MESMO id em
+            // todos os pipelines com nomes diferentes. Em Boa Vista, os 3.980 perdidos do
+            // COMERCIAL viravam "tratamento cancelado" porque o 143 do funil TRATAMENTO chama
+            // "TRATAMENTO CANCELADO". O webhook usa o mesmo construtor (KommoStagesResolver),
+            // então os dois caminhos traduzem a etapa do mesmo jeito.
+            stageNameMap = MapaCanonicoDeEtapas.Montar(
+                (pipes?.Embedded?.Pipelines ?? new())
+                    .SelectMany(p => (p.Embedded?.Statuses ?? new())
+                        .Select(st => new EtapaDaConta(p.Id, st.Id, st.Name))));
             _logger.LogInformation(
                 "Sync Kommo unit {Unit}: {N} etapas resolvidas por nome (auto stage-map)",
                 unit.Id, stageNameMap.Count);

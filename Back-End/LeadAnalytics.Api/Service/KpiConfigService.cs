@@ -220,11 +220,17 @@ public class KpiConfigService(
         // backfill da Cloudia) com fallback pro CreatedAt do backend. Sem isso, leads
         // migrados da Cloudia ficam todos amontoados no mês da migração e desalinham
         // do card "Total de Leads".
+        //
+        // FIM EXCLUSIVO (`< to`), igual ao card de Leads (LeadService): a tela manda o fim do
+        // período como o INÍCIO do próximo (o dia comercial vira às 19h). Com `<=`, o lead que
+        // entra exatamente às 19:00:00 contava nos dois dias e o KPI não batia com o card.
+        // Vale para todas as janelas de data/hora deste serviço; as de dia da franquia
+        // (DateOnly, "de 01 a 16") seguem inclusivas.
         var baseQuery = _db.Leads.AsNoTracking()
             .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                      && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
-                     && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) < to);
         if (unitId.HasValue)
             baseQuery = baseQuery.Where(l => l.UnitId == unitId.Value);
         baseQuery = await ResponsibleUserFilter.ApplyAsync(baseQuery, responsibleUser, ct);
@@ -345,7 +351,6 @@ public class KpiConfigService(
             {
                 if (p.StageIds.Count == 0)
                     return (0, sample, "Selecione ao menos uma etapa.");
-                var ids = p.StageIds;
 
                 // Conta por ENTRADA na etapa (LeadStageHistory dentro do período) —
                 // não por CurrentStageId + CreatedAt. Sem isso, lead criado em maio
@@ -360,11 +365,10 @@ public class KpiConfigService(
 
                 // Janela usa a data CORRIGIDA quando o admin ajustou a transição
                 // (ex.: SDR moveu o lead no dia errado), senão a original.
-                var entryLeadIds = await _db.LeadStageHistories.AsNoTracking()
-                    .Where(h => ids.Contains(h.StageId)
-                        && h.EntrySource != LeadStageHistory.SourceLegacy
+                var entryLeadIds = await p.Etapas.Aplicar(_db.LeadStageHistories.AsNoTracking())
+                    .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
                         && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) < to)
                     .Join(scope, h => h.LeadId, l => l.Id, (h, l) => h.LeadId)
                     .ToListAsync(ct);
                 var entryCountByLead = entryLeadIds
@@ -376,7 +380,7 @@ public class KpiConfigService(
                 // seguem contando toda entrada no período (comportamento inalterado).
                 if (kpiKey == "agendados")
                 {
-                    var reclass = await LoadReclassifiedLeadIdsAsync(ids, entryCountByLead, ct);
+                    var reclass = await LoadReclassifiedLeadIdsAsync(p.Etapas, entryCountByLead, ct);
                     return (entryCountByLead.Keys.Count(id => !reclass.Contains(id)), sample, null);
                 }
                 return (entryCountByLead.Count, sample, null);
@@ -393,7 +397,6 @@ public class KpiConfigService(
 
                 if (p.StageIds.Count > 0)
                 {
-                    var ids = p.StageIds;
 
                     // `porEntradaNaEtapa` responde a pergunta que a soma de dinheiro
                     // exige: "quanto FECHOU no período", e não "quanto vale o campo dos
@@ -407,14 +410,13 @@ public class KpiConfigService(
                     {
                         // Linhas `legacy` ficam de fora: nelas ChangedAt e o updated_at do
                         // lead, e contá-las jogaria todo fechamento para o dia do sync.
-                        var entraram = _db.LeadStageHistories.AsNoTracking()
-                            .Where(h => ids.Contains(h.StageId)
-                                        && h.EntrySource != Models.LeadStageHistory.SourceLegacy
+                        var entraram = p.Etapas.Aplicar(_db.LeadStageHistories.AsNoTracking())
+                            .Where(h => h.EntrySource != Models.LeadStageHistory.SourceLegacy
                                         // A data que vale é a CORRIGIDA quando existe. Sem isto a
                                         // correção do admin (e a datação de migração) não chegava
                                         // ao número: o dinheiro ficava no mês do mutirão.
                                         && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
+                                        && (h.CorrectedChangedAt ?? h.ChangedAt) < to)
                             .Select(h => h.LeadId);
 
                         // Sem a janela de CRIACAO: quem fechou no periodo entra, tenha o
@@ -429,7 +431,7 @@ public class KpiConfigService(
                     {
                         // Antes o filtro de etapa so valia para StageFieldFilter, e um
                         // custom_field_sum com stageIds somava a base inteira em silencio.
-                        q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
+                        q = p.Etapas.AplicarNaEtapaAtual(q);
                     }
                 }
 
@@ -480,7 +482,7 @@ public class KpiConfigService(
 
                 var count = await _db.RecoveryAttempts.AsNoTracking()
                     .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
-                        && r.CreatedAt >= from && r.CreatedAt <= to)
+                        && r.CreatedAt >= from && r.CreatedAt < to)
                     .Join(scope, r => r.LeadId, l => l.Id, (r, l) => r.LeadId)
                     .Distinct()
                     .CountAsync(ct);
@@ -686,7 +688,8 @@ public class KpiConfigService(
                         Spine.SpineApiClient.ScheduleCategory.Sessao,
                         Spine.SpineApiClient.ScheduleCategory.Retorno,
                         Spine.SpineApiClient.ScheduleCategory.RetornoComExames,
-                        Spine.SpineApiClient.ScheduleCategory.RetornoAposTratamento,
+                        // Reavaliação também: a cadeira vazia é a mesma.
+                        Spine.SpineApiClient.ScheduleCategory.Reavaliacao,
                     }, ct);
                 if (agenda is null) return new FranquiaMedida(null, KpiNotes.SemAutorizacaoFranquia);
 
@@ -725,6 +728,12 @@ public class KpiConfigService(
 
                 "consultas" => new FranquiaMedida(av.Realizadas,
                     "fonte: CRM da franquia · comparecimento real"),
+
+                // Denominador do comparecimento (Veredito e funil): os horários do período que
+                // já aconteceram. Açailândia, 01–16/10/2026: 31 marcados, 4 ainda por vir →
+                // 27 com desfecho; 11 ÷ 27 = 40,7%, e não os 35% de 11 ÷ 31.
+                KpiSourceTypes.AgendadosComDesfecho => new FranquiaMedida(av.Resolvidas,
+                    "fonte: CRM da franquia · avaliações do período que já aconteceram"),
 
                 _ => new FranquiaMedida(null, $"métrica de franquia desconhecida: {metric}"),
             };
@@ -794,16 +803,14 @@ public class KpiConfigService(
         {
             // Drill: leads que ENTRARAM na etapa no período (espelha ComputeAsync).
             if (p.StageIds.Count == 0) return (new(), 0, false);
-            var ids = p.StageIds;
 
             var scope = _db.Leads.AsNoTracking().ExcludeDeleted().Where(l => l.TenantId == clinicId);
             if (unitId.HasValue) scope = scope.Where(l => l.UnitId == unitId.Value);
 
-            var historyRows = await _db.LeadStageHistories.AsNoTracking()
-                .Where(h => ids.Contains(h.StageId)
-                    && h.EntrySource != LeadStageHistory.SourceLegacy
+            var historyRows = await p.Etapas.Aplicar(_db.LeadStageHistories.AsNoTracking())
+                .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
                     && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                    && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) < to)
                 .Join(scope, h => h.LeadId, l => l.Id,
                     (h, l) => new { h.Id, h.LeadId, EffectiveAt = (h.CorrectedChangedAt ?? h.ChangedAt) })
                 .ToListAsync(ct);
@@ -822,7 +829,7 @@ public class KpiConfigService(
             {
                 var inPeriodCount = historyRows
                     .GroupBy(r => r.LeadId).ToDictionary(g => g.Key, g => g.Count());
-                var reclass = await LoadReclassifiedLeadIdsAsync(ids, inPeriodCount, ct);
+                var reclass = await LoadReclassifiedLeadIdsAsync(p.Etapas, inPeriodCount, ct);
                 if (reclass.Count > 0)
                     foreach (var id in reclass) historyByLead.Remove(id);
             }
@@ -838,7 +845,7 @@ public class KpiConfigService(
 
             var attemptRows = await _db.RecoveryAttempts.AsNoTracking()
                 .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
-                    && r.CreatedAt >= from && r.CreatedAt <= to)
+                    && r.CreatedAt >= from && r.CreatedAt < to)
                 .Join(scope, r => r.LeadId, l => l.Id, (r, l) => new { r.LeadId, r.Outcome, r.CreatedAt })
                 .ToListAsync(ct);
 
@@ -860,15 +867,12 @@ public class KpiConfigService(
                 .ExcludeDeleted()
                 .Where(l => l.TenantId == clinicId
                          && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
-                         && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
+                         && (l.OriginalCreatedAt ?? l.CreatedAt) < to);
             if (unitId.HasValue)
                 q = q.Where(l => l.UnitId == unitId.Value);
 
             if (sourceType == KpiSourceTypes.StageFieldFilter && p.StageIds.Count > 0)
-            {
-                var ids = p.StageIds;
-                q = q.Where(l => l.CurrentStageId != null && ids.Contains(l.CurrentStageId.Value));
-            }
+                q = p.Etapas.AplicarNaEtapaAtual(q);
         }
 
         q = q.OrderByDescending(l => l.CreatedAt);
@@ -971,7 +975,7 @@ public class KpiConfigService(
             .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                      && (l.OriginalCreatedAt ?? l.CreatedAt) >= from
-                     && (l.OriginalCreatedAt ?? l.CreatedAt) <= to);
+                     && (l.OriginalCreatedAt ?? l.CreatedAt) < to);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
@@ -985,7 +989,9 @@ public class KpiConfigService(
         // (mesma semântica do kpi_overrides), em vez do FechouTratamento hardcoded — sem
         // isso, a unidade que usa "Em Tratamento" como estágio final vê count=19 no card
         // mas Origem/Fisio/Valor vazios porque o loop abaixo nunca casa o lead.
-        List<int>? tratStageIds = null;
+        // FiltroDeEtapas (não só a lista de números): respeita "funilDaEtapa" da config, para
+        // o breakdown casar com o número grande quando o KPI prende 142/143 a um funil.
+        FiltroDeEtapas? tratStageIds = null;
         if (unitId.HasValue)
         {
             var tratCfg = await _db.KpiConfigurations.AsNoTracking()
@@ -996,7 +1002,7 @@ public class KpiConfigService(
                 try
                 {
                     var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(tratCfg.ConfigJson));
-                    if (parsed.StageIds.Count > 0) tratStageIds = parsed.StageIds;
+                    if (parsed.StageIds.Count > 0) tratStageIds = parsed.Etapas;
                 }
                 catch (JsonException) { /* config inválida — cai pro hardcoded */ }
             }
@@ -1007,7 +1013,7 @@ public class KpiConfigService(
         // e o drill-down, ambos por StageId), o breakdown TEM que casar pelas mesmas etapas —
         // senão o card mostra "1" mas os chips (Pagamento/Origem/Tipo) ficam "sem dados" porque
         // o StageLabel gravado no histórico não é exatamente a constante hardcoded LeadStages.*.
-        List<int>? agStageIds = null;
+        FiltroDeEtapas? agStageIds = null;
         if (unitId.HasValue)
         {
             var agCfg = await _db.KpiConfigurations.AsNoTracking()
@@ -1018,7 +1024,7 @@ public class KpiConfigService(
                 try
                 {
                     var parsed = ParseConfig(JsonSerializer.Deserialize<JsonElement>(agCfg.ConfigJson));
-                    if (parsed.StageIds.Count > 0) agStageIds = parsed.StageIds;
+                    if (parsed.StageIds.Count > 0) agStageIds = parsed.Etapas;
                 }
                 catch (JsonException) { /* config inválida — cai pro hardcoded */ }
             }
@@ -1209,11 +1215,10 @@ public class KpiConfigService(
                     && (!unitId.HasValue || e.UnitId == unitId.Value))
                 .Select(e => e.LeadId)
                 .ToListAsync(ct);
-            var tratHist = await _db.LeadStageHistories.AsNoTracking()
-                .Where(h => tratStageIds.Contains(h.StageId)
-                    && h.EntrySource != LeadStageHistory.SourceLegacy
+            var tratHist = await tratStageIds.Aplicar(_db.LeadStageHistories.AsNoTracking())
+                .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
                     && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                    && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
+                    && (h.CorrectedChangedAt ?? h.ChangedAt) < to
                     && h.Lead!.TenantId == clinicId
                     && (!unitId.HasValue || h.Lead.UnitId == unitId.Value)
                     && !tratExcluded.Contains(h.LeadId))
@@ -1266,7 +1271,7 @@ public class KpiConfigService(
                 && (!unitId.HasValue || l.UnitId == unitId.Value)
                 && l.AppointmentScheduledAtFilledAt != null
                 && l.AppointmentScheduledAtFilledAt >= from
-                && l.AppointmentScheduledAtFilledAt <= to)
+                && l.AppointmentScheduledAtFilledAt < to)
             .Select(l => new { l.LeadType, l.ConsultationValue, l.CustomFieldsJson })
             .ToListAsync(ct);
         foreach (var l in consultasRows)
@@ -1345,7 +1350,7 @@ public class KpiConfigService(
         var agHistQ = _db.LeadStageHistories.AsNoTracking()
             .Where(h => h.EntrySource != LeadStageHistory.SourceLegacy
                 && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                && (h.CorrectedChangedAt ?? h.ChangedAt) <= to
+                && (h.CorrectedChangedAt ?? h.ChangedAt) < to
                 && h.Lead.TenantId == clinicId
                 // ExcludeDeleted: leads deletados na Kommo (Status="deleted") não contam —
                 // igual ao número grande (ComputeAsync) e ao drill. Sem isso o card divergia.
@@ -1353,7 +1358,7 @@ public class KpiConfigService(
                 && !agExcluded.Contains(h.LeadId)
                 && (!unitId.HasValue || h.Lead.UnitId == unitId.Value));
         agHistQ = agStageIds != null
-            ? agHistQ.Where(h => agStageIds.Contains(h.StageId))
+            ? agStageIds.Aplicar(agHistQ)
             : agHistQ.Where(h => agStages.Contains(h.StageLabel));
         var agHist = await agHistQ
             .Select(h => new {
@@ -1378,7 +1383,7 @@ public class KpiConfigService(
             .Where(h => agLeadIds.Contains(h.LeadId)
                 && h.EntrySource != LeadStageHistory.SourceLegacy);
         agCountQ = agStageIds != null
-            ? agCountQ.Where(h => agStageIds.Contains(h.StageId))
+            ? agStageIds.Aplicar(agCountQ)
             : agCountQ.Where(h => agStages.Contains(h.StageLabel));
         var agHistCountByLead = await agCountQ
             .GroupBy(h => h.LeadId)
@@ -1458,7 +1463,7 @@ public class KpiConfigService(
 
             var attempts = await _db.RecoveryAttempts.AsNoTracking()
                 .Where(r => (r.EntrySource == "events_api" || r.EntrySource == "webhook")
-                            && r.CreatedAt >= from && r.CreatedAt <= to)
+                            && r.CreatedAt >= from && r.CreatedAt < to)
                 .Join(attemptScope, r => r.LeadId, l => l.Id,
                     (r, l) => new { r.LeadId, r.Outcome, r.CreatedAt, l.Source, l.CustomFieldsJson })
                 .ToListAsync(ct);
@@ -1512,7 +1517,7 @@ public class KpiConfigService(
             .Where(l => l.TenantId == clinicId
                         && (!unitId.HasValue || l.UnitId == unitId.Value)
                         && l.AppointmentScheduledAt >= from
-                        && l.AppointmentScheduledAt <= to)
+                        && l.AppointmentScheduledAt < to)
             .CountAsync(ct);
 
         if (unitId.HasValue)
@@ -1603,7 +1608,7 @@ public class KpiConfigService(
         // leads antigos cujos campos foram preenchidos recentemente.
         var q = _db.Leads.AsNoTracking()
             .ExcludeDeleted()
-            .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt <= to
+            .Where(l => l.TenantId == clinicId && l.UpdatedAt >= from && l.UpdatedAt < to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
@@ -1711,14 +1716,13 @@ public class KpiConfigService(
             .Where(l => l.TenantId == clinicId && l.CustomFieldsJson != null);
 
         if (!porEntrada)
-            q = q.Where(l => l.CreatedAt >= from && l.CreatedAt <= to);
+            q = q.Where(l => l.CreatedAt >= from && l.CreatedAt < to);
 
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
 
         if (p.StageIds.Count > 0)
         {
-            var etapas = p.StageIds;
             if (porEntrada)
             {
                 // Quem ENTROU na etapa dentro do período — mesmo que já tenha saído dela
@@ -1727,12 +1731,13 @@ public class KpiConfigService(
                 // Linhas `legacy` ficam de fora: nelas ChangedAt é o updated_at do lead,
                 // não a data de entrada, e contá-las jogaria o desfecho para o dia do
                 // último sync.
-                var entraram = _db.LeadStageHistories.AsNoTracking()
-                    .Where(h => etapas.Contains(h.StageId)
-                                && h.EntrySource != Models.LeadStageHistory.SourceLegacy
+                // 142/143 podem vir presos a um funil (funilDaEtapa): a ALTA do TRATAMENTO
+                // não se mistura com o GANHO do COMERCIAL.
+                var entraram = p.Etapas.Aplicar(_db.LeadStageHistories.AsNoTracking())
+                    .Where(h => h.EntrySource != Models.LeadStageHistory.SourceLegacy
                                 // Idem: a data corrigida manda sobre a do arraste.
                                 && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                                && (h.CorrectedChangedAt ?? h.ChangedAt) <= to)
+                                && (h.CorrectedChangedAt ?? h.ChangedAt) < to)
                     .Select(h => h.LeadId);
 
                 q = q.Where(l => entraram.Contains(l.Id));
@@ -1740,7 +1745,7 @@ public class KpiConfigService(
             else
             {
                 // Sem a flag: a etapa ATUAL do lead, como o StageFieldFilter faz.
-                q = q.Where(l => l.CurrentStageId != null && etapas.Contains(l.CurrentStageId.Value));
+                q = p.Etapas.AplicarNaEtapaAtual(q);
             }
         }
 
@@ -1785,7 +1790,7 @@ public class KpiConfigService(
 
         var q = _db.Leads.AsNoTracking()
             .ExcludeDeleted()
-            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt <= to);
+            .Where(l => l.TenantId == clinicId && l.CreatedAt >= from && l.CreatedAt < to);
         if (unitId.HasValue) q = q.Where(l => l.UnitId == unitId.Value);
 
         var rows = await q.OrderByDescending(l => l.CreatedAt).Take(MaxScan)
@@ -1940,21 +1945,21 @@ public class KpiConfigService(
 
     /// <summary>Valor do primeiro campo cujo nome (lowercase) casa com o predicado.</summary>
     /// <summary>
-    /// Dado o conjunto de leads que ENTRARAM nas etapas <paramref name="stageIds"/> dentro do
+    /// Dado o conjunto de leads que ENTRARAM nas etapas <paramref name="etapas"/> dentro do
     /// período (com a contagem de linhas no período por lead em <paramref name="inPeriodCountByLead"/>),
     /// devolve os leadIds que são RECLASSIFICAÇÃO: já tinham entrado nessas etapas ANTES do
     /// período (total de linhas no histórico &gt; linhas no período). Espelha a mesma regra do
     /// KpiBreakdownsAsync/DashboardOverview — usada pra alinhar o número grande e o drill.
     /// </summary>
     private async Task<HashSet<int>> LoadReclassifiedLeadIdsAsync(
-        List<int> stageIds, Dictionary<int, int> inPeriodCountByLead, CancellationToken ct)
+        FiltroDeEtapas etapas, Dictionary<int, int> inPeriodCountByLead, CancellationToken ct)
     {
         var leadIds = inPeriodCountByLead.Keys.ToList();
         if (leadIds.Count == 0) return new();
         // Só linhas non-legacy: linhas legacy são snapshots do sync (etapa atual), não
         // entradas reais — se contadas, viravam reclassificação falsa (ver KpiBreakdownsAsync).
-        var totalByLead = await _db.LeadStageHistories.AsNoTracking()
-            .Where(h => stageIds.Contains(h.StageId) && leadIds.Contains(h.LeadId)
+        var totalByLead = await etapas.Aplicar(_db.LeadStageHistories.AsNoTracking())
+            .Where(h => leadIds.Contains(h.LeadId)
                 && h.EntrySource != LeadStageHistory.SourceLegacy)
             .GroupBy(h => h.LeadId)
             .Select(g => new { LeadId = g.Key, Count = g.Count() })
@@ -2148,7 +2153,7 @@ public class KpiConfigService(
             .Select(l => new { l, Appt = ResolveApptDate(l.AppointmentScheduledAt, l.CustomFieldsJson, profile) })
             .Where(x => x.Appt is not null)
             .Select(x => new { x.l, Appt = AsUtc(x.Appt!.Value) })
-            .Where(x => x.Appt >= from && x.Appt <= to)
+            .Where(x => x.Appt >= from && x.Appt < to)
             .OrderBy(x => x.Appt)
             .ToList();
 
@@ -2417,7 +2422,12 @@ public class KpiConfigService(
 
     // ─── Parsing ─────────────────────────────────────────────────────────────
 
-    private record ParsedConfig(List<int> StageIds, long? FieldId, string? FieldCode, List<string> MatchValues);
+    private record ParsedConfig(List<int> StageIds, long? FieldId, string? FieldCode, List<string> MatchValues,
+        Dictionary<int, long> FunilDaEtapa)
+    {
+        /// <summary>As etapas do KPI, com as que estão presas a um funil (<see cref="FiltroDeEtapas"/>).</summary>
+        public FiltroDeEtapas Etapas => new(StageIds, FunilDaEtapa);
+    }
 
     private static ParsedConfig ParseConfig(JsonElement config)
     {
@@ -2443,7 +2453,7 @@ public class KpiConfigService(
                     if (el.ValueKind == JsonValueKind.String) matchValues.Add(el.GetString() ?? "");
         }
 
-        return new ParsedConfig(stageIds, fieldId, fieldCode, matchValues);
+        return new ParsedConfig(stageIds, fieldId, fieldCode, matchValues, FiltroDeEtapas.LerFunilDaEtapa(config));
     }
 
     /// <summary>Extrai o "value" de um campo do CustomFieldsJson casando por field_id ou field_code.</summary>
@@ -2549,7 +2559,7 @@ public class KpiConfigService(
         var q = _db.Leads.AsNoTracking()
             .ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
-                        && l.UpdatedAt >= from && l.UpdatedAt <= to
+                        && l.UpdatedAt >= from && l.UpdatedAt < to
                         && l.CustomFieldsJson != null);
         if (unitId.HasValue)
             q = q.Where(l => l.UnitId == unitId.Value);
@@ -2673,7 +2683,7 @@ public class KpiConfigService(
         var qualScope = _db.Leads.AsNoTracking().ExcludeDeleted()
             .Where(l => l.TenantId == clinicId
                      && l.Qualification != null
-                     && l.QualificationFilledAt >= from && l.QualificationFilledAt <= to);
+                     && l.QualificationFilledAt >= from && l.QualificationFilledAt < to);
         if (unitId.HasValue)
             qualScope = qualScope.Where(l => l.UnitId == unitId.Value);
         var qualRows = await qualScope

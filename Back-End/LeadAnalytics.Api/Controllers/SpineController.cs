@@ -620,8 +620,9 @@ public class SpineController(
         PorCategorias(unitId, de, ate, [SpineApiClient.ScheduleCategory.Sessao], ct);
 
     /// <summary>
-    /// Retornos: RETORNO (3), RETORNO COM EXAMES (6) e RETORNO PÓS-TRATAMENTO (7)
-    /// somados. Inclui o "retorno com exames" do fluxo de aguardando exames.
+    /// Retornos: RETORNO (3) e RETORNO COM EXAMES (6) somados. Inclui o "retorno com
+    /// exames" do fluxo de aguardando exames. A categoria 7 NÃO entra: na franquia ela é
+    /// REAVALIAÇÃO (ver <see cref="Reavaliacoes"/>), e somá-la aqui inflava os retornos.
     /// </summary>
     [HttpGet("retornos")]
     public Task<IActionResult> Retornos(
@@ -629,8 +630,18 @@ public class SpineController(
         CancellationToken ct = default) =>
         PorCategorias(unitId, de, ate, [
             SpineApiClient.ScheduleCategory.Retorno,
-            SpineApiClient.ScheduleCategory.RetornoComExames,
-            SpineApiClient.ScheduleCategory.RetornoAposTratamento], ct);
+            SpineApiClient.ScheduleCategory.RetornoComExames], ct);
+
+    /// <summary>
+    /// Reavaliações (categoria 7 da agenda da franquia). Mesma estrutura do card de
+    /// avaliações. Antes estavam somadas em Retornos com o nome errado de "retorno
+    /// pós-tratamento".
+    /// </summary>
+    [HttpGet("reavaliacoes")]
+    public Task<IActionResult> Reavaliacoes(
+        [FromQuery] int unitId, [FromQuery] DateOnly? de, [FromQuery] DateOnly? ate,
+        CancellationToken ct = default) =>
+        PorCategorias(unitId, de, ate, [SpineApiClient.ScheduleCategory.Reavaliacao], ct);
 
     private async Task<IActionResult> PorCategorias(
         int unitId, DateOnly? de, DateOnly? ate, int[] cats, CancellationToken ct)

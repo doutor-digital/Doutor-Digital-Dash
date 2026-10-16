@@ -33,7 +33,7 @@ public class SpineHistoricoService(
         (SpineApiClient.ScheduleCategory.Sessao, "SESSAO"),
         (SpineApiClient.ScheduleCategory.Retorno, "RETORNO"),
         (SpineApiClient.ScheduleCategory.RetornoComExames, "RETORNO C/ EXAMES"),
-        (SpineApiClient.ScheduleCategory.RetornoAposTratamento, "RETORNO POS-TRATAMENTO"),
+        (SpineApiClient.ScheduleCategory.Reavaliacao, "REAVALIACAO"),
     ];
 
     /// <summary>Captura os últimos <paramref name="dias"/> dias e faz upsert. Retorna quantos gravou.</summary>

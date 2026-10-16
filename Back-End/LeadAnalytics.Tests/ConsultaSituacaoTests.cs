@@ -35,7 +35,7 @@ public class ConsultaSituacaoTests
     [InlineData(SpineApiClient.ScheduleCategory.Sessao, 1840187L)]
     [InlineData(SpineApiClient.ScheduleCategory.Retorno, 1840189L)]
     [InlineData(SpineApiClient.ScheduleCategory.RetornoComExames, 1840191L)]
-    [InlineData(SpineApiClient.ScheduleCategory.RetornoAposTratamento, 1840193L)]
+    [InlineData(SpineApiClient.ScheduleCategory.Reavaliacao, 1840193L)]
     public void Cada_categoria_da_franquia_cai_na_opcao_certa(int spine, long enumId)
     {
         Assert.Equal(enumId, ConsultaSituacaoSyncService.EnumCategoria(spine));

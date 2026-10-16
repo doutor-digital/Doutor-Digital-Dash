@@ -32,7 +32,7 @@ public class SpineAgendaService(
         (SpineApiClient.ScheduleCategory.Sessao, "Sessão"),
         (SpineApiClient.ScheduleCategory.Retorno, "Retorno"),
         (SpineApiClient.ScheduleCategory.RetornoComExames, "Retorno com exames"),
-        (SpineApiClient.ScheduleCategory.RetornoAposTratamento, "Retorno após tratamento"),
+        (SpineApiClient.ScheduleCategory.Reavaliacao, "Reavaliação"),
     ];
 
     private static string Grupo(int idStatus) => idStatus switch

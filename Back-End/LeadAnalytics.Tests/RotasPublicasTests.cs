@@ -146,6 +146,7 @@ public class RotasPublicasTests : IAsyncLifetime
         "GET /internal/spine/resumo",
         "POST /internal/stage-map/sync",
         "POST /internal/stage-map/corrigir-rotulos",
+        "POST /internal/stage-map/corrigir-etapa-atual",
         "GET /internal/stage-map/saude",
         "GET /internal/sync/kommo/units",
         "POST /internal/sync/kommo/units/{unitId:int}",

@@ -84,6 +84,26 @@ public class InternalStageMapController(
         });
     }
 
+    /// <summary>
+    /// Conserta a etapa ATUAL dos leads da unidade pelo par (funil, etapa) — os perdidos do
+    /// COMERCIAL que ficaram como "tratamento cancelado". Padrão: simulação (só conta e
+    /// mostra "de → para"). Exige unitId: correção de dado é uma unidade por vez.
+    /// </summary>
+    [HttpPost("corrigir-etapa-atual")]
+    public async Task<IActionResult> CorrigirEtapaAtual(
+        [FromHeader(Name = "X-Admin-Key")] string? adminKey,
+        [FromQuery] int unitId,
+        [FromQuery] bool simular = true,
+        CancellationToken ct = default)
+    {
+        if (!await guard.IsAuthorizedAsync(adminKey)) return Unauthorized();
+        if (unitId <= 0) return BadRequest(new { error = "informe unitId" });
+
+        var r = await mapa.CorrigirEtapaAtualAsync(unitId, simular, ct);
+        if (r.Erro is not null) return BadRequest(new { error = r.Erro });
+        return Ok(new { simular, resultado = r });
+    }
+
     /// <summary>Quanto do histórico ainda está com rótulo podre — o placar do conserto.</summary>
     [HttpGet("saude")]
     public async Task<IActionResult> Saude(

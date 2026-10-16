@@ -645,6 +645,9 @@ public class WebhooksController(
                 }
                 result.CustomKpis = result.CustomKpis
                     .OrderBy(k => k.SortOrder).ThenBy(k => k.Label).ToList();
+
+                if (configs.Any(c => c.KpiKey == "agendados" && c.SourceType == KpiSourceTypes.Franquia))
+                    await PublicarAgendadosComDesfechoAsync(result, clinicId, unitId, dateFrom, dateTo, responsibleUser);
             }
             else
             {
@@ -685,6 +688,9 @@ public class WebhooksController(
                         _logger.LogWarning(ex, "Falha no KPI de franquia {Kpi} no agregado", cfg.KpiKey);
                     }
                 }
+
+                if (franquiaCfgs.Any(c => c.KpiKey == "agendados"))
+                    await PublicarAgendadosComDesfechoAsync(result, escopoKpi, null, dateFrom, dateTo, responsibleUser);
             }
 
             _cache.Set(cacheKey, result, DashboardOverviewCacheTtl);
@@ -693,6 +699,35 @@ public class WebhooksController(
         catch (ArgumentException ex)
         {
             return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Publica <c>agendados_com_desfecho</c> ao lado do <c>agendados</c> da franquia: os
+    /// horários do período que já aconteceram. O Veredito e a taxa de comparecimento do funil
+    /// dividem por ele — dividir pelos agendados contava como "não usado" o horário de amanhã
+    /// (Açailândia, 01–16/10/2026: 35% e "20 não usados" em vez de 40,7% e 16).
+    ///
+    /// Não custa chamada nova à franquia: a agenda do período já foi lida para o "agendados"
+    /// e está no cache do SpineAvaliacoesService (mesma unidade, mesmas datas).
+    /// </summary>
+    private async Task PublicarAgendadosComDesfechoAsync(
+        DashboardOverviewDto result, int escopo, int? unitId, DateTime dateFrom, DateTime dateTo,
+        string? responsibleUser)
+    {
+        if (!result.KpiOverrides.ContainsKey("agendados")) return;
+        try
+        {
+            var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+                $$"""{"metric":"{{KpiSourceTypes.AgendadosComDesfecho}}"}""");
+            var (medida, _, note) = await _kpiService.MedirAsync(
+                escopo, unitId, KpiSourceTypes.Franquia, config, dateFrom, dateTo,
+                responsibleUser, null, HttpContext.RequestAborted);
+            PublicacaoDeKpi.Publicar(result, KpiSourceTypes.AgendadosComDesfecho, medida, note);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao medir {Kpi}", KpiSourceTypes.AgendadosComDesfecho);
         }
     }
 

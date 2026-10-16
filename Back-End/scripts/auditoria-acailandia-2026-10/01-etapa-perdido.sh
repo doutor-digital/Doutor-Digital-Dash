@@ -18,9 +18,14 @@
 #  3. Confira o id da unidade (padrão 14 = Açailândia):
 #        SELECT "Id" FROM units WHERE "Slug" = 'doutor-hernia-acailandia';
 #
-#  COMO RODAR
-#     ./01-etapa-perdido.sh            → só CONFERE (padrão). Não grava nada.
-#     MODO=gravar ./01-etapa-perdido.sh → grava, e confere de novo no fim.
+#  COMO RODAR (nesta ordem)
+#     1) No painel, unidade Açailândia → "Sincronizar com a Kommo" e espere terminar.
+#        É o sync que grava o funil certo de cada lead, lido direto da Kommo, e já
+#        corrige a maioria dos perdidos. O conserto abaixo NÃO adivinha funil (review
+#        de 16/10: adivinhar pelo histórico gravava ALTA como "fechou tratamento").
+#     2) ./01-etapa-perdido.sh                          → só CONFERE. Não grava nada.
+#     3) SYNC_FEITO=1 MODO=gravar ./01-etapa-perdido.sh → grava o que sobrou.
+#        Sem SYNC_FEITO=1 o modo gravar roda o sync aqui mesmo, antes (pode levar minutos).
 #
 #  O QUE CADA PASSO MEXE
 #   • etapa atual do lead (leads."CurrentStage")  → corrigir-etapa-atual
@@ -61,28 +66,30 @@ fi
 
 if [[ "$MODO" == "gravar" ]]; then
 
-  echo "== 2. Corrige a ETAPA ATUAL dos leads =="
+  # O sync vem ANTES do conserto, sempre: é ele que grava o funil de cada lead a partir da Kommo.
+  if [[ "${SYNC_FEITO:-0}" != "1" ]]; then
+    echo "== 1b. Sync profundo da unidade ANTES do conserto (lê a Kommo; pode levar vários minutos) =="
+    echo "   (se você já clicou em 'Sincronizar com a Kommo' no painel e ele terminou, rode com SYNC_FEITO=1)"
+    curl -sS --fail-with-body --max-time 1800 -X POST "$API/internal/sync/kommo/units/$UNIDADE?maxLeads=20000" \
+      -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Length: 0"
+    echo
+  fi
+
+  echo "== 2. Corrige a ETAPA ATUAL dos leads (só os que têm funil conhecido) =="
   chamar POST "/internal/stage-map/corrigir-etapa-atual?unitId=$UNIDADE&simular=false"
 
   echo "== 3. Corrige o RÓTULO do histórico (últimos $DIAS_HISTORICO dias) =="
   chamar POST "/internal/stage-map/corrigir-rotulos?unitId=$UNIDADE&dias=$DIAS_HISTORICO&simular=false"
 
-  # Os leads que sobrarem em "semFunil" (143/142 sem funil no banco) se resolvem num sync
-  # da unidade: ele lê o funil de cada cartão na Kommo. Caminho recomendado: botão
-  # "Sincronizar com a Kommo" da unidade no painel (roda em segundo plano). Por aqui é
-  # síncrono e o proxy pode cortar a conexão de um sync longo — por isso fica opcional.
-  if [[ "${SYNC_PROFUNDO:-0}" == "1" ]]; then
-    echo "== 4. Sync profundo da unidade (lê a Kommo; pode levar vários minutos) =="
-    curl -sS --fail-with-body --max-time 1800 -X POST "$API/internal/sync/kommo/units/$UNIDADE?maxLeads=20000" \
-      -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Length: 0"
-    echo
-  fi
+  # Quem sobrar em "semFunil" depois do sync não está mais na Kommo (cartão apagado) ou passou
+  # do limite de leads do sync: fica como está — melhor errado à vista do que "corrigido" no chute.
 fi
 
 echo "== Conferência (simulação: mostra o que AINDA seria corrigido) =="
-echo "-- etapa atual: 'mudancas' lista de→para; esperado ANTES de gravar:"
-echo "   TRATAMENTO_CANCELADO → PERDIDO (~180) e ALTA → 09_FECHOU_TRATAMENTO (GANHO do COMERCIAL)."
-echo "   'semFunil' = 143/142 sem funil conhecido; resolve com o sync da unidade (ver passo 4)."
+echo "-- etapa atual: 'mudancas' lista de→para."
+echo "   ANTES do sync: os 142/143 aparecem em 'semFunil' (o conserto não adivinha funil) — é normal."
+echo "   DEPOIS do sync: TRATAMENTO_CANCELADO → PERDIDO só para quem o sync ainda não corrigiu."
+echo "   'semFunil' que sobra depois do sync = cartão que não está mais na Kommo: não é tocado."
 echo "   'funisPreenchidos' = leads que só ganham o funil (a etapa já estava certa)."
 echo "   Só entram etapas 142/143 e etapas gravadas como número cru; o resto não é tocado."
 chamar POST "/internal/stage-map/corrigir-etapa-atual?unitId=$UNIDADE&simular=true"

@@ -177,8 +177,8 @@ public sealed class KommoStageMapService(
     /// <param name="Mudancas">"de → para" com a quantidade, para conferir antes de gravar.</param>
     /// <param name="Amostra">Até 20 ids da Kommo (cartões) que seriam corrigidos.</param>
     /// <param name="FunisPreenchidos">
-    /// Leads com a coluna de funil vazia que ganham o funil (pelo histórico, ou porque o
-    /// número da etapa só existe em um funil) — mesmo quando a etapa já estava certa. Sem
+    /// Leads com a coluna de funil vazia que ganham o funil (porque o número da etapa só
+    /// existe em um funil) — mesmo quando a etapa já estava certa. Sem
     /// isso, um lead parado nunca recebe o funil e fica fora de KPI com etapa presa a funil.
     /// </param>
     public sealed record ResultadoEtapaAtual(
@@ -193,10 +193,10 @@ public sealed class KommoStageMapService(
     /// etapa canônica errada — o caso dos perdidos do COMERCIAL gravados como "tratamento
     /// cancelado" porque o webhook traduzia o 143 sem olhar o funil.
     ///
-    /// De onde vem o funil de cada lead: da coluna <see cref="Lead.CurrentPipelineId"/>; se
-    /// ela estiver vazia (lead gravado antes dela), da linha mais recente do histórico com a
-    /// MESMA etapa e funil gravado. Sem nenhum dos dois, o lead não é tocado e entra em
-    /// <c>SemFunil</c>. O histórico nunca é alterado aqui (isso é o
+    /// De onde vem o funil de cada lead: da coluna <see cref="Lead.CurrentPipelineId"/> (o sync
+    /// grava direto da Kommo), ou do número da etapa quando ele só existe em um funil. Nunca do
+    /// histórico, que tem buracos (review de 16/10). Sem funil conhecido, o lead não é tocado e
+    /// entra em <c>SemFunil</c> — rode o sync da unidade antes. O histórico nunca é alterado aqui (isso é o
     /// <see cref="CorrigirRotulosAsync"/>), e o id da etapa também não.
     ///
     /// Só mexe no defeito que a auditoria achou: etapa de número AMBÍGUO na conta (142/143)
@@ -219,14 +219,11 @@ public sealed class KommoStageMapService(
             .Where(l => l.UnitId == unitId && l.CurrentStageId != null && l.Status != LeadQueryExtensions.StatusDeleted)
             .ToListAsync(ct);
 
-        // Funil pelo histórico: a linha mais recente de cada lead em cada etapa, com funil.
-        var leadIds = leads.Select(l => l.Id).ToList();
-        var funilPeloHistorico = (await db.LeadStageHistories.AsNoTracking()
-                .Where(h => leadIds.Contains(h.LeadId) && h.PipelineId != null)
-                .Select(h => new { h.LeadId, h.StageId, h.PipelineId, Quando = h.CorrectedChangedAt ?? h.ChangedAt })
-                .ToListAsync(ct))
-            .GroupBy(h => (h.LeadId, h.StageId))
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(h => h.Quando).First().PipelineId!.Value);
+        // NÃO se deduz o funil pelo histórico (review de 16/10): o sync grava sem histórico e as linhas de webhook
+        // antes de 04/09 não têm funil, então "a última linha com o mesmo número" pode ser o 142 do COMERCIAL de
+        // um lead que hoje está no 142 do TRATAMENTO — e o conserto gravaria ALTA como "fechou tratamento". Sem
+        // funil conhecido o lead fica como está (SemFunil); quem resolve é o sync da unidade, que lê o funil
+        // direto da Kommo — por isso o script roda o sync ANTES deste passo.
 
         // Em quantos funis cada número de etapa existe. 142/143 existem em todos; o resto,
         // em um só — e aí o número basta para saber o funil.
@@ -242,7 +239,6 @@ public sealed class KommoStageMapService(
             var etapa = lead.CurrentStageId!.Value;
             var funisPossiveis = funisDoNumero.GetValueOrDefault(etapa) ?? [];
             long? funil = lead.CurrentPipelineId
-                ?? (funilPeloHistorico.TryGetValue((lead.Id, etapa), out var f) ? (long?)f : null)
                 ?? (funisPossiveis.Count == 1 ? (long?)funisPossiveis[0] : null);
 
             if (lead.CurrentPipelineId is null && funil is not null)

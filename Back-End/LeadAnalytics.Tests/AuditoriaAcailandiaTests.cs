@@ -260,7 +260,7 @@ public class AuditoriaAcailandiaTests
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
         };
         db.Leads.AddRange(
-            L(1, LeadStages.TratamentoCancelado, 143, null),       // funil vem do histórico → PERDIDO
+            L(1, LeadStages.TratamentoCancelado, 143, null),       // só o histórico diz COMERCIAL → NÃO adivinha (semFunil)
             L(2, LeadStages.TratamentoCancelado, 143, Tratamento), // está certo → não mexe
             L(3, LeadStages.TratamentoCancelado, 143, null),       // sem funil em lugar nenhum → semFunil
             L(4, EmEspera.ToString(), EmEspera, null),             // número cru → EM_ESPERA
@@ -286,10 +286,10 @@ public class AuditoriaAcailandiaTests
         var r = await Mapa(db).CorrigirEtapaAtualAsync(UnidadeId, simular: true, default);
 
         Assert.Equal(6, r.Examinados);
-        Assert.Equal(3, r.Corrigidos);
-        Assert.Equal(1, r.SemFunil);
-        Assert.Equal(3, r.FunisPreenchidos); // 1 (histórico), 4 e 6 (número de um funil só)
-        Assert.Contains(r.Mudancas, m => m.De == LeadStages.TratamentoCancelado && m.Para == LeadStages.Perdido && m.Quantidade == 1);
+        Assert.Equal(2, r.Corrigidos);
+        Assert.Equal(2, r.SemFunil);          // 1 e 3: o histórico não serve de prova (review de 16/10)
+        Assert.Equal(2, r.FunisPreenchidos);  // 4 e 6 (número de um funil só)
+        Assert.DoesNotContain(r.Mudancas, m => m.De == LeadStages.TratamentoCancelado);
         Assert.Contains(r.Mudancas, m => m.De == LeadStages.Alta && m.Para == LeadStages.FechouTratamento);
         db.ChangeTracker.Clear();
         Assert.Equal(LeadStages.TratamentoCancelado, (await db.Leads.FindAsync(1))!.CurrentStage);
@@ -304,8 +304,8 @@ public class AuditoriaAcailandiaTests
         db.ChangeTracker.Clear();
 
         var l1 = (await db.Leads.FindAsync(1))!;
-        Assert.Equal(LeadStages.Perdido, l1.CurrentStage);
-        Assert.Equal(Comercial, l1.CurrentPipelineId);
+        Assert.Equal(LeadStages.TratamentoCancelado, l1.CurrentStage); // espera o sync dizer o funil
+        Assert.Null(l1.CurrentPipelineId);
         Assert.Equal(LeadStages.TratamentoCancelado, (await db.Leads.FindAsync(2))!.CurrentStage);
         Assert.Equal(LeadStages.TratamentoCancelado, (await db.Leads.FindAsync(3))!.CurrentStage);
         Assert.Equal(LeadStages.EmEspera, (await db.Leads.FindAsync(4))!.CurrentStage);

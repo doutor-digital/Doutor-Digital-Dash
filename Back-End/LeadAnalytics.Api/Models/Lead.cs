@@ -26,6 +26,14 @@ public class Lead
     public string CurrentStage { get; set; } = "NOVO";
     public int? CurrentStageId { get; set; }
 
+    /// <summary>
+    /// Funil da etapa atual (pipeline_id da Kommo). O número da etapa sozinho não basta:
+    /// 142 e 143 existem em todo funil — no COMERCIAL o 143 é PERDIDO, no TRATAMENTO é
+    /// TRATAMENTO CANCELADO. Nulo nos leads gravados antes desta coluna, até o próximo
+    /// webhook ou sync do cartão.
+    /// </summary>
+    public long? CurrentPipelineId { get; set; }
+
     /// <summary>Valor do negócio (campo <c>price</c> do lead na Kommo), em R$.</summary>
     public decimal? Price { get; set; }
 

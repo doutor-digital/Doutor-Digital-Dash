@@ -49,7 +49,13 @@ public class SpineApiClient
         public const int Sessao = 2;
         public const int Retorno = 3;
         public const int RetornoComExames = 6;
-        public const int RetornoAposTratamento = 7;
+
+        /// <summary>
+        /// REAVALIAÇÃO — é o nome da categoria 7 na agenda da franquia (conferido na
+        /// Açailândia, 16/10/2026). O código chamava de "retorno pós-tratamento" e somava no
+        /// card Retornos; reavaliação é outra consulta e tem card próprio.
+        /// </summary>
+        public const int Reavaliacao = 7;
     }
 
     /// <summary>Máximo aceito pela API; acima disso ela devolve 400.</summary>

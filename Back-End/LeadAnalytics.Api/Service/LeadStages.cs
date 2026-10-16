@@ -19,6 +19,7 @@ public static class LeadStages
     public const string Perdido             = "PERDIDO";              // COMERCIAL · Perdido (status 143)
     public const string Alta                = "ALTA";                 // TRATAMENTO · Alta (status 142)
     public const string TratamentoCancelado = "TRATAMENTO_CANCELADO"; // TRATAMENTO · Cancelado (status 143)
+    public const string EmEspera            = "EM_ESPERA";            // COMERCIAL · Em espera (não é terminal)
 
     public const string AttendedCompareceu = "compareceu";
     public const string AttendedFaltou = "faltou";

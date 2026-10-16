@@ -18,39 +18,52 @@ public class KommoStagesResolver(
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromHours(1);
 
-    public async Task<Dictionary<int, string>> GetStageMapAsync(int unitId, CancellationToken ct)
+    /// <summary>
+    /// As etapas da conta com o FUNIL de cada uma — a base dos outros métodos. Cacheada por
+    /// 1h por unidade. Falha em silêncio (lista vazia) se a Kommo não responder.
+    /// </summary>
+    public async Task<IReadOnlyList<EtapaDaConta>> GetEtapasAsync(int unitId, CancellationToken ct)
     {
-        var cacheKey = $"kommo-stages-map:{unitId}";
-        if (cache.TryGetValue(cacheKey, out Dictionary<int, string>? cached) && cached is not null)
+        var cacheKey = $"kommo-stages-list:{unitId}";
+        if (cache.TryGetValue(cacheKey, out IReadOnlyList<EtapaDaConta>? cached) && cached is not null)
             return cached;
 
-        var map = new Dictionary<int, string>();
+        var etapas = new List<EtapaDaConta>();
         var unit = await db.Units.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unitId, ct);
         if (unit is null || string.IsNullOrWhiteSpace(unit.KommoSubdomain) || string.IsNullOrWhiteSpace(unit.KommoAccessToken))
         {
-            cache.Set(cacheKey, map, TimeSpan.FromMinutes(5));
-            return map;
+            cache.Set<IReadOnlyList<EtapaDaConta>>(cacheKey, etapas, TimeSpan.FromMinutes(5));
+            return etapas;
         }
 
         try
         {
             var resp = await api.GetPipelinesAsync(unit.KommoSubdomain!, unit.KommoAccessToken!, ct);
             foreach (var pipeline in resp?.Embedded?.Pipelines ?? new())
-            {
                 foreach (var status in pipeline.Embedded?.Statuses ?? new())
-                {
                     if (!string.IsNullOrWhiteSpace(status.Name))
-                        map[(int)status.Id] = status.Name!;
-                }
-            }
-            logger.LogInformation("[kommo-stages] unit={Unit} carregou {Count} etapas", unitId, map.Count);
+                        etapas.Add(new EtapaDaConta(pipeline.Id, status.Id, status.Name));
+            logger.LogInformation("[kommo-stages] unit={Unit} carregou {Count} etapas", unitId, etapas.Count);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "[kommo-stages] falha ao buscar pipelines (unit={Unit})", unitId);
         }
 
-        cache.Set(cacheKey, map, Ttl);
+        cache.Set<IReadOnlyList<EtapaDaConta>>(cacheKey, etapas, Ttl);
+        return etapas;
+    }
+
+    /// <summary>
+    /// <c>status_id → nome</c>, sem funil. Ambíguo para 142/143 (o último funil lido vence) —
+    /// serve para mostrar nome em texto livre, NUNCA para decidir a etapa canônica. Para
+    /// isso use <see cref="GetCanonicalStageMapAsync"/> ou <see cref="GetEtapasAsync"/>.
+    /// </summary>
+    public async Task<Dictionary<int, string>> GetStageMapAsync(int unitId, CancellationToken ct)
+    {
+        var map = new Dictionary<int, string>();
+        foreach (var e in await GetEtapasAsync(unitId, ct))
+            map[(int)e.Etapa] = e.Nome!;
         return map;
     }
 
@@ -63,21 +76,17 @@ public class KommoStagesResolver(
     }
 
     /// <summary>
-    /// Mapa <c>status_id (string) → etapa canônica</c> derivado dos NOMES das etapas
-    /// na Kommo (reusa o cache de <see cref="GetStageMapAsync"/>). Usado pelo webhook
-    /// ao vivo como <c>stageMapOverride</c> do <see cref="KommoIngestionService"/>,
-    /// pra resolver agendados mesmo quando a unidade NÃO tem <c>KommoStageMapJson</c>
-    /// preenchido — análogo ao que o sync já faz.
+    /// Mapa <c>etapa da Kommo → etapa canônica</c> derivado dos NOMES das etapas, com a
+    /// chave <c>"{funil}:{etapa}"</c> (e a chave só com o número quando ele não é ambíguo).
+    /// Usado pelo webhook ao vivo como <c>stageMapOverride</c> do
+    /// <see cref="KommoIngestionService"/> — o MESMO construtor que o sync usa
+    /// (<see cref="MapaCanonicoDeEtapas"/>).
+    ///
+    /// Antes este mapa era só por número: o 143 do funil TRATAMENTO ("TRATAMENTO
+    /// CANCELADO") sobrescrevia o 143 do COMERCIAL ("PERDIDO"), e todo lead perdido que
+    /// chegava pelo webhook era gravado como tratamento cancelado (Açailândia, 16/10/2026:
+    /// 180 de 180).
     /// </summary>
     public async Task<Dictionary<string, string>> GetCanonicalStageMapAsync(int unitId, CancellationToken ct)
-    {
-        var byId = await GetStageMapAsync(unitId, ct);
-        var canonical = new Dictionary<string, string>(byId.Count);
-        foreach (var (id, name) in byId)
-        {
-            var c = CanonicalStages.Resolve(name);
-            if (c != null) canonical[id.ToString()] = c;
-        }
-        return canonical;
-    }
+        => MapaCanonicoDeEtapas.Montar(await GetEtapasAsync(unitId, ct));
 }

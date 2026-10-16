@@ -64,9 +64,9 @@ public class AgendaDoDiaService(AppDbContext db)
                              && l.CreatedAt >= deUtc && l.CreatedAt < ateUtc
                              && (l.HasAppointment || l.AppointmentScheduledAt != null), ct);
 
-        var avaliacoes = porCategoria
-            .Where(c => c.Categoria.Contains("AVALIA", StringComparison.OrdinalIgnoreCase))
-            .Sum(c => c.Quantidade);
+        // Pelo ID da categoria, não pelo texto: "REAVALIAÇÃO" (categoria 7) também contém
+        // "AVALIA", e contar por texto somaria reavaliação como avaliação.
+        var avaliacoes = agenda.Count(a => a.IdCategory == SpineApiClient.ScheduleCategory.Avaliacao);
 
         return new AgendaDoDiaDto
         {
@@ -89,7 +89,7 @@ public class AgendaDoDiaService(AppDbContext db)
         SpineApiClient.ScheduleCategory.Sessao => "SESSÃO",
         SpineApiClient.ScheduleCategory.Retorno => "RETORNO",
         SpineApiClient.ScheduleCategory.RetornoComExames => "RETORNO COM EXAMES",
-        SpineApiClient.ScheduleCategory.RetornoAposTratamento => "RETORNO APÓS TRATAMENTO",
+        SpineApiClient.ScheduleCategory.Reavaliacao => "REAVALIAÇÃO",
         _ => "OUTRO",
     };
 }

@@ -58,7 +58,7 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
                         // Data corrigida manda: a conferência tem de olhar o MESMO
                         // número que o card, senão ela acusa divergência que não existe.
                         && (h.CorrectedChangedAt ?? h.ChangedAt) >= de
-                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= ate
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) < ate
                         && h.StageLabel.Contains("AGENDADO")
                         && h.Lead.TenantId == tenantId
                         && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))
@@ -85,10 +85,10 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
         // ── 2. Consultas: as três populações do mesmo card ──────────────────
         var marcadasNoPeriodo = await escopo
             .CountAsync(l => l.AppointmentScheduledAtFilledAt >= de
-                             && l.AppointmentScheduledAtFilledAt <= ate, ct);
+                             && l.AppointmentScheduledAtFilledAt < ate, ct);
 
         var comDataNoPeriodo = await escopo
-            .CountAsync(l => l.AppointmentScheduledAt >= de && l.AppointmentScheduledAt <= ate, ct);
+            .CountAsync(l => l.AppointmentScheduledAt >= de && l.AppointmentScheduledAt < ate, ct);
 
         var fonteConsultas = unitId.HasValue
             ? await _db.KpiConfigurations.AsNoTracking()
@@ -229,7 +229,7 @@ public class ConferenciaService(AppDbContext db, KpiConfigService kpiConfig)
                         // Data corrigida manda: a conferência tem de olhar o MESMO
                         // número que o card, senão ela acusa divergência que não existe.
                         && (h.CorrectedChangedAt ?? h.ChangedAt) >= de
-                        && (h.CorrectedChangedAt ?? h.ChangedAt) <= ate
+                        && (h.CorrectedChangedAt ?? h.ChangedAt) < ate
                         && h.StageLabel.Contains("AGENDADO")
                         && h.Lead.TenantId == tenantId
                         && (!unitId.HasValue || h.Lead.UnitId == unitId.Value))

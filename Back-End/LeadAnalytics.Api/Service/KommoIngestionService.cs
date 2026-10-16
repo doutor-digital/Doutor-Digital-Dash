@@ -101,14 +101,14 @@ public class KommoIngestionService(
         Unit? configDa = null)
     {
         var cfg = configDa ?? unit;
-        // Mapa efetivo de etapas: começa pelo mapa derivado dos NOMES das etapas da Kommo
-        // (override passado pelo sync — resolve agendados mesmo sem KommoStageMapJson) e
-        // sobrepõe o mapa explícito da unidade, que tem prioridade (config do admin vence).
-        var stageMap = stageMapOverride is null
-            ? new Dictionary<string, string>()
-            : new Dictionary<string, string>(stageMapOverride);
-        foreach (var kv in ParseStageMap(cfg.KommoStageMapJson))
-            stageMap[kv.Key] = kv.Value;
+        // Dois mapas de etapa, consultados por MapaCanonicoDeEtapas.Traduzir: o MANUAL da
+        // unidade (KommoStageMapJson — a config do admin vence) e o AUTOMÁTICO, derivado dos
+        // NOMES das etapas na Kommo (passado pelo sync e pelo webhook; resolve agendados mesmo
+        // sem mapa manual). A exceção ao "admin vence" é o número ambíguo (142/143): "143"
+        // sozinho não diz de qual funil é, e aí manda o par (funil, etapa).
+        var mapaManual = ParseStageMap(cfg.KommoStageMapJson);
+        var mapaAuto = stageMapOverride ?? new Dictionary<string, string>();
+        var ambiguos = MapaCanonicoDeEtapas.NumerosAmbiguos(mapaAuto);
 
         // Mapeamento dos custom fields do Perfil do Lead (escolhido em Configurações).
         // Usado pra popular Lead.AppointmentScheduledAt e Lead.ConsultationValue direto
@@ -304,19 +304,17 @@ public class KommoIngestionService(
             // vindos da Kommo. CurrentStageId mantém o status_id numérico cru para referência.
             var rawStage = ev.Stage?.Trim();
             int? rawStageId = int.TryParse(rawStage, out var parsedStageId) ? parsedStageId : null;
-            var stageChanged = !string.IsNullOrWhiteSpace(rawStage) && rawStageId != lead.CurrentStageId;
+            long? funilDoEvento = long.TryParse(ev.PipelineId, out var parsedFunil) ? parsedFunil : null;
+            var stageChanged = MudouDeEtapa(rawStage, rawStageId, funilDoEvento, lead.CurrentStageId, lead.CurrentPipelineId);
 
             string? canonical = null;
-            // Procura primeiro a chave qualificada pelo funil ("{pipeline}:{status}"):
-            // ganho/perdido (142/143) repetem id entre funis com nomes diferentes, e sem
-            // isso o mapa de um funil sequestra os leads do outro. Cai na chave simples
-            // para unidades com KommoStageMapJson manual, que usa só o status_id.
-            var chaveComFunil = string.IsNullOrWhiteSpace(ev.PipelineId)
+            // Ganho/perdido (142/143) repetem id entre funis com nomes diferentes: sem o funil,
+            // o mapa de um funil sequestra os leads do outro. Ordem completa em
+            // MapaCanonicoDeEtapas.Traduzir.
+            var canonicalRaw = string.IsNullOrWhiteSpace(rawStage)
                 ? null
-                : $"{ev.PipelineId}:{rawStage}";
-            if (!string.IsNullOrWhiteSpace(rawStage)
-                && ((chaveComFunil != null && stageMap.TryGetValue(chaveComFunil, out var canonicalRaw))
-                    || stageMap.TryGetValue(rawStage, out canonicalRaw)))
+                : MapaCanonicoDeEtapas.Traduzir(mapaManual, mapaAuto, ambiguos, ev.PipelineId, rawStage!);
+            if (canonicalRaw is not null)
             {
                 // Resolve é tolerante: aceita o nome canônico exato, o nome da etapa da
                 // Kommo com prefixo ("04_AGENDADO_SEM_PAGAMENTO") ou por palavra-chave.
@@ -350,7 +348,7 @@ public class KommoIngestionService(
                     {
                         LeadId = lead.Id,
                         StageId = lead.CurrentStageId ?? 0,
-                        PipelineId = long.TryParse(ev.PipelineId, out var funilId) ? funilId : null,
+                        PipelineId = funilDoEvento,
                         StageLabel = newCurrentStage,
                         ChangedAt = stageChangedAt,
                         EntrySource = LeadStageHistory.SourceWebhook,
@@ -368,6 +366,12 @@ public class KommoIngestionService(
                 lead.CurrentStage = mappedLeadStage;
             }
 
+            // Funil da etapa atual: grava sempre que o evento trouxer, inclusive quando a
+            // etapa não mudou — é assim que os leads antigos (coluna nula) ganham o funil no
+            // primeiro webhook/sync depois do deploy.
+            if (!string.IsNullOrWhiteSpace(rawStage) && funilDoEvento.HasValue)
+                lead.CurrentPipelineId = funilDoEvento;
+
             // Automação de Consulta/Tratamento — só se a unidade mapeou esse status_id.
             if (canonical != null)
             {
@@ -381,6 +385,23 @@ public class KommoIngestionService(
             await _db.SaveChangesAsync(ct);
 
         return changed;
+    }
+
+    /// <summary>
+    /// A etapa mudou? Compara FUNIL + ETAPA, não só o número da etapa.
+    ///
+    /// Comparando só o número, sair do 143 do TRATAMENTO (cancelado) para o 143 do
+    /// COMERCIAL (perdido) era "nada mudou" — o histórico não registrava a passagem e o
+    /// rótulo errado ficava para sempre. O funil só entra na conta quando os dois lados
+    /// o conhecem: lead antigo (funil nulo) com o mesmo número cai no conserto retroativo
+    /// do rótulo, sem cravar uma linha de histórico com data inventada.
+    /// </summary>
+    internal static bool MudouDeEtapa(
+        string? etapaCrua, int? etapaDoEvento, long? funilDoEvento, int? etapaAtual, long? funilAtual)
+    {
+        if (string.IsNullOrWhiteSpace(etapaCrua)) return false;
+        if (etapaDoEvento != etapaAtual) return true;
+        return funilDoEvento.HasValue && funilAtual.HasValue && funilDoEvento != funilAtual;
     }
 
     /// <summary>Lê o mapa status_id→etapa canônica da unidade. Vazio se ausente/ inválido.</summary>

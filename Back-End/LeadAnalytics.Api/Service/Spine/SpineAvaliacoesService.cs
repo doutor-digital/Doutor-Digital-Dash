@@ -117,10 +117,22 @@ public class SpineAvaliacoesService(
             }
         }
 
-        var dto = Montar(de, ate, rows);
+        var dto = Montar(de, ate, SemIgnorados(rows, _options.AgendamentosIgnorados));
         _cache.Set(cacheKey, dto, TimeSpan.FromSeconds(_options.CacheSeconds));
         _logger.LogDebug("Spine cat {Cats} {UnitId} {De}→{Ate}: {N} registros", chaveCat, unitId, de, ate, rows.Count);
         return dto;
+    }
+
+    /// <summary>
+    /// Tira da conta os horários listados em <see cref="SpineOptions.AgendamentosIgnorados"/>
+    /// (registros de teste na agenda real). Lista vazia = nada muda — é o padrão.
+    /// </summary>
+    internal static IReadOnlyList<SpineSchedule> SemIgnorados(
+        IReadOnlyList<SpineSchedule> rows, IReadOnlyCollection<long>? ignorados)
+    {
+        if (ignorados is null || ignorados.Count == 0) return rows;
+        var fora = ignorados as ISet<long> ?? ignorados.ToHashSet();
+        return rows.Where(r => !fora.Contains(r.IdSchedule)).ToList();
     }
 
     internal static SpineAvaliacoesDto Montar(

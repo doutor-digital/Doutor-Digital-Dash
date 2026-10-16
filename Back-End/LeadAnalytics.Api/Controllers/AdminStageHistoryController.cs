@@ -185,7 +185,7 @@ public class AdminStageHistoryController(
                 && h.Lead.UnitId == unitId
                 && h.EntrySource != LeadStageHistory.SourceLegacy
                 && (h.CorrectedChangedAt ?? h.ChangedAt) >= from
-                && (h.CorrectedChangedAt ?? h.ChangedAt) <= to);
+                && (h.CorrectedChangedAt ?? h.ChangedAt) < to);
         if (wantedStages is not null)
             q = q.Where(h => wantedStages.Contains(h.StageLabel));
         // Filtro por etapa específica (substitui o agrupamento por KPI quando o front manda).

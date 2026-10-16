@@ -36,7 +36,9 @@ public class KommoStageHistoryBackfillService(
             return new BackfillResult(0, 0, false, null, "unidade sem KommoSubdomain/AccessToken");
 
         // status_id (Kommo) → etapa canônica → label LeadStages.* (o que guardamos em StageLabel).
-        var stageNameById = await stagesResolver.GetStageMapAsync(unit.Id, ct);
+        // Nome pelo par (funil, etapa): 142/143 existem em todo funil com nomes diferentes,
+        // e o mapa só por número rotulava o PERDIDO do COMERCIAL como TRATAMENTO CANCELADO.
+        var etapasDaConta = await stagesResolver.GetEtapasAsync(unit.Id, ct);
 
         // ExternalId (lead id da Kommo) → Id interno do lead, restrito ao tenant/unidade.
         var leadIdByExternal = await db.Leads.AsNoTracking()
@@ -80,8 +82,9 @@ public class KommoStageHistoryBackfillService(
 
                 var statusId = ev.ValueAfter?.FirstOrDefault()?.LeadStatus?.Id;
                 if (statusId is not long sid) continue;
+                var funilDepois = ev.ValueAfter?.FirstOrDefault()?.LeadStatus?.PipelineId;
 
-                var name = stageNameById.TryGetValue((int)sid, out var n) ? n : null;
+                var name = MapaCanonicoDeEtapas.Nome(etapasDaConta, funilDepois, sid);
                 var label = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(name));
                 if (label is null) continue; // etapa fora do funil canônico — não rastreamos
 
@@ -90,7 +93,8 @@ public class KommoStageHistoryBackfillService(
                 var beforeId = ev.ValueBefore?.FirstOrDefault()?.LeadStatus?.Id;
                 if (beforeId is long bid)
                 {
-                    var beforeName = stageNameById.TryGetValue((int)bid, out var bn) ? bn : null;
+                    var beforeName = MapaCanonicoDeEtapas.Nome(
+                        etapasDaConta, ev.ValueBefore?.FirstOrDefault()?.LeadStatus?.PipelineId, bid);
                     var beforeLabel = CanonicalStages.ToLeadStage(CanonicalStages.Resolve(beforeName));
                     if (LeadStages.IsScheduled(label) && LeadStages.IsScheduled(beforeLabel)) continue;
                 }
@@ -99,7 +103,7 @@ public class KommoStageHistoryBackfillService(
                 {
                     LeadId = internalLeadId,
                     StageId = (int)sid,
-                    PipelineId = ev.ValueAfter?.FirstOrDefault()?.LeadStatus?.PipelineId,
+                    PipelineId = funilDepois,
                     StageLabel = label,
                     ChangedAt = changedAt,
                     KommoEventId = ev.Id,

@@ -19,4 +19,17 @@ public class SpineOptions
 
     /// <summary>Segundos de cache das respostas agregadas. Agenda muda devagar.</summary>
     public int CacheSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// Horários da agenda da franquia (idSchedule) que os cards NÃO contam — registros de
+    /// teste lançados na agenda real. VAZIO por padrão: o filtro existe, mas está desligado.
+    ///
+    /// Por que por id e não por nome ("TESTE"): não há no projeto uma regra segura para
+    /// reconhecer paciente de teste pelo nome, e um palpite errado tiraria paciente de
+    /// verdade da conta. O id vem de quem conferiu (a recepção ou a auditoria) e só some
+    /// o que foi apontado. Para ligar, por variável de ambiente:
+    /// <c>Spine__AgendamentosIgnorados__0=3738045</c>, <c>Spine__AgendamentosIgnorados__1=3735665</c>.
+    /// O melhor conserto continua sendo a recepção apagar/corrigir o registro na franquia.
+    /// </summary>
+    public long[] AgendamentosIgnorados { get; set; } = [];
 }

@@ -1348,6 +1348,9 @@ namespace LeadAnalytics.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("CurrentPipelineId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("CurrentStage")
                         .IsRequired()
                         .HasColumnType("text");

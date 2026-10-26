@@ -1,0 +1,731 @@
+{
+  "pipelines": {
+    "COMERCIAL": {
+      "id": 14675775,
+      "statuses": {
+        "incoming leads": 113393351,
+        "em qualificação": 113393355,
+        "em espera": 113393359,
+        "conferir na franquia": 113393363,
+        "agendado": 113393367,
+        "não compareceu": 113393371,
+        "compareceu": 113393375,
+        "em negociação": 113393379,
+        "retorno pós-tratamento": 113393383,
+        "closed - won": 142,
+        "closed - lost": 143
+      }
+    },
+    "TRATAMENTO": {
+      "id": 14675783,
+      "statuses": {
+        "incoming leads": 113393403,
+        "em tratamento": 113393407,
+        "closed - won": 142,
+        "closed - lost": 143
+      }
+    }
+  },
+  "groups": {
+    "paciente": {
+      "id": "leads_23821793037688",
+      "name": "PACIENTE"
+    }
+  },
+  "fields": {
+    "paciente::franquia#1": {
+      "id": 218646,
+      "name": "*FRANQUIA*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::idclient-franquia#1": {
+      "id": 218648,
+      "name": "⚙ idClient (franquia)",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::idschedule-franquia#1": {
+      "id": 218650,
+      "name": "⚙ idSchedule (franquia)",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::idade#1": {
+      "id": 218652,
+      "name": "# Idade",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::sexo#1": {
+      "id": 218654,
+      "name": "⚥ Sexo",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Feminino": 175116,
+        "Masculino": 175118
+      }
+    },
+    "paciente::cidade#1": {
+      "id": 218656,
+      "name": "⌂ Cidade",
+      "type": "textarea",
+      "group": "paciente"
+    },
+    "paciente::estado#1": {
+      "id": 218658,
+      "name": "⌂ Estado",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::endereco#1": {
+      "id": 218660,
+      "name": "⌂ Endereço",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::origem-na-franquia#1": {
+      "id": 218662,
+      "name": "⚑ Origem na franquia",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::status-do-paciente#1": {
+      "id": 218664,
+      "name": "✓ Status do paciente",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Inativo": 175120,
+        "Ativo": 175122
+      }
+    },
+    "paciente::em-qualificacao#1": {
+      "id": 218666,
+      "name": "*EM QUALIFICAÇÃO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::qualificacao-quente-morno-frio#1": {
+      "id": 218668,
+      "name": "★ Qualificação (Quente/Morno/Frio)",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Quente": 175124,
+        "Morno": 175126,
+        "Frio": 175128
+      }
+    },
+    "paciente::tipo-de-lead#1": {
+      "id": 218670,
+      "name": "⬢ Tipo de lead",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Resgate": 175130,
+        "Cadastro": 175132,
+        "TRANSFERIDO DE OUTRA UNIDADE": 175134
+      }
+    },
+    "paciente::regiao-da-dor#1": {
+      "id": 218672,
+      "name": "⚕ Região da dor",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Lombar": 175136,
+        "Torácica": 175138,
+        "Outra": 175140,
+        "Não informada": 175142,
+        "Cervical": 175144
+      }
+    },
+    "paciente::queixa#1": {
+      "id": 218674,
+      "name": "✎ Queixa",
+      "type": "textarea",
+      "group": "paciente"
+    },
+    "paciente::observacoes#1": {
+      "id": 218676,
+      "name": "✎ Observações",
+      "type": "textarea",
+      "group": "paciente"
+    },
+    "paciente::em-espera#1": {
+      "id": 218678,
+      "name": "*EM ESPERA*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::motivo-da-espera#1": {
+      "id": 218680,
+      "name": "⊘ Motivo da espera",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Vai decidir": 175146,
+        "Viajando": 175148,
+        "Financeiro agora não": 175150,
+        "Outro": 175152,
+        "Exames": 175154
+      }
+    },
+    "paciente::retomar-em#1": {
+      "id": 218682,
+      "name": "◷ Retomar em",
+      "type": "date",
+      "group": "paciente"
+    },
+    "paciente::agendado#1": {
+      "id": 218684,
+      "name": "*AGENDADO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::agendou#1": {
+      "id": 218686,
+      "name": "✓ Agendou",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sim": 175156,
+        "Não": 175158
+      }
+    },
+    "paciente::data-da-consulta#1": {
+      "id": 218688,
+      "name": "◷ Data da Consulta",
+      "type": "date_time",
+      "group": "paciente"
+    },
+    "paciente::agendado-pela-sdr-em#1": {
+      "id": 218690,
+      "name": "◷ Agendado pela SDR em",
+      "type": "date_time",
+      "group": "paciente"
+    },
+    "paciente::tipo-de-agendamento#1": {
+      "id": 218692,
+      "name": "⬢ Tipo de agendamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Resgate": 175160,
+        "Cadastro": 175162
+      }
+    },
+    "paciente::responsavel-agendamento#1": {
+      "id": 218694,
+      "name": "☻ Responsável agendamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "SDR": 175164,
+        "I.A SOFIA": 175166,
+        "DOUTOR DIGITAL": 175168
+      }
+    },
+    "paciente::agendamento-feito-por#1": {
+      "id": 218696,
+      "name": "⬢ Agendamento feito por",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "IA": 175170,
+        "Humano": 175172
+      }
+    },
+    "paciente::valor-da-consulta#1": {
+      "id": 219008,
+      "name": "¤ Valor da Consulta",
+      "type": "monetary",
+      "group": "paciente"
+    },
+    "paciente::consulta-pg-antecipado#1": {
+      "id": 218702,
+      "name": "✓ Consulta pg antecipado",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Não": 175182,
+        "Sim": 175184
+      }
+    },
+    "paciente::categoria-da-consulta#1": {
+      "id": 218704,
+      "name": "⌂ Categoria da consulta",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Avaliação": 175186,
+        "Sessão": 175188,
+        "Retorno": 175190,
+        "Retorno com exames": 175192,
+        "Retorno após tratamento": 175194
+      }
+    },
+    "paciente::situacao-da-consulta#1": {
+      "id": 218706,
+      "name": "✓ Situação da consulta",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Agendado": 175196,
+        "Confirmado": 175198,
+        "Atendido": 175200,
+        "Não compareceu": 175202,
+        "Remarcado": 175204,
+        "Desmarcado": 175206
+      }
+    },
+    "paciente::fisioterapeuta#1": {
+      "id": 218708,
+      "name": "⚕ Fisioterapeuta",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "A definir": 175208
+      }
+    },
+    "paciente::compareceu#1": {
+      "id": 218710,
+      "name": "✓ Compareceu",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sim": 175210,
+        "Não": 175212
+      }
+    },
+    "paciente::compareceu#2": {
+      "id": 218712,
+      "name": "*COMPARECEU*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::tratamento-indicado#1": {
+      "id": 218714,
+      "name": "⚕ Tratamento indicado",
+      "type": "multiselect",
+      "group": "paciente",
+      "enums": {
+        "01 Mês — PREVENTIVO CERVICAL": 175214,
+        "01 Mês — MANUTENÇÃO CERVICAL": 175216,
+        "01 Mês — MANUTENÇÃO LOMBAR": 175218,
+        "01 Mês — DESCOMPRESSÃO CERVICAL": 175220,
+        "01 Mês — DESCOMPRESSÃO LOMBAR": 175222,
+        "02 Meses — POSTURAL": 175224,
+        "03 Meses — LOMBAR CRÔNICO": 175226,
+        "03 Meses — LOMBAR AGUDO": 175228,
+        "03 Meses — CERVICAL CRÔNICO": 175230,
+        "03 Meses — CERVICAL AGUDO": 175232,
+        "01 Mês — PREVENTIVO LOMBAR": 175234,
+        "Cervical longo - 3 meses": 175236,
+        "Lombar longo - 3 meses": 175238,
+        "Cervical curto - 1 mês": 175240,
+        "Lombar curto - 1 mês": 175242,
+        "Manutenção": 175244,
+        "Postural": 175246,
+        "SEM TRATAMENTO INDICADO": 175248
+      }
+    },
+    "paciente::em-negociacao#1": {
+      "id": 218716,
+      "name": "*EM NEGOCIAÇÃO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::motivo-de-nao-fechamento-do-tratamento#1": {
+      "id": 218718,
+      "name": "⊘ Motivo de não fechamento do tratamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Plano de saúde": 175250,
+        "Outra patologia": 175252,
+        "Solicitado exames": 175254,
+        "Caso enviado para a franquia": 175256,
+        "Decidir com a familia": 175258,
+        "Mora em outra cidade": 175260,
+        "Bandeira vermelha": 175262,
+        "Vai viajar": 175264,
+        "Achou caro": 175266,
+        "Vai se organizar financeiramente": 175268,
+        "Assinou contrato": 175270,
+        "Financeiramente vulnerável": 175272,
+        "Sem resposta após consulta": 175274
+      }
+    },
+    "paciente::ganho-concluido#1": {
+      "id": 218720,
+      "name": "*GANHO / CONCLUÍDO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::fechou-tratamento#1": {
+      "id": 218722,
+      "name": "✓ Fechou tratamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sim": 175276,
+        "Não": 175278
+      }
+    },
+    "paciente::tratamento-fechado#1": {
+      "id": 218724,
+      "name": "⚕ Tratamento fechado",
+      "type": "multiselect",
+      "group": "paciente",
+      "enums": {
+        "01 Mês — PREVENTIVO CERVICAL": 175280,
+        "01 Mês — MANUTENÇÃO CERVICAL": 175282,
+        "01 Mês — MANUTENÇÃO LOMBAR": 175284,
+        "01 Mês — DESCOMPRESSÃO CERVICAL": 175286,
+        "01 Mês — DESCOMPRESSÃO LOMBAR": 175288,
+        "02 Meses — POSTURAL": 175290,
+        "03 Meses — LOMBAR CRÔNICO": 175292,
+        "03 Meses — LOMBAR AGUDO": 175294,
+        "03 Meses — CERVICAL CRÔNICO": 175296,
+        "03 Meses — CERVICAL AGUDO": 175298,
+        "01 Mês — PREVENTIVO LOMBAR": 175300,
+        "Cervical longo - 3 meses": 175302,
+        "Lombar longo - 3 meses": 175304,
+        "Cervical - 1 mês": 175306,
+        "Lombar - 1 mês": 175308,
+        "Manutenção": 175310,
+        "Postural": 175312
+      }
+    },
+    "paciente::valor-do-tratamento#1": {
+      "id": 219010,
+      "name": "¤ Valor do tratamento",
+      "type": "monetary",
+      "group": "paciente"
+    },
+    "paciente::forma-de-pagamento#1": {
+      "id": 218744,
+      "name": "⬢ Forma de pagamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "À vista / PIX": 175360,
+        "Cartão de crédito": 175362,
+        "Cartão de débito": 175364,
+        "Boleto": 175366,
+        "Misto": 175368
+      }
+    },
+    "paciente::tipo-de-fechamento-de-tratamento#1": {
+      "id": 218746,
+      "name": "⬢ Tipo de fechamento de tratamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Resgate": 175370,
+        "Cadastro": 175372
+      }
+    },
+    "paciente::semaforo#1": {
+      "id": 218748,
+      "name": "◉ Semáforo",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "PARCIAL — fechou e pagou parte": 175374,
+        "AZUL — fechou, pagamento não confirmado": 175376,
+        "AMARELO — não fechou: dinheiro, família, vai pensar": 175378,
+        "LARANJA — não fechou: falta exame ou retorno": 175380,
+        "VERMELHO — não é caso para a clínica": 175382,
+        "VERDE — fechou e pagou tudo": 175384
+      }
+    },
+    "paciente::perdido#1": {
+      "id": 218750,
+      "name": "*PERDIDO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::motivo-do-nao-agendamento#1": {
+      "id": 218752,
+      "name": "⊘ Motivo do não agendamento",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sem condições financeira": 175386,
+        "Não interagiu": 175388,
+        "Informação para terceiro": 175390,
+        "Outra patologia": 175392,
+        "Clicou por engano": 175394,
+        "Está viajando": 175396,
+        "Sem interesse": 175398,
+        "Não deu continuidade ao atendimento": 175400,
+        "Vai se organizar": 175402,
+        "Assinou contrato": 175404,
+        "Plano de Saúde": 175406,
+        "Outra cidade": 175408
+      }
+    },
+    "paciente::em-tratamento#1": {
+      "id": 218754,
+      "name": "*EM TRATAMENTO*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::idtreatment-franquia#1": {
+      "id": 218756,
+      "name": "⚙ idTreatment (franquia)",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::proxima-sessao#1": {
+      "id": 218758,
+      "name": "◷ Próxima sessão",
+      "type": "date_time",
+      "group": "paciente"
+    },
+    "paciente::ultima-sessao#1": {
+      "id": 218760,
+      "name": "◷ Última sessão",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::sessoes-realizadas#1": {
+      "id": 218762,
+      "name": "# Sessões realizadas",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::sessoes-agendadas-por-vir#1": {
+      "id": 218764,
+      "name": "# Sessões agendadas (por vir)",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::sessoes-no-historico#1": {
+      "id": 218766,
+      "name": "# Sessões no histórico",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::no-de-faltas#1": {
+      "id": 218768,
+      "name": "# Nº de faltas",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::local-do-tratamento#1": {
+      "id": 218770,
+      "name": "⚕ Local do tratamento",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::grau#1": {
+      "id": 218772,
+      "name": "⚕ Grau",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::status-do-tratamento#1": {
+      "id": 218774,
+      "name": "⚕ Status do tratamento",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::automatico-nao-preencher#1": {
+      "id": 218776,
+      "name": "*AUTOMÁTICO · NÃO PREENCHER",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::resposta-da-ia#1": {
+      "id": 218778,
+      "name": "Resposta da IA",
+      "type": "textarea",
+      "group": "paciente"
+    },
+    "paciente::pausar-ia#1": {
+      "id": 218780,
+      "name": "Pausar IA",
+      "type": "checkbox",
+      "group": "paciente"
+    },
+    "paciente::status-da-conversa#1": {
+      "id": 218782,
+      "name": "⬢ Status da conversa",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Aguardando lead": 175410,
+        "Respondendo": 175412,
+        "Sem resposta": 175414,
+        "Encerrada": 175416
+      }
+    },
+    "paciente::atendimento-assumido-por-humano#1": {
+      "id": 218784,
+      "name": "✓ Atendimento assumido por humano",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sim": 175418,
+        "Não": 175420
+      }
+    },
+    "paciente::data-do-primeiro-contato#1": {
+      "id": 218786,
+      "name": "◷ Data do primeiro contato",
+      "type": "date_time",
+      "group": "paciente"
+    },
+    "paciente::interacao#1": {
+      "id": 218788,
+      "name": "✓ Interação",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Sim": 175422,
+        "Não": 175424
+      }
+    },
+    "paciente::tipo-de-resgate#1": {
+      "id": 218790,
+      "name": "⬢ Tipo de resgate",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Disparo Whatsap": 175426,
+        "Template de Mensagem": 175428,
+        "Disparo Email": 175430,
+        "Disparo SMS": 175432,
+        "Ligação": 175434,
+        "Disparo": 175436,
+        "Mensagem": 175438
+      }
+    },
+    "paciente::tentativas-de-resgate#1": {
+      "id": 218792,
+      "name": "⬢ Tentativas de resgate",
+      "type": "multiselect",
+      "group": "paciente",
+      "enums": {
+        "Resgate 2 - 48h": 175440,
+        "Resgate 3 - 96h": 175442,
+        "Resgate 4 - 120h": 175444,
+        "Resgate 5 - 240h": 175446,
+        "Resgate 1 - 24h": 175448,
+        "Resgaste 1 - 24h": 175450,
+        "Resgaste 2 - 48h": 175452,
+        "Resgaste 3 - 72h": 175454,
+        "Resgaste 4 - 120h": 175456,
+        "Resgaste 5 - 240h": 175458
+      }
+    },
+    "paciente::no-de-tentativas-de-contato#1": {
+      "id": 218794,
+      "name": "# Nº de tentativas de contato",
+      "type": "numeric",
+      "group": "paciente"
+    },
+    "paciente::marketing#1": {
+      "id": 218816,
+      "name": "*MARKETING*",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::origem#1": {
+      "id": 218818,
+      "name": "⚑ Origem",
+      "type": "select",
+      "group": "paciente",
+      "enums": {
+        "Meta-Instagram": 175520,
+        "Meta-WhatsApp": 175522,
+        "Org-Facebook": 175524,
+        "Org-Instagram": 175526,
+        "Org-WhatsApp": 175528,
+        "Indicação": 175530,
+        "Outdoor": 175532,
+        "Fachada": 175534,
+        "Rádio": 175536,
+        "Carro de som": 175538,
+        "Panfleto": 175540,
+        "Eventos": 175542,
+        "Site oficial - Franquia": 175544,
+        "Google": 175546,
+        "Sem origem": 175548,
+        "Meta-Facebook": 175550,
+        "WhatsApp anúncio": 175552,
+        "Youtube (franquia)": 175554,
+        "Whatsapp (franquia)": 175556,
+        "Cartão De Visita (franquia)": 175558,
+        "Ligação Telefonica (franquia)": 175560,
+        "Direto Whatsapp/facebook (franquia)": 175562,
+        "Direto (franquia)": 175564
+      }
+    },
+    "paciente::campanha#1": {
+      "id": 218820,
+      "name": "⌂ Campanha",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::anuncio-ad#1": {
+      "id": 218822,
+      "name": "⌂ Anúncio (ad)",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::titulo-do-anuncio#1": {
+      "id": 218824,
+      "name": "⌂ Título do anúncio",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::id-do-anuncio#1": {
+      "id": 218826,
+      "name": "⌂ ID do anúncio",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::plataforma-de-origem#1": {
+      "id": 218828,
+      "name": "⌂ Plataforma de origem",
+      "type": "text",
+      "group": "paciente"
+    },
+    "paciente::url-de-origem-do-clique#1": {
+      "id": 218830,
+      "name": "⌂ URL de origem do clique",
+      "type": "url",
+      "group": "paciente"
+    },
+    "paciente::ctwa-clid#1": {
+      "id": 218832,
+      "name": "⌂ ctwa_clid",
+      "type": "text",
+      "group": "paciente"
+    }
+  },
+  "loss_reasons": {
+    "Sem condições financeiras": 39502803,
+    "Não interagiu": 39502807,
+    "Informação para terceiro": 39502811,
+    "Outra patologia": 39502815,
+    "Clicou por engano": 39502819,
+    "Está viajando": 39502823,
+    "Sem interesse": 39502827,
+    "Não deu continuidade ao atendimento": 39502831,
+    "Vai se organizar": 39502835,
+    "Plano de saúde": 39502839,
+    "Outra cidade": 39502843,
+    "Solicitado exames": 39502847
+  },
+  "target": {
+    "subdomain": "doutorherniasalto",
+    "account_id": 37102255
+  }
+}

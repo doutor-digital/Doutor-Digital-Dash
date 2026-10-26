@@ -1,0 +1,1443 @@
+{
+ "blueprint_version": 1,
+ "exported_at": "2026-10-26T17:55:43+00:00",
+ "source": {
+  "subdomain": "doutorherniaacailandia",
+  "account_id": 36516475,
+  "currency": "BRL",
+  "nota": "v5 enxuto — seleção medida de doutorherniaacailandia, grupo único PACIENTE"
+ },
+ "pipelines": [
+  {
+   "name": "COMERCIAL",
+   "sort": 1,
+   "is_main": true,
+   "is_unsorted_on": true,
+   "statuses": [
+    {
+     "name": "EM QUALIFICAÇÃO",
+     "sort": 20,
+     "color": "#87f2c0"
+    },
+    {
+     "name": "EM ESPERA",
+     "sort": 30,
+     "color": "#e6e8ea"
+    },
+    {
+     "name": "CONFERIR NA FRANQUIA",
+     "sort": 40,
+     "color": "#ffce5a"
+    },
+    {
+     "name": "AGENDADO",
+     "sort": 50,
+     "color": "#fffeb2"
+    },
+    {
+     "name": "NÃO COMPARECEU",
+     "sort": 60,
+     "color": "#ff8f92"
+    },
+    {
+     "name": "COMPARECEU",
+     "sort": 70,
+     "color": "#deff81"
+    },
+    {
+     "name": "EM NEGOCIAÇÃO",
+     "sort": 80,
+     "color": "#ff8f92"
+    },
+    {
+     "name": "RETORNO PÓS-TRATAMENTO",
+     "sort": 90,
+     "color": "#ccc8f9"
+    }
+   ],
+   "system_statuses": {
+    "142": "GANHO / CONCLUIDO",
+    "143": "PERDIDO"
+   }
+  },
+  {
+   "name": "TRATAMENTO",
+   "sort": 2,
+   "is_main": false,
+   "is_unsorted_on": true,
+   "statuses": [
+    {
+     "name": "EM TRATAMENTO",
+     "sort": 20,
+     "color": "#87f2c0"
+    }
+   ],
+   "system_statuses": {
+    "142": "ALTA",
+    "143": "TRATAMENTO CANCELADO"
+   }
+  }
+ ],
+ "field_groups": [
+  {
+   "key": "paciente",
+   "name": "PACIENTE",
+   "sort": 1
+  }
+ ],
+ "fields": [
+  {
+   "key": "paciente::franquia#1",
+   "name": "*FRANQUIA*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 10
+  },
+  {
+   "key": "paciente::idclient-franquia#1",
+   "name": "⚙ idClient (franquia)",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 20,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::idschedule-franquia#1",
+   "name": "⚙ idSchedule (franquia)",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 30,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::idade#1",
+   "name": "# Idade",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 40,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::sexo#1",
+   "name": "⚥ Sexo",
+   "type": "select",
+   "group": "paciente",
+   "sort": 50,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Feminino",
+     "sort": 1
+    },
+    {
+     "value": "Masculino",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::cidade#1",
+   "name": "⌂ Cidade",
+   "type": "textarea",
+   "group": "paciente",
+   "sort": 60,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::estado#1",
+   "name": "⌂ Estado",
+   "type": "text",
+   "group": "paciente",
+   "sort": 70
+  },
+  {
+   "key": "paciente::endereco#1",
+   "name": "⌂ Endereço",
+   "type": "text",
+   "group": "paciente",
+   "sort": 80,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::origem-na-franquia#1",
+   "name": "⚑ Origem na franquia",
+   "type": "text",
+   "group": "paciente",
+   "sort": 90,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::status-do-paciente#1",
+   "name": "✓ Status do paciente",
+   "type": "select",
+   "group": "paciente",
+   "sort": 100,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Inativo",
+     "sort": 1
+    },
+    {
+     "value": "Ativo",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::em-qualificacao#1",
+   "name": "*EM QUALIFICAÇÃO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 110
+  },
+  {
+   "key": "paciente::qualificacao-quente-morno-frio#1",
+   "name": "★ Qualificação (Quente/Morno/Frio)",
+   "type": "select",
+   "group": "paciente",
+   "sort": 120,
+   "enums": [
+    {
+     "value": "Quente",
+     "sort": 1
+    },
+    {
+     "value": "Morno",
+     "sort": 2
+    },
+    {
+     "value": "Frio",
+     "sort": 3
+    }
+   ]
+  },
+  {
+   "key": "paciente::tipo-de-lead#1",
+   "name": "⬢ Tipo de lead",
+   "type": "select",
+   "group": "paciente",
+   "sort": 130,
+   "enums": [
+    {
+     "value": "Resgate",
+     "sort": 1
+    },
+    {
+     "value": "Cadastro",
+     "sort": 2
+    },
+    {
+     "value": "TRANSFERIDO DE OUTRA UNIDADE",
+     "sort": 3
+    }
+   ]
+  },
+  {
+   "key": "paciente::regiao-da-dor#1",
+   "name": "⚕ Região da dor",
+   "type": "select",
+   "group": "paciente",
+   "sort": 140,
+   "enums": [
+    {
+     "value": "Lombar",
+     "sort": 1
+    },
+    {
+     "value": "Torácica",
+     "sort": 2
+    },
+    {
+     "value": "Outra",
+     "sort": 3
+    },
+    {
+     "value": "Não informada",
+     "sort": 4
+    },
+    {
+     "value": "Cervical",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::queixa#1",
+   "name": "✎ Queixa",
+   "type": "textarea",
+   "group": "paciente",
+   "sort": 150
+  },
+  {
+   "key": "paciente::observacoes#1",
+   "name": "✎ Observações",
+   "type": "textarea",
+   "group": "paciente",
+   "sort": 160
+  },
+  {
+   "key": "paciente::em-espera#1",
+   "name": "*EM ESPERA*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 170
+  },
+  {
+   "key": "paciente::motivo-da-espera#1",
+   "name": "⊘ Motivo da espera",
+   "type": "select",
+   "group": "paciente",
+   "sort": 180,
+   "enums": [
+    {
+     "value": "Vai decidir",
+     "sort": 1
+    },
+    {
+     "value": "Viajando",
+     "sort": 2
+    },
+    {
+     "value": "Financeiro agora não",
+     "sort": 3
+    },
+    {
+     "value": "Outro",
+     "sort": 4
+    },
+    {
+     "value": "Exames",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::retomar-em#1",
+   "name": "◷ Retomar em",
+   "type": "date",
+   "group": "paciente",
+   "sort": 190
+  },
+  {
+   "key": "paciente::agendado#1",
+   "name": "*AGENDADO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 200
+  },
+  {
+   "key": "paciente::agendou#1",
+   "name": "✓ Agendou",
+   "type": "select",
+   "group": "paciente",
+   "sort": 210,
+   "enums": [
+    {
+     "value": "Sim",
+     "sort": 1
+    },
+    {
+     "value": "Não",
+     "sort": 2
+    }
+   ]
+  },
+  {
+   "key": "paciente::data-da-consulta#1",
+   "name": "◷ Data da Consulta",
+   "type": "date_time",
+   "group": "paciente",
+   "sort": 220,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::agendado-pela-sdr-em#1",
+   "name": "◷ Agendado pela SDR em",
+   "type": "date_time",
+   "group": "paciente",
+   "sort": 230,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::tipo-de-agendamento#1",
+   "name": "⬢ Tipo de agendamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 240,
+   "enums": [
+    {
+     "value": "Resgate",
+     "sort": 1
+    },
+    {
+     "value": "Cadastro",
+     "sort": 2
+    }
+   ]
+  },
+  {
+   "key": "paciente::responsavel-agendamento#1",
+   "name": "☻ Responsável agendamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 250,
+   "enums": [
+    {
+     "value": "SDR",
+     "sort": 1
+    },
+    {
+     "value": "I.A SOFIA",
+     "sort": 2
+    },
+    {
+     "value": "DOUTOR DIGITAL",
+     "sort": 3
+    }
+   ]
+  },
+  {
+   "key": "paciente::agendamento-feito-por#1",
+   "name": "⬢ Agendamento feito por",
+   "type": "select",
+   "group": "paciente",
+   "sort": 260,
+   "enums": [
+    {
+     "value": "IA",
+     "sort": 1
+    },
+    {
+     "value": "Humano",
+     "sort": 2
+    }
+   ]
+  },
+  {
+   "key": "paciente::valor-da-consulta#1",
+   "name": "¤ Valor da Consulta",
+   "type": "monetary",
+   "group": "paciente",
+   "sort": 270
+  },
+  {
+   "key": "paciente::consulta-pg-antecipado#1",
+   "name": "✓ Consulta pg antecipado",
+   "type": "select",
+   "group": "paciente",
+   "sort": 280,
+   "enums": [
+    {
+     "value": "Não",
+     "sort": 1
+    },
+    {
+     "value": "Sim",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::categoria-da-consulta#1",
+   "name": "⌂ Categoria da consulta",
+   "type": "select",
+   "group": "paciente",
+   "sort": 290,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Avaliação",
+     "sort": 1
+    },
+    {
+     "value": "Sessão",
+     "sort": 2
+    },
+    {
+     "value": "Retorno",
+     "sort": 3
+    },
+    {
+     "value": "Retorno com exames",
+     "sort": 4
+    },
+    {
+     "value": "Retorno após tratamento",
+     "sort": 5
+    }
+   ]
+  },
+  {
+   "key": "paciente::situacao-da-consulta#1",
+   "name": "✓ Situação da consulta",
+   "type": "select",
+   "group": "paciente",
+   "sort": 300,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Agendado",
+     "sort": 1
+    },
+    {
+     "value": "Confirmado",
+     "sort": 2
+    },
+    {
+     "value": "Atendido",
+     "sort": 3
+    },
+    {
+     "value": "Não compareceu",
+     "sort": 4
+    },
+    {
+     "value": "Remarcado",
+     "sort": 5
+    },
+    {
+     "value": "Desmarcado",
+     "sort": 6
+    }
+   ]
+  },
+  {
+   "key": "paciente::fisioterapeuta#1",
+   "name": "⚕ Fisioterapeuta",
+   "type": "select",
+   "group": "paciente",
+   "sort": 310,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "A definir",
+     "sort": 1
+    }
+   ]
+  },
+  {
+   "key": "paciente::compareceu#1",
+   "name": "✓ Compareceu",
+   "type": "select",
+   "group": "paciente",
+   "sort": 320,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Sim",
+     "sort": 1
+    },
+    {
+     "value": "Não",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::compareceu#2",
+   "name": "*COMPARECEU*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 330
+  },
+  {
+   "key": "paciente::tratamento-indicado#1",
+   "name": "⚕ Tratamento indicado",
+   "type": "multiselect",
+   "group": "paciente",
+   "sort": 340,
+   "enums": [
+    {
+     "value": "01 Mês — PREVENTIVO CERVICAL",
+     "sort": 1
+    },
+    {
+     "value": "01 Mês — MANUTENÇÃO CERVICAL",
+     "sort": 2
+    },
+    {
+     "value": "01 Mês — MANUTENÇÃO LOMBAR",
+     "sort": 3
+    },
+    {
+     "value": "01 Mês — DESCOMPRESSÃO CERVICAL",
+     "sort": 4
+    },
+    {
+     "value": "01 Mês — DESCOMPRESSÃO LOMBAR",
+     "sort": 5
+    },
+    {
+     "value": "02 Meses — POSTURAL",
+     "sort": 6
+    },
+    {
+     "value": "03 Meses — LOMBAR CRÔNICO",
+     "sort": 7
+    },
+    {
+     "value": "03 Meses — LOMBAR AGUDO",
+     "sort": 8
+    },
+    {
+     "value": "03 Meses — CERVICAL CRÔNICO",
+     "sort": 9
+    },
+    {
+     "value": "03 Meses — CERVICAL AGUDO",
+     "sort": 10
+    },
+    {
+     "value": "01 Mês — PREVENTIVO LOMBAR",
+     "sort": 500
+    },
+    {
+     "value": "Cervical longo - 3 meses",
+     "sort": 501
+    },
+    {
+     "value": "Lombar longo - 3 meses",
+     "sort": 502
+    },
+    {
+     "value": "Cervical curto - 1 mês",
+     "sort": 503
+    },
+    {
+     "value": "Lombar curto - 1 mês",
+     "sort": 504
+    },
+    {
+     "value": "Manutenção",
+     "sort": 505
+    },
+    {
+     "value": "Postural",
+     "sort": 506
+    },
+    {
+     "value": "SEM TRATAMENTO INDICADO",
+     "sort": 507
+    }
+   ],
+   "required_statuses": [
+    {
+     "pipeline": "COMERCIAL",
+     "status": "COMPARECEU"
+    }
+   ]
+  },
+  {
+   "key": "paciente::em-negociacao#1",
+   "name": "*EM NEGOCIAÇÃO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 350
+  },
+  {
+   "key": "paciente::motivo-de-nao-fechamento-do-tratamento#1",
+   "name": "⊘ Motivo de não fechamento do tratamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 360,
+   "enums": [
+    {
+     "value": "Plano de saúde",
+     "sort": 1
+    },
+    {
+     "value": "Outra patologia",
+     "sort": 2
+    },
+    {
+     "value": "Solicitado exames",
+     "sort": 3
+    },
+    {
+     "value": "Caso enviado para a franquia",
+     "sort": 4
+    },
+    {
+     "value": "Decidir com a familia",
+     "sort": 5
+    },
+    {
+     "value": "Mora em outra cidade",
+     "sort": 6
+    },
+    {
+     "value": "Bandeira vermelha",
+     "sort": 7
+    },
+    {
+     "value": "Vai viajar",
+     "sort": 8
+    },
+    {
+     "value": "Achou caro",
+     "sort": 9
+    },
+    {
+     "value": "Vai se organizar financeiramente",
+     "sort": 10
+    },
+    {
+     "value": "Assinou contrato",
+     "sort": 11
+    },
+    {
+     "value": "Financeiramente vulnerável",
+     "sort": 12
+    },
+    {
+     "value": "Sem resposta após consulta",
+     "sort": 13
+    }
+   ]
+  },
+  {
+   "key": "paciente::ganho-concluido#1",
+   "name": "*GANHO / CONCLUÍDO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 370
+  },
+  {
+   "key": "paciente::fechou-tratamento#1",
+   "name": "✓ Fechou tratamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 380,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Sim",
+     "sort": 1
+    },
+    {
+     "value": "Não",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::tratamento-fechado#1",
+   "name": "⚕ Tratamento fechado",
+   "type": "multiselect",
+   "group": "paciente",
+   "sort": 390,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "01 Mês — PREVENTIVO CERVICAL",
+     "sort": 1
+    },
+    {
+     "value": "01 Mês — MANUTENÇÃO CERVICAL",
+     "sort": 2
+    },
+    {
+     "value": "01 Mês — MANUTENÇÃO LOMBAR",
+     "sort": 3
+    },
+    {
+     "value": "01 Mês — DESCOMPRESSÃO CERVICAL",
+     "sort": 4
+    },
+    {
+     "value": "01 Mês — DESCOMPRESSÃO LOMBAR",
+     "sort": 5
+    },
+    {
+     "value": "02 Meses — POSTURAL",
+     "sort": 6
+    },
+    {
+     "value": "03 Meses — LOMBAR CRÔNICO",
+     "sort": 7
+    },
+    {
+     "value": "03 Meses — LOMBAR AGUDO",
+     "sort": 8
+    },
+    {
+     "value": "03 Meses — CERVICAL CRÔNICO",
+     "sort": 9
+    },
+    {
+     "value": "03 Meses — CERVICAL AGUDO",
+     "sort": 10
+    },
+    {
+     "value": "01 Mês — PREVENTIVO LOMBAR",
+     "sort": 500
+    },
+    {
+     "value": "Cervical longo - 3 meses",
+     "sort": 501
+    },
+    {
+     "value": "Lombar longo - 3 meses",
+     "sort": 502
+    },
+    {
+     "value": "Cervical - 1 mês",
+     "sort": 503
+    },
+    {
+     "value": "Lombar - 1 mês",
+     "sort": 504
+    },
+    {
+     "value": "Manutenção",
+     "sort": 505
+    },
+    {
+     "value": "Postural",
+     "sort": 506
+    }
+   ]
+  },
+  {
+   "key": "paciente::valor-do-tratamento#1",
+   "name": "¤ Valor do tratamento",
+   "type": "monetary",
+   "group": "paciente",
+   "sort": 400
+  },
+  {
+   "key": "paciente::forma-de-pagamento#1",
+   "name": "⬢ Forma de pagamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 410,
+   "enums": [
+    {
+     "value": "À vista / PIX",
+     "sort": 1
+    },
+    {
+     "value": "Cartão de crédito",
+     "sort": 2
+    },
+    {
+     "value": "Cartão de débito",
+     "sort": 3
+    },
+    {
+     "value": "Boleto",
+     "sort": 4
+    },
+    {
+     "value": "Misto",
+     "sort": 5
+    }
+   ]
+  },
+  {
+   "key": "paciente::tipo-de-fechamento-de-tratamento#1",
+   "name": "⬢ Tipo de fechamento de tratamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 420,
+   "enums": [
+    {
+     "value": "Resgate",
+     "sort": 1
+    },
+    {
+     "value": "Cadastro",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::semaforo#1",
+   "name": "◉ Semáforo",
+   "type": "select",
+   "group": "paciente",
+   "sort": 430,
+   "enums": [
+    {
+     "value": "PARCIAL — fechou e pagou parte",
+     "sort": 1
+    },
+    {
+     "value": "AZUL — fechou, pagamento não confirmado",
+     "sort": 2
+    },
+    {
+     "value": "AMARELO — não fechou: dinheiro, família, vai pensar",
+     "sort": 3
+    },
+    {
+     "value": "LARANJA — não fechou: falta exame ou retorno",
+     "sort": 4
+    },
+    {
+     "value": "VERMELHO — não é caso para a clínica",
+     "sort": 5
+    },
+    {
+     "value": "VERDE — fechou e pagou tudo",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::perdido#1",
+   "name": "*PERDIDO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 440
+  },
+  {
+   "key": "paciente::motivo-do-nao-agendamento#1",
+   "name": "⊘ Motivo do não agendamento",
+   "type": "select",
+   "group": "paciente",
+   "sort": 450,
+   "enums": [
+    {
+     "value": "Sem condições financeira",
+     "sort": 1
+    },
+    {
+     "value": "Não interagiu",
+     "sort": 2
+    },
+    {
+     "value": "Informação para terceiro",
+     "sort": 3
+    },
+    {
+     "value": "Outra patologia",
+     "sort": 4
+    },
+    {
+     "value": "Clicou por engano",
+     "sort": 5
+    },
+    {
+     "value": "Está viajando",
+     "sort": 6
+    },
+    {
+     "value": "Sem interesse",
+     "sort": 7
+    },
+    {
+     "value": "Não deu continuidade ao atendimento",
+     "sort": 8
+    },
+    {
+     "value": "Vai se organizar",
+     "sort": 9
+    },
+    {
+     "value": "Assinou contrato",
+     "sort": 10
+    },
+    {
+     "value": "Plano de Saúde",
+     "sort": 11
+    },
+    {
+     "value": "Outra cidade",
+     "sort": 500
+    }
+   ],
+   "required_statuses": [
+    {
+     "pipeline": "COMERCIAL",
+     "status": "PERDIDO"
+    }
+   ]
+  },
+  {
+   "key": "paciente::em-tratamento#1",
+   "name": "*EM TRATAMENTO*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 460
+  },
+  {
+   "key": "paciente::idtreatment-franquia#1",
+   "name": "⚙ idTreatment (franquia)",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 470,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::proxima-sessao#1",
+   "name": "◷ Próxima sessão",
+   "type": "date_time",
+   "group": "paciente",
+   "sort": 480,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::ultima-sessao#1",
+   "name": "◷ Última sessão",
+   "type": "text",
+   "group": "paciente",
+   "sort": 490
+  },
+  {
+   "key": "paciente::sessoes-realizadas#1",
+   "name": "# Sessões realizadas",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 500,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::sessoes-agendadas-por-vir#1",
+   "name": "# Sessões agendadas (por vir)",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 510
+  },
+  {
+   "key": "paciente::sessoes-no-historico#1",
+   "name": "# Sessões no histórico",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 520
+  },
+  {
+   "key": "paciente::no-de-faltas#1",
+   "name": "# Nº de faltas",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 530
+  },
+  {
+   "key": "paciente::local-do-tratamento#1",
+   "name": "⚕ Local do tratamento",
+   "type": "text",
+   "group": "paciente",
+   "sort": 540
+  },
+  {
+   "key": "paciente::grau#1",
+   "name": "⚕ Grau",
+   "type": "text",
+   "group": "paciente",
+   "sort": 550
+  },
+  {
+   "key": "paciente::status-do-tratamento#1",
+   "name": "⚕ Status do tratamento",
+   "type": "text",
+   "group": "paciente",
+   "sort": 560
+  },
+  {
+   "key": "paciente::automatico-nao-preencher#1",
+   "name": "*AUTOMÁTICO · NÃO PREENCHER",
+   "type": "text",
+   "group": "paciente",
+   "sort": 570
+  },
+  {
+   "key": "paciente::resposta-da-ia#1",
+   "name": "Resposta da IA",
+   "type": "textarea",
+   "group": "paciente",
+   "sort": 580
+  },
+  {
+   "key": "paciente::pausar-ia#1",
+   "name": "Pausar IA",
+   "type": "checkbox",
+   "group": "paciente",
+   "sort": 590
+  },
+  {
+   "key": "paciente::status-da-conversa#1",
+   "name": "⬢ Status da conversa",
+   "type": "select",
+   "group": "paciente",
+   "sort": 600,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Aguardando lead",
+     "sort": 1
+    },
+    {
+     "value": "Respondendo",
+     "sort": 2
+    },
+    {
+     "value": "Sem resposta",
+     "sort": 3
+    },
+    {
+     "value": "Encerrada",
+     "sort": 4
+    }
+   ]
+  },
+  {
+   "key": "paciente::atendimento-assumido-por-humano#1",
+   "name": "✓ Atendimento assumido por humano",
+   "type": "select",
+   "group": "paciente",
+   "sort": 610,
+   "enums": [
+    {
+     "value": "Sim",
+     "sort": 1
+    },
+    {
+     "value": "Não",
+     "sort": 2
+    }
+   ]
+  },
+  {
+   "key": "paciente::data-do-primeiro-contato#1",
+   "name": "◷ Data do primeiro contato",
+   "type": "date_time",
+   "group": "paciente",
+   "sort": 620,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::interacao#1",
+   "name": "✓ Interação",
+   "type": "select",
+   "group": "paciente",
+   "sort": 630,
+   "enums": [
+    {
+     "value": "Sim",
+     "sort": 1
+    },
+    {
+     "value": "Não",
+     "sort": 2
+    }
+   ]
+  },
+  {
+   "key": "paciente::tipo-de-resgate#1",
+   "name": "⬢ Tipo de resgate",
+   "type": "select",
+   "group": "paciente",
+   "sort": 640,
+   "enums": [
+    {
+     "value": "Disparo Whatsap",
+     "sort": 500
+    },
+    {
+     "value": "Template de Mensagem",
+     "sort": 500
+    },
+    {
+     "value": "Disparo Email",
+     "sort": 500
+    },
+    {
+     "value": "Disparo SMS",
+     "sort": 500
+    },
+    {
+     "value": "Ligação",
+     "sort": 500
+    },
+    {
+     "value": "Disparo",
+     "sort": 500
+    },
+    {
+     "value": "Mensagem",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::tentativas-de-resgate#1",
+   "name": "⬢ Tentativas de resgate",
+   "type": "multiselect",
+   "group": "paciente",
+   "sort": 650,
+   "enums": [
+    {
+     "value": "Resgate 2 - 48h",
+     "sort": 500
+    },
+    {
+     "value": "Resgate 3 - 96h",
+     "sort": 500
+    },
+    {
+     "value": "Resgate 4 - 120h",
+     "sort": 500
+    },
+    {
+     "value": "Resgate 5 - 240h",
+     "sort": 500
+    },
+    {
+     "value": "Resgate 1 - 24h",
+     "sort": 500
+    },
+    {
+     "value": "Resgaste 1 - 24h",
+     "sort": 500
+    },
+    {
+     "value": "Resgaste 2 - 48h",
+     "sort": 500
+    },
+    {
+     "value": "Resgaste 3 - 72h",
+     "sort": 500
+    },
+    {
+     "value": "Resgaste 4 - 120h",
+     "sort": 500
+    },
+    {
+     "value": "Resgaste 5 - 240h",
+     "sort": 500
+    }
+   ]
+  },
+  {
+   "key": "paciente::no-de-tentativas-de-contato#1",
+   "name": "# Nº de tentativas de contato",
+   "type": "numeric",
+   "group": "paciente",
+   "sort": 660
+  },
+  {
+   "key": "paciente::marketing#1",
+   "name": "*MARKETING*",
+   "type": "text",
+   "group": "paciente",
+   "sort": 670
+  },
+  {
+   "key": "paciente::origem#1",
+   "name": "⚑ Origem",
+   "type": "select",
+   "group": "paciente",
+   "sort": 680,
+   "is_api_only": true,
+   "enums": [
+    {
+     "value": "Meta-Instagram",
+     "sort": 500
+    },
+    {
+     "value": "Meta-WhatsApp",
+     "sort": 500
+    },
+    {
+     "value": "Org-Facebook",
+     "sort": 500
+    },
+    {
+     "value": "Org-Instagram",
+     "sort": 500
+    },
+    {
+     "value": "Org-WhatsApp",
+     "sort": 500
+    },
+    {
+     "value": "Indicação",
+     "sort": 500
+    },
+    {
+     "value": "Outdoor",
+     "sort": 500
+    },
+    {
+     "value": "Fachada",
+     "sort": 500
+    },
+    {
+     "value": "Rádio",
+     "sort": 500
+    },
+    {
+     "value": "Carro de som",
+     "sort": 500
+    },
+    {
+     "value": "Panfleto",
+     "sort": 500
+    },
+    {
+     "value": "Eventos",
+     "sort": 500
+    },
+    {
+     "value": "Site oficial - Franquia",
+     "sort": 500
+    },
+    {
+     "value": "Google",
+     "sort": 500
+    },
+    {
+     "value": "Sem origem",
+     "sort": 500
+    },
+    {
+     "value": "Meta-Facebook",
+     "sort": 500
+    },
+    {
+     "value": "WhatsApp anúncio",
+     "sort": 500
+    },
+    {
+     "value": "Youtube (franquia)",
+     "sort": 900
+    },
+    {
+     "value": "Whatsapp (franquia)",
+     "sort": 901
+    },
+    {
+     "value": "Cartão De Visita (franquia)",
+     "sort": 911
+    },
+    {
+     "value": "Ligação Telefonica (franquia)",
+     "sort": 921
+    },
+    {
+     "value": "Direto Whatsapp/facebook (franquia)",
+     "sort": 931
+    },
+    {
+     "value": "Direto (franquia)",
+     "sort": 941
+    }
+   ]
+  },
+  {
+   "key": "paciente::campanha#1",
+   "name": "⌂ Campanha",
+   "type": "text",
+   "group": "paciente",
+   "sort": 690,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::anuncio-ad#1",
+   "name": "⌂ Anúncio (ad)",
+   "type": "text",
+   "group": "paciente",
+   "sort": 700,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::titulo-do-anuncio#1",
+   "name": "⌂ Título do anúncio",
+   "type": "text",
+   "group": "paciente",
+   "sort": 710,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::id-do-anuncio#1",
+   "name": "⌂ ID do anúncio",
+   "type": "text",
+   "group": "paciente",
+   "sort": 720,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::plataforma-de-origem#1",
+   "name": "⌂ Plataforma de origem",
+   "type": "text",
+   "group": "paciente",
+   "sort": 730,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::url-de-origem-do-clique#1",
+   "name": "⌂ URL de origem do clique",
+   "type": "url",
+   "group": "paciente",
+   "sort": 740,
+   "is_api_only": true
+  },
+  {
+   "key": "paciente::ctwa-clid#1",
+   "name": "⌂ ctwa_clid",
+   "type": "text",
+   "group": "paciente",
+   "sort": 750,
+   "is_api_only": true
+  }
+ ],
+ "loss_reasons": [
+  {
+   "name": "Sem condições financeiras",
+   "sort": 1
+  },
+  {
+   "name": "Não interagiu",
+   "sort": 2
+  },
+  {
+   "name": "Informação para terceiro",
+   "sort": 3
+  },
+  {
+   "name": "Outra patologia",
+   "sort": 4
+  },
+  {
+   "name": "Clicou por engano",
+   "sort": 5
+  },
+  {
+   "name": "Está viajando",
+   "sort": 6
+  },
+  {
+   "name": "Sem interesse",
+   "sort": 7
+  },
+  {
+   "name": "Não deu continuidade ao atendimento",
+   "sort": 8
+  },
+  {
+   "name": "Vai se organizar",
+   "sort": 9
+  },
+  {
+   "name": "Plano de saúde",
+   "sort": 10
+  },
+  {
+   "name": "Outra cidade",
+   "sort": 11
+  },
+  {
+   "name": "Solicitado exames",
+   "sort": 12
+  }
+ ],
+ "notes": [
+  "Grupo único PACIENTE: o cartão tem uma aba só.",
+  "Obrigatório só em PERDIDO (Motivo do não agendamento) e COMPARECEU (Tratamento indicado).",
+  "Nenhum campo é escondido — logo nenhum escondido pode ser obrigatório.",
+  "Os 12 campos utm_*/gclid/fbclid do grupo Statistics a Kommo cria sozinha.",
+  "Nomes dos campos são contrato: o código resolve por nome (kommo-schema.campoPorNome)."
+ ]
+}

@@ -768,7 +768,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     {
         var list = new List<(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry, EntityChangeLog)>();
 
-        foreach (var entry in ChangeTracker.Entries())
+        // ToList: desmarcar a última propriedade modificada faz o EF voltar a entidade
+        // para Unchanged — mudar estado durante a enumeração do ChangeTracker não é seguro.
+        foreach (var entry in ChangeTracker.Entries().ToList())
         {
             var typeName = entry.Entity.GetType().Name;
             if (!AuditedEntities.Contains(typeName)) continue;
@@ -784,6 +786,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                     if (!prop.IsModified) continue;
                     if (IgnoredProps.Contains(prop.Metadata.Name)) continue;
                     if (Equals(prop.OriginalValue, prop.CurrentValue)) continue;
+                    if (MesmoJsonEmOutraGrafia(prop))
+                    {
+                        // O webhook e a sincronização gravam o mesmo JSON com texto diferente
+                        // (espaço/ordem das chaves) e ficavam se alternando: ~250 mil linhas de
+                        // trilha falsa por dia (19/11). Mesmo conteúdo = nem trilha nem UPDATE.
+                        prop.IsModified = false;
+                        continue;
+                    }
                     changes[prop.Metadata.Name] = new
                     {
                         from = Redact(prop.Metadata.Name, prop.OriginalValue),
@@ -823,6 +833,32 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Coluna de texto *Json cujo valor antigo e o novo são o MESMO JSON (só muda espaço,
+    /// ordem das chaves, grafia de número). Texto que não é JSON válido conta como mudança.
+    /// </summary>
+    private static bool MesmoJsonEmOutraGrafia(Microsoft.EntityFrameworkCore.ChangeTracking.PropertyEntry prop)
+    {
+        if (prop.Metadata.ClrType != typeof(string)) return false;
+        if (!prop.Metadata.Name.EndsWith("Json", StringComparison.Ordinal)) return false;
+        return MesmoJson(prop.OriginalValue as string, prop.CurrentValue as string);
+    }
+
+    public static bool MesmoJson(string? antes, string? depois)
+    {
+        if (string.IsNullOrWhiteSpace(antes) || string.IsNullOrWhiteSpace(depois)) return false;
+        try
+        {
+            using var a = JsonDocument.Parse(antes);
+            using var b = JsonDocument.Parse(depois);
+            return JsonElement.DeepEquals(a.RootElement, b.RootElement);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string? ResolveKey(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
